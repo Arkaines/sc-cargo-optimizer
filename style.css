@@ -17,17 +17,17 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f6fa;
-  --panel: #ffffff;
-  --panel-border: #d7dee8;
-  --text: #1a2233;
-  --muted: #5b6478;
-  --accent: #0d7fb0;
-  --accent-2: #187a41;
-  --danger: #c62828;
-  --warning: #a3690a;
-  --input-bg: #eef1f6;
-  --btn-secondary-bg: #e2e8f0;
+  --bg: #dde1e8;
+  --panel: #eef0f4;
+  --panel-border: #c2c8d2;
+  --text: #1f2733;
+  --muted: #57606f;
+  --accent: #0d6f9c;
+  --accent-2: #16713b;
+  --danger: #b5271f;
+  --warning: #93600a;
+  --input-bg: #e4e8ee;
+  --btn-secondary-bg: #d5dae2;
   --on-accent: #ffffff;
 }
 
@@ -45,7 +45,7 @@ body {
 #theme-toggle {
   position: fixed;
   top: 1rem;
-  left: 1rem;
+  right: 1rem;
   z-index: 100;
   width: 2.5rem;
   height: 2.5rem;
