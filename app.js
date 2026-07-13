@@ -1068,6 +1068,23 @@ function progressiveTrimMatch(cleaned) {
   return null;
 }
 
+// Active l'onglet contenant tabId, quel que soit le groupe ".tabs" auquel il
+// appartient (utilisé notamment pour ramener sur "Nouvelle mission" quand on
+// importe une mission OCR depuis un autre onglet).
+function activateTab(tabId) {
+  const panel = document.getElementById(tabId);
+  if (!panel) return;
+  const group = panel.closest(".tabs");
+  if (!group) return;
+  const buttons = group.querySelectorAll(".tab-btn");
+  const panels = group.querySelectorAll(".tab-panel");
+  buttons.forEach((b) => b.classList.remove("active"));
+  panels.forEach((p) => (p.style.display = "none"));
+  panel.style.display = "";
+  const btn = Array.from(buttons).find((b) => b.dataset.tab === tabId);
+  if (btn) btn.classList.add("active");
+}
+
 function applyOcrResultToForm(parsed) {
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
@@ -1086,6 +1103,7 @@ function applyOcrResultToForm(parsed) {
       );
     });
   }
+  activateTab("new-mission-tab");
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1183,17 +1201,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Chaque groupe ".tabs" bascule indépendamment des autres groupes présents
   // sur la page (ex : les onglets Nouvelle mission/Missions n'affectent pas
   // ceux de Distances/Optimisation).
-  document.querySelectorAll(".tabs").forEach((group) => {
-    const buttons = group.querySelectorAll(".tab-btn");
-    const panels = group.querySelectorAll(".tab-panel");
-    buttons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        buttons.forEach((b) => b.classList.remove("active"));
-        panels.forEach((p) => (p.style.display = "none"));
-        btn.classList.add("active");
-        document.getElementById(btn.dataset.tab).style.display = "";
-      });
-    });
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tab));
   });
 
   document.getElementById("ship-select").addEventListener("change", (e) => {
