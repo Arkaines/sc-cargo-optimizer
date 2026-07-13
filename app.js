@@ -415,7 +415,22 @@ function optimizeRoute(missions, startId) {
     return { locId, actions, legDistance: i > 0 ? dist[order[i - 1]][idx] : 0 };
   });
 
-  return { steps, total, approximate, stopCount: n };
+  // Charge de cargo réellement présente sur le vaisseau à chaque arrêt : on
+  // ajoute au retrait, on retire au dépôt. C'est cette charge cumulée le long
+  // du trajet qui compte pour la capacité, pas la somme brute de toutes les
+  // missions (on décharge en cours de route, ce qui libère de la place).
+  let load = 0;
+  let maxLoad = 0;
+  steps.forEach((step) => {
+    step.actions.forEach((a) => {
+      const sum = (a.mission.cargoItems || []).reduce((s, item) => s + (Number(item.quantity) || 0), 0);
+      load += a.type === "pickup" ? sum : -sum;
+    });
+    step.cargoLoad = load;
+    if (load > maxLoad) maxLoad = load;
+  });
+
+  return { steps, total, approximate, stopCount: n, maxCargoLoad: maxLoad };
 }
 
 // =========================================================================
@@ -619,19 +634,16 @@ function renderMissionsTable() {
     ? `${included.length}/${state.missions.length} mission(s) sélectionnée(s) — ${totalCargo} SCU — ${totalReward} aUEC`
     : "Aucune mission enregistrée pour l'instant.";
 
+  // Ceci est la somme brute de toutes les récupérations, pas la charge réelle
+  // à un instant donné (on décharge en cours de route, ce qui libère de la
+  // place) : la vraie vérification de capacité se fait dans le résultat de
+  // l'optimisation, une fois l'ordre du trajet connu.
   const capacityEl = document.getElementById("cargo-capacity-status");
   const ship = getSelectedShip();
-  if (!ship) {
-    capacityEl.textContent = "Sélectionne un vaisseau (menu de gauche) pour voir si ta cargaison tient.";
-    capacityEl.className = "hint";
-  } else {
-    const remaining = ship.scu - totalCargo;
-    capacityEl.textContent =
-      remaining >= 0
-        ? `${totalCargo} / ${ship.scu} SCU chargés avec le ${ship.name} — il reste ${remaining} SCU de place.`
-        : `${totalCargo} / ${ship.scu} SCU chargés avec le ${ship.name} — dépassement de ${-remaining} SCU !`;
-    capacityEl.className = remaining >= 0 ? "hint cargo-ok" : "hint cargo-overload";
-  }
+  capacityEl.className = "hint";
+  capacityEl.textContent = ship
+    ? `${totalCargo} SCU à transporter au total (${ship.name}, ${ship.scu} SCU) — la charge réelle à bord dépend de l'ordre du trajet, vérifie via "Optimiser la route".`
+    : `${totalCargo} SCU à transporter au total — sélectionne un vaisseau (menu de gauche) puis optimise la route pour vérifier que ça tient.`;
 }
 
 function renderDistanceEditor() {
@@ -778,6 +790,20 @@ function renderRouteResult(result) {
   totalP.textContent = `Distance totale estimée : ${result.total} — ${result.steps.length} arrêt(s)`;
   container.appendChild(totalP);
 
+  const ship = getSelectedShip();
+  const loadP = document.createElement("p");
+  if (ship) {
+    const over = result.maxCargoLoad > ship.scu;
+    loadP.className = over ? "cargo-overload" : "cargo-ok";
+    loadP.textContent = over
+      ? `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — dépassement de ${result.maxCargoLoad - ship.scu} SCU à un moment du trajet !`
+      : `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — ça tient à tout moment du trajet.`;
+  } else {
+    loadP.className = "hint";
+    loadP.textContent = `Charge maximale sur le trajet : ${result.maxCargoLoad} SCU — sélectionne un vaisseau (menu de gauche) pour vérifier que ça tient.`;
+  }
+  container.appendChild(loadP);
+
   const ol = document.createElement("ol");
   ol.className = "route-steps";
   result.steps.forEach((step) => {
@@ -792,6 +818,10 @@ function renderRouteResult(result) {
       legSpan.textContent = ` (+${step.legDistance})`;
       header.appendChild(legSpan);
     }
+    const loadSpan = document.createElement("span");
+    loadSpan.className = "route-load";
+    loadSpan.textContent = ` — ${step.cargoLoad} SCU à bord`;
+    header.appendChild(loadSpan);
     li.appendChild(header);
 
     if (step.actions.length) {
