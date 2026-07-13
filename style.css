@@ -7,13 +7,14 @@
   --panel-border: #3568a8;
   --text: #dae1e7;
   --muted: #93a9c4;
-  --accent: #4dbfdd;
+  --accent: #dd6b4d;
+  --accent-cyan: #4dbfdd;
   --accent-2: #7ee787;
   --danger: #ff6b6b;
-  --warning: #dd6b4d;
+  --warning: #e0a030;
   --input-bg: #12294a;
   --btn-secondary-bg: #24487a;
-  --on-accent: #0d2138;
+  --on-accent: #ffffff;
   --heading-font: "Oswald", "Segoe UI", system-ui, sans-serif;
   font-family: "Segoe UI", system-ui, sans-serif;
 }
@@ -25,10 +26,11 @@
   --panel-border: #b9c4d1;
   --text: #16294a;
   --muted: #55647d;
-  --accent: #1c4b82;
+  --accent: #c85a3f;
+  --accent-cyan: #0f6e8c;
   --accent-2: #187a41;
   --danger: #b5271f;
-  --warning: #a3491f;
+  --warning: #93600a;
   --input-bg: #e4e9ee;
   --btn-secondary-bg: #cdd6e0;
   --on-accent: #ffffff;
@@ -467,7 +469,7 @@ th {
 }
 
 .route-load {
-  color: var(--accent);
+  color: var(--accent-cyan);
   font-weight: 400;
   font-size: 0.85rem;
 }
