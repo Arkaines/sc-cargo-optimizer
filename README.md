@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Arkaine Heinlein" width="120" />
+  <img src="assets/logo.png" alt="Arkaine Heinlein" width="120" />
 </p>
 
 <h1 align="center">Optimiseur de routes cargo — Star Citizen</h1>
@@ -38,14 +38,16 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 
 ## Structure du projet
 
-| Fichier | Rôle |
+| Emplacement | Rôle |
 |---|---|
-| `index.html` / `style.css` | Interface |
-| `app.js` | Logique principale (état, optimisation de trajet, rendu) |
-| `i18n.js` | Traductions FR/EN |
-| `ocr.js` | Extraction de champs depuis le texte reconnu par Tesseract |
-| `uex.js` | Appels à l'API UEX Corp |
-| `locations.js`, `distances.js`, `commodities.js`, `companies.js`, `ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
+| `index.html` | Page principale |
+| `css/style.css` | Interface |
+| `assets/` | Logo et favicon |
+| `js/app.js` | Logique principale (état, optimisation de trajet, rendu) |
+| `js/i18n.js` | Traductions FR/EN |
+| `js/ocr.js` | Extraction de champs depuis le texte reconnu par Tesseract |
+| `js/uex.js` | Appels à l'API UEX Corp |
+| `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
 
 ## Source des données
 
