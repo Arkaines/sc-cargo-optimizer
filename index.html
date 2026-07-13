@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Optimiseur de routes cargo — Star Citizen</title>
+<link rel="icon" type="image/png" href="favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 <script>
   (function () {
@@ -17,8 +21,13 @@
 <button type="button" id="theme-toggle" data-i18n-aria-label="themeToggleLabel"></button>
 <button type="button" id="lang-toggle" data-i18n-aria-label="langToggleLabel"></button>
 <header>
-  <h1 data-i18n="appTitle"></h1>
-  <p data-i18n="appSubtitle"></p>
+  <div class="header-brand">
+    <img src="logo.png" alt="Arkaine Heinlein" class="brand-logo" />
+    <div>
+      <h1 data-i18n="appTitle"></h1>
+      <p data-i18n="appSubtitle"></p>
+    </div>
+  </div>
   <p class="hint">
     <span data-i18n="poweredByPrefix"></span>
     <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>.

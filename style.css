@@ -1,33 +1,36 @@
+/* Palette de marque "Arkaine Heinlein" : navy fonce #183661, navy moyen
+   #1c4b82, corail #dd6b4d, gris-bleu clair #dae1e7, cyan #4dbfdd. */
 :root {
   color-scheme: dark;
-  --bg: #0f1420;
-  --panel: #171e2e;
-  --panel-border: #2a3550;
-  --text: #e4e9f2;
-  --muted: #8b96ad;
-  --accent: #4fc3f7;
+  --bg: #183661;
+  --panel: #1c4b82;
+  --panel-border: #3568a8;
+  --text: #dae1e7;
+  --muted: #93a9c4;
+  --accent: #4dbfdd;
   --accent-2: #7ee787;
   --danger: #ff6b6b;
-  --warning: #e0a030;
-  --input-bg: #0d1320;
-  --btn-secondary-bg: #26314a;
-  --on-accent: #06131c;
+  --warning: #dd6b4d;
+  --input-bg: #12294a;
+  --btn-secondary-bg: #24487a;
+  --on-accent: #0d2138;
+  --heading-font: "Oswald", "Segoe UI", system-ui, sans-serif;
   font-family: "Segoe UI", system-ui, sans-serif;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #dde1e8;
-  --panel: #eef0f4;
-  --panel-border: #c2c8d2;
-  --text: #1f2733;
-  --muted: #57606f;
-  --accent: #0d6f9c;
-  --accent-2: #16713b;
+  --bg: #dae1e7;
+  --panel: #f0f3f6;
+  --panel-border: #b9c4d1;
+  --text: #16294a;
+  --muted: #55647d;
+  --accent: #1c4b82;
+  --accent-2: #187a41;
   --danger: #b5271f;
-  --warning: #93600a;
-  --input-bg: #e4e8ee;
-  --btn-secondary-bg: #d5dae2;
+  --warning: #a3491f;
+  --input-bg: #e4e9ee;
+  --btn-secondary-bg: #cdd6e0;
   --on-accent: #ffffff;
 }
 
@@ -77,9 +80,26 @@ header {
   border-bottom: 1px solid var(--panel-border);
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  flex: none;
+}
+
 header h1 {
   margin: 0 0 0.25rem;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  font-family: var(--heading-font);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 header p {
@@ -119,6 +139,9 @@ aside#side-panel {
   margin-top: 0;
   font-size: 1.1rem;
   color: var(--accent);
+  font-family: var(--heading-font);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .side-block code {
@@ -194,52 +217,6 @@ main {
   gap: 1.5rem;
 }
 
-details {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem;
-}
-
-details > summary {
-  margin: -1.25rem -1.5rem;
-  padding: 1.25rem 1.5rem;
-  font-size: 1.1rem;
-  color: var(--accent);
-  font-weight: 600;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  user-select: none;
-}
-
-details > summary::-webkit-details-marker {
-  display: none;
-}
-
-details > summary::before {
-  content: "▸";
-  display: inline-block;
-  font-size: 0.8em;
-  color: var(--muted);
-  transition: transform 0.15s ease;
-}
-
-details[open] > summary::before {
-  transform: rotate(90deg);
-}
-
-details[open] > summary {
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-details > summary + * {
-  margin-top: 1.25rem;
-}
-
 .tabs {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -263,6 +240,9 @@ details > summary + * {
   padding: 1rem 0.25rem;
   font-size: 1.05rem;
   font-weight: 600;
+  font-family: var(--heading-font);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--muted);
   cursor: pointer;
 }
@@ -312,6 +292,8 @@ button {
   padding: 0.55rem 1rem;
   font-size: 0.9rem;
   font-weight: 600;
+  font-family: var(--heading-font);
+  letter-spacing: 0.01em;
 }
 
 .btn-primary {
@@ -459,6 +441,8 @@ th {
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--accent-2);
+  font-family: var(--heading-font);
+  letter-spacing: 0.01em;
 }
 
 .route-steps {
