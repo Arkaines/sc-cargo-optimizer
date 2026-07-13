@@ -204,6 +204,17 @@ function missionDropoffIds(m) {
   return Array.from(new Set((m.cargoItems || []).map((i) => i.dropoffId).filter(Boolean)));
 }
 
+// Signature d'une mission qui ignore volontairement son nom : deux missions
+// avec les mêmes marchandises/lieux/donneur/récompense mais un nom différent
+// (ou vice versa) comptent comme la même mission "répétée".
+function missionSignature(m) {
+  const items = (m.cargoItems || [])
+    .map((item) => `${item.commodity}|${item.quantity}|${item.pickupId}|${item.dropoffId}`)
+    .sort()
+    .join(";");
+  return `${m.giver || ""}::${items}::${m.reward || ""}`;
+}
+
 function removeMission(id) {
   state.missions = state.missions.filter((m) => m.id !== id);
   saveState();
@@ -705,12 +716,30 @@ function renderHistoryTable() {
   const tbody = document.getElementById("history-tbody");
   tbody.innerHTML = "";
   const missions = historyMissions();
+
+  // Regroupe les missions terminées identiques (même donneur, mêmes lignes
+  // de cargaison, même récompense) en ignorant leur nom, pour compter combien
+  // de fois cette mission a été faite.
+  const groups = new Map();
   missions.forEach((m) => {
+    const sig = missionSignature(m);
+    if (!groups.has(sig)) groups.set(sig, { rep: m, ids: [], count: 0 });
+    const g = groups.get(sig);
+    g.count++;
+    g.ids.push(m.id);
+  });
+
+  Array.from(groups.values()).forEach((g) => {
+    const m = g.rep;
     const tr = document.createElement("tr");
 
     const tdName = document.createElement("td");
     tdName.textContent = m.name;
     tr.appendChild(tdName);
+
+    const tdTimes = document.createElement("td");
+    tdTimes.textContent = `× ${g.count}`;
+    tr.appendChild(tdTimes);
 
     const tdGiver = document.createElement("td");
     tdGiver.textContent = m.giver || "-";
@@ -754,7 +783,10 @@ function renderHistoryTable() {
     restoreBtn.className = "btn-secondary";
     restoreBtn.textContent = t("restoreBtn");
     restoreBtn.addEventListener("click", () => {
-      m.completed = false;
+      // Ne restaure qu'une seule occurrence du groupe (la dernière terminée).
+      const id = g.ids[g.ids.length - 1];
+      const mission = state.missions.find((mm) => mm.id === id);
+      if (mission) mission.completed = false;
       saveState();
       renderAll();
     });
@@ -765,7 +797,9 @@ function renderHistoryTable() {
     delBtn.className = "btn-danger-sm";
     delBtn.textContent = t("deleteBtn");
     delBtn.addEventListener("click", () => {
-      removeMission(m.id);
+      // Supprime toutes les occurrences du groupe.
+      state.missions = state.missions.filter((mm) => !g.ids.includes(mm.id));
+      saveState();
       renderAll();
     });
     tdActions.appendChild(delBtn);
