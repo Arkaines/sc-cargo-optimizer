@@ -328,6 +328,14 @@ th {
   font-size: 0.85rem;
 }
 
+.route-cargo-items {
+  margin: 0.15rem 0 0.35rem;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
 .action-pickup {
   color: var(--accent);
 }

@@ -722,6 +722,19 @@ function renderRouteResult(result) {
         const actionLi = document.createElement("li");
         actionLi.className = a.type === "pickup" ? "action-pickup" : "action-dropoff";
         actionLi.textContent = `${a.type === "pickup" ? "Récupérer" : "Déposer"} — ${a.mission.name}`;
+
+        const items = a.mission.cargoItems || [];
+        if (items.length) {
+          const itemsUl = document.createElement("ul");
+          itemsUl.className = "route-cargo-items";
+          items.forEach((item) => {
+            const itemLi = document.createElement("li");
+            itemLi.textContent = `${item.quantity || "?"} SCU de ${item.commodity || "?"}`;
+            itemsUl.appendChild(itemLi);
+          });
+          actionLi.appendChild(itemsUl);
+        }
+
         ul.appendChild(actionLi);
       });
       li.appendChild(ul);
