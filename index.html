@@ -183,16 +183,11 @@
     </div>
   </div>
 
-  <div class="tabs">
-    <div class="tab-buttons">
-      <button type="button" class="tab-btn active" data-tab="distances-tab" data-i18n="distancesTab"></button>
-    </div>
-
-    <div class="tab-panel" id="distances-tab">
-      <input type="text" id="distance-filter" data-i18n-placeholder="distanceFilterPlaceholder" autocomplete="off" style="margin-bottom:0.75rem;" />
-      <div id="distance-editor"></div>
-    </div>
-  </div>
+  <details id="distances-details">
+    <summary data-i18n="distancesTab"></summary>
+    <input type="text" id="distance-filter" data-i18n-placeholder="distanceFilterPlaceholder" autocomplete="off" style="margin-bottom:0.75rem;" />
+    <div id="distance-editor"></div>
+  </details>
 </main>
 </div>
 
