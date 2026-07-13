@@ -6,9 +6,21 @@
 const STORAGE_KEY = "sc-cargo-optimizer-v1";
 const DEFAULT_DISTANCE = 100; // valeur de repli quand une distance n'a pas été renseignée
 
+function defaultState() {
+  return {
+    missions: [],
+    customLocations: [],
+    distances: {},
+    nextMissionId: 1,
+    uexLocations: [],
+    uexSyncedAt: null,
+    settings: { apiKey: "" },
+  };
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return { missions: [], customLocations: [], distances: {}, nextMissionId: 1 };
+  if (!raw) return defaultState();
   try {
     const parsed = JSON.parse(raw);
     return {
@@ -16,9 +28,12 @@ function loadState() {
       customLocations: parsed.customLocations || [],
       distances: parsed.distances || {},
       nextMissionId: parsed.nextMissionId || 1,
+      uexLocations: parsed.uexLocations || [],
+      uexSyncedAt: parsed.uexSyncedAt || null,
+      settings: { apiKey: (parsed.settings && parsed.settings.apiKey) || "" },
     };
   } catch (e) {
-    return { missions: [], customLocations: [], distances: {}, nextMissionId: 1 };
+    return defaultState();
   }
 }
 
@@ -32,7 +47,8 @@ function saveState() {
 // Lieux
 // =========================================================================
 function allLocations() {
-  return [...DEFAULT_LOCATIONS, ...state.customLocations];
+  const base = state.uexLocations.length ? state.uexLocations : DEFAULT_LOCATIONS;
+  return [...base, ...state.customLocations];
 }
 
 function getLocationById(id) {
@@ -490,39 +506,85 @@ function renderDistanceEditor() {
   const locs = locIds.map((id) => getLocationById(id)).filter(Boolean);
   locs.sort((a, b) => a.name.localeCompare(b.name));
 
+  const pairs = [];
+  for (let i = 0; i < locs.length; i++) {
+    for (let j = i + 1; j < locs.length; j++) pairs.push([locs[i], locs[j]]);
+  }
+
+  const anyUexPair = pairs.some(([a, b]) => a.uexTerminalId && b.uexTerminalId);
+  if (anyUexPair) {
+    const bulkBtn = document.createElement("button");
+    bulkBtn.type = "button";
+    bulkBtn.className = "btn-secondary";
+    bulkBtn.textContent = "Remplir les distances manquantes via UEX";
+    bulkBtn.addEventListener("click", async () => {
+      bulkBtn.disabled = true;
+      bulkBtn.textContent = "Récupération en cours...";
+      for (const [a, b] of pairs) {
+        if (!a.uexTerminalId || !b.uexTerminalId) continue;
+        if (hasCustomDistance(a.id, b.id)) continue;
+        try {
+          const d = await fetchUexDistance(a.uexTerminalId, b.uexTerminalId);
+          setDistance(a.id, b.id, d);
+        } catch (e) {
+          console.error(`Distance UEX ${a.name} -> ${b.name} :`, e);
+        }
+      }
+      renderDistanceEditor();
+    });
+    container.appendChild(bulkBtn);
+  }
+
   const table = document.createElement("table");
   table.className = "distance-table";
   const thead = document.createElement("thead");
-  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance</th></tr>";
+  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance</th><th></th></tr>";
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
 
-  for (let i = 0; i < locs.length; i++) {
-    for (let j = i + 1; j < locs.length; j++) {
-      const a = locs[i];
-      const b = locs[j];
-      const tr = document.createElement("tr");
-      const tdA = document.createElement("td");
-      tdA.textContent = a.name;
-      const tdB = document.createElement("td");
-      tdB.textContent = b.name;
-      const tdInput = document.createElement("td");
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = "0";
-      input.step = "any";
-      input.placeholder = String(DEFAULT_DISTANCE);
-      if (hasCustomDistance(a.id, b.id)) input.value = state.distances[distanceKey(a.id, b.id)];
-      input.addEventListener("change", () => {
-        setDistance(a.id, b.id, input.value);
+  pairs.forEach(([a, b]) => {
+    const tr = document.createElement("tr");
+    const tdA = document.createElement("td");
+    tdA.textContent = a.name;
+    const tdB = document.createElement("td");
+    tdB.textContent = b.name;
+    const tdInput = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "any";
+    input.placeholder = String(DEFAULT_DISTANCE);
+    if (hasCustomDistance(a.id, b.id)) input.value = state.distances[distanceKey(a.id, b.id)];
+    input.addEventListener("change", () => {
+      setDistance(a.id, b.id, input.value);
+    });
+    tdInput.appendChild(input);
+    tr.appendChild(tdA);
+    tr.appendChild(tdB);
+    tr.appendChild(tdInput);
+
+    const tdAction = document.createElement("td");
+    if (a.uexTerminalId && b.uexTerminalId) {
+      const uexBtn = document.createElement("button");
+      uexBtn.type = "button";
+      uexBtn.className = "btn-secondary";
+      uexBtn.textContent = "via UEX";
+      uexBtn.addEventListener("click", async () => {
+        uexBtn.disabled = true;
+        try {
+          const d = await fetchUexDistance(a.uexTerminalId, b.uexTerminalId);
+          input.value = d;
+          setDistance(a.id, b.id, d);
+        } catch (e) {
+          alert(`Impossible de récupérer la distance UEX : ${e.message}`);
+        }
+        uexBtn.disabled = false;
       });
-      tdInput.appendChild(input);
-      tr.appendChild(tdA);
-      tr.appendChild(tdB);
-      tr.appendChild(tdInput);
-      tbody.appendChild(tr);
+      tdAction.appendChild(uexBtn);
     }
-  }
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+  });
   table.appendChild(tbody);
   container.appendChild(table);
 
@@ -590,10 +652,21 @@ function renderRouteResult(result) {
   container.appendChild(ol);
 }
 
+function renderUexStatus() {
+  const status = document.getElementById("uex-status");
+  if (state.uexLocations.length) {
+    const date = new Date(state.uexSyncedAt).toLocaleString("fr-FR");
+    status.textContent = `${state.uexLocations.length} lieux chargés depuis UEX Corp (synchro : ${date}).`;
+  } else {
+    status.textContent = "Pas encore synchronisé — la liste de lieux par défaut (Stanton) est utilisée.";
+  }
+}
+
 function renderAll() {
   refreshAllLocationSelects();
   renderMissionsTable();
   renderDistanceEditor();
+  renderUexStatus();
   document.getElementById("route-result").innerHTML = "";
 }
 
@@ -656,5 +729,26 @@ document.addEventListener("DOMContentLoaded", () => {
       state = loadState();
       renderAll();
     }
+  });
+
+  const apiKeyInput = document.getElementById("uex-api-key");
+  apiKeyInput.value = state.settings.apiKey || "";
+  apiKeyInput.addEventListener("change", () => {
+    state.settings.apiKey = apiKeyInput.value.trim();
+    saveState();
+  });
+
+  document.getElementById("uex-sync-btn").addEventListener("click", async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = "Synchronisation...";
+    try {
+      await syncUexLocations();
+      renderAll();
+    } catch (err) {
+      alert(`Échec de la synchronisation UEX : ${err.message}`);
+    }
+    btn.disabled = false;
+    btn.textContent = "Synchroniser les lieux depuis UEX Corp";
   });
 });

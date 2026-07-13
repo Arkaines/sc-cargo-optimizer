@@ -14,6 +14,24 @@
 
 <main>
   <section>
+    <h2>Source de données — UEX Corp</h2>
+    <p class="hint">
+      Synchronise la liste des lieux (stations, villes, avant-postes) et récupère les distances réelles
+      via l'API publique <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>.
+    </p>
+    <div class="optimize-row">
+      <div>
+        <label for="uex-api-key">Clé API UEX (optionnelle)</label>
+        <input type="text" id="uex-api-key" placeholder="Laisser vide si non nécessaire" autocomplete="off" />
+      </div>
+      <div>
+        <button type="button" id="uex-sync-btn" class="btn-primary">Synchroniser les lieux depuis UEX Corp</button>
+      </div>
+    </div>
+    <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
+  </section>
+
+  <section>
     <h2>Nouvelle mission</h2>
     <form id="mission-form">
       <div class="form-grid">
@@ -112,6 +130,7 @@
 </footer>
 
 <script src="locations.js"></script>
+<script src="uex.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
