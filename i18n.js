@@ -91,6 +91,7 @@ const TRANSLATIONS = {
     colReward: "Récompense",
     deleteBtn: "Supprimer",
     missionsSummary: "{included}/{total} mission(s) sélectionnée(s) — {cargo} SCU — {reward} aUEC",
+    tooManyMissionsWarning: "⚠ {count} missions actives enregistrées — ça peut devenir difficile à suivre, pense à en terminer certaines.",
     noMissionsYet: "Aucune mission enregistrée pour l'instant.",
     capacityWithShip:
       '{cargo} SCU à transporter au total ({shipName}, {shipScu} SCU) — la charge réelle à bord dépend de l\'ordre du trajet, vérifie via "Optimiser la route".',
@@ -228,6 +229,7 @@ const TRANSLATIONS = {
     colReward: "Reward",
     deleteBtn: "Delete",
     missionsSummary: "{included}/{total} mission(s) selected — {cargo} SCU — {reward} aUEC",
+    tooManyMissionsWarning: "⚠ {count} active missions saved — this can get hard to track, consider completing some.",
     noMissionsYet: "No missions saved yet.",
     capacityWithShip:
       '{cargo} SCU to haul in total ({shipName}, {shipScu} SCU) — actual load on board depends on the route order, check via "Optimize route".',

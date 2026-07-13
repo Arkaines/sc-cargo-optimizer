@@ -700,6 +700,14 @@ function renderMissionsTable() {
     ? t("missionsSummary", { included: included.length, total: missions.length, cargo: totalCargo, reward: totalReward })
     : t("noMissionsYet");
 
+  const tooManyWarning = document.getElementById("too-many-missions-warning");
+  if (missions.length > 10) {
+    tooManyWarning.style.display = "";
+    tooManyWarning.textContent = t("tooManyMissionsWarning", { count: missions.length });
+  } else {
+    tooManyWarning.style.display = "none";
+  }
+
   // Ceci est la somme brute de toutes les récupérations, pas la charge réelle
   // à un instant donné (on décharge en cours de route, ce qui libère de la
   // place) : la vraie vérification de capacité se fait dans le résultat de
@@ -1283,7 +1291,7 @@ function renderOcrResult(rawText, parsed) {
   const hasApproximateSplit = (parsed.cargoItems || []).some((item) => item.approximate);
   if (hasApproximateSplit) {
     const warn = document.createElement("p");
-    warn.className = "hint ocr-approx-warning";
+    warn.className = "hint warning-text";
     warn.textContent = t("ocrApproxWarning");
     container.appendChild(warn);
   }

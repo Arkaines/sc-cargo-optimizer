@@ -231,7 +231,7 @@ aside#side-panel {
   padding: 0.15rem 0;
 }
 
-.ocr-approx-warning {
+.warning-text {
   color: var(--warning);
   font-weight: 600;
   margin-top: 0.5rem;
