@@ -68,59 +68,71 @@ function extractReward(normalized) {
   return m[1].replace(/[,.\s]/g, "");
 }
 
-// Retire le suffixe "sur <corps céleste>" (ex : "sur Pyro IV", "sur Cellin")
-// que le jeu ajoute au nom du lieu mais qui n'en fait pas partie.
 // Le jeu ajoute au nom du lieu une précision de position qui n'en fait pas
-// partie : "sur <corps>" pour un lieu en surface, "au-dessus de/d'<corps>"
-// pour une station en orbite. On coupe tout ce qui suit ce mot-clé.
-const LOCATION_SUFFIX_RE = /\s+(?:sur|au-dessus)\b.*$/i;
+// partie : "sur <corps>" pour un lieu en surface, "au-dessus de/d'<corps>" ou
+// "au L4 Lagrange de <corps>" pour un point stellaire. "au" couvre les deux
+// variantes ("au-dessus..." commence aussi par "au" suivi d'une frontière de
+// mot sur le tiret). On coupe tout ce qui suit ce mot-clé.
+const LOCATION_SUFFIX_RE = /\s+(?:sur|au)\b.*$/i;
 
 function stripSystemSuffix(text) {
   return text.replace(LOCATION_SUFFIX_RE, "").trim();
 }
 
+// Isole le nom de lieu au tout début d'un morceau de texte en retirant les
+// artefacts OCR parasites (":", "|", etc.) qui trainent juste avant le
+// prochain repère utile.
+function cleanLocationEdges(text) {
+  return text.replace(/[\s:|;,.\-]+$/, "").trim();
+}
+
+// Analyse le morceau qui suit "Livrez à " jusqu'au prochain mot-clé :
+// "<lieu> [artefacts OCR] X/Y SCU de <marchandise>". Le nombre X et les
+// caractères entre le lieu et "X/Y" sont volontairement tolérés (l'OCR
+// insère parfois des symboles parasites, ex : ": | 0/3 SCU").
+function parseDropoffChunk(content) {
+  const scuMatch = /^(.*?)SCU\s+de\s+(.+)$/i.exec(content);
+  if (!scuMatch) return null;
+  const beforeScu = scuMatch[1].trim();
+  const commodity = scuMatch[2].trim();
+  const qtyMatch = /(\d+)\s*\/\s*(\d+)\s*$/.exec(beforeScu);
+  if (!qtyMatch) return null;
+  const location = cleanLocationEdges(beforeScu.slice(0, qtyMatch.index));
+  return { location: stripSystemSuffix(location), quantity: Number(qtyMatch[2]), commodity };
+}
+
+// Analyse le morceau qui suit "Allez à " jusqu'au prochain mot-clé :
+// "<lieu> pour récupérer : <marchandise>". Seul le lieu nous intéresse ici.
+function parsePickupChunk(content) {
+  const re = new RegExp("^(.+?)\\s+pour\\s+r" + E_ACUTE + "cup" + E_ACUTE + "rer\\b", "i");
+  const m = re.exec(content);
+  if (!m) return null;
+  return stripSystemSuffix(cleanLocationEdges(m[1]));
+}
+
 // Extrait les objectifs (dépôt + marchandise + quantité, avec leurs lieux de
 // retrait alternatifs) depuis le texte normalisé (espaces uniquement, pas de
-// retours à la ligne, pour ne pas être perturbé par le retour à la ligne
-// automatique du jeu au milieu d'un nom de lieu ou de marchandise).
+// retours à la ligne). Découpe d'abord le texte à chaque "Livrez à"/"Allez à"
+// puis analyse chaque morceau séparément : plus tolérant aux artefacts OCR
+// qu'une seule grosse expression régulière couvrant toute la phrase.
 function extractObjectives(normalized) {
-  const re = new RegExp(
-    "Livrez\\s+[" +
-      A_GRAVE +
-      "a]\\s+(.+?)\\s*:\\s*\\d+/(\\d+)\\s*SCU\\s+de\\s+(.+?)(?=\\s+Livrez\\s+[" +
-      A_GRAVE +
-      "a]|\\s+Allez\\s+[" +
-      A_GRAVE +
-      "a]|$)" +
-      "|" +
-      "Allez\\s+[" +
-      A_GRAVE +
-      "a]\\s+(.+?)\\s+pour\\s+r" +
-      E_ACUTE +
-      "cup" +
-      E_ACUTE +
-      "rer\\s*:\\s*(.+?)(?=\\s+Allez\\s+[" +
-      A_GRAVE +
-      "a]|\\s+Livrez\\s+[" +
-      A_GRAVE +
-      "a]|$)",
-    "gi"
-  );
+  const KEYWORD_RE = new RegExp("(Livrez\\s+[" + A_GRAVE + "a]\\s+|Allez\\s+[" + A_GRAVE + "a]\\s+)", "gi");
+  const tokens = normalized.split(KEYWORD_RE);
 
   const objectives = [];
   let current = null;
-  let m;
-  while ((m = re.exec(normalized)) !== null) {
-    if (m[1] !== undefined) {
-      current = {
-        dropoff: stripSystemSuffix(m[1]),
-        quantity: Number(m[2]),
-        commodity: m[3].trim(),
-        pickupOptions: [],
-      };
-      objectives.push(current);
+  for (let i = 1; i < tokens.length; i += 2) {
+    const keyword = tokens[i].trim().toLowerCase();
+    const content = tokens[i + 1] || "";
+    if (keyword.startsWith("livrez")) {
+      const parsed = parseDropoffChunk(content);
+      current = parsed
+        ? { dropoff: parsed.location, quantity: parsed.quantity, commodity: parsed.commodity, pickupOptions: [] }
+        : null;
+      if (current) objectives.push(current);
     } else if (current) {
-      current.pickupOptions.push(stripSystemSuffix(m[4]));
+      const loc = parsePickupChunk(content);
+      if (loc) current.pickupOptions.push(loc);
     }
   }
   return objectives;
