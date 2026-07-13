@@ -28,7 +28,7 @@ function defaultState() {
 // lieux et qu'on ne savait pas quelle marchandise allait où).
 function migrateMission(m) {
   if (m.cargoItems && m.cargoItems.length && m.cargoItems[0].pickupId !== undefined) {
-    return m;
+    return { ...m, completed: m.completed || false };
   }
 
   const oldPickupIds = m.pickupIds || (m.pickupId ? [m.pickupId] : []);
@@ -48,7 +48,7 @@ function migrateMission(m) {
   }));
 
   const { pickupIds, dropoffIds, pickupId, dropoffId, commodity, cargo, ...rest } = m;
-  return { ...rest, cargoItems };
+  return { ...rest, cargoItems, completed: m.completed || false };
 }
 
 function loadState() {
@@ -181,10 +181,19 @@ function addMission(mission) {
     cargoItems: mission.cargoItems || [],
     reward: mission.reward,
     included: true,
+    completed: false,
   };
   state.missions.push(m);
   saveState();
   return m;
+}
+
+function activeMissions() {
+  return state.missions.filter((m) => !m.completed);
+}
+
+function historyMissions() {
+  return state.missions.filter((m) => m.completed);
 }
 
 function missionPickupIds(m) {
@@ -565,7 +574,7 @@ function renderShipCapacity() {
 function renderStartLocationOptions() {
   const sel = document.getElementById("start-location");
   const prev = sel.value;
-  const usedIds = computeUniqueLocationIds(state.missions.filter((m) => m.included));
+  const usedIds = computeUniqueLocationIds(activeMissions().filter((m) => m.included));
   sel.innerHTML = "";
   const free = document.createElement("option");
   free.value = "";
@@ -587,7 +596,8 @@ function renderStartLocationOptions() {
 function renderMissionsTable() {
   const tbody = document.getElementById("missions-tbody");
   tbody.innerHTML = "";
-  state.missions.forEach((m) => {
+  const missions = activeMissions();
+  missions.forEach((m) => {
     const tr = document.createElement("tr");
 
     const tdCheck = document.createElement("td");
@@ -643,6 +653,17 @@ function renderMissionsTable() {
     tr.appendChild(tdReward);
 
     const tdActions = document.createElement("td");
+    const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
+    doneBtn.className = "btn-secondary";
+    doneBtn.textContent = t("completeBtn");
+    doneBtn.addEventListener("click", () => {
+      m.completed = true;
+      saveState();
+      renderAll();
+    });
+    tdActions.appendChild(doneBtn);
+
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "btn-danger-sm";
@@ -658,14 +679,14 @@ function renderMissionsTable() {
   });
 
   const summary = document.getElementById("missions-summary");
-  const included = state.missions.filter((m) => m.included);
+  const included = missions.filter((m) => m.included);
   const totalCargo = included.reduce(
     (s, m) => s + (m.cargoItems || []).reduce((s2, item) => s2 + (Number(item.quantity) || 0), 0),
     0
   );
   const totalReward = included.reduce((s, m) => s + (Number(m.reward) || 0), 0);
-  summary.textContent = state.missions.length
-    ? t("missionsSummary", { included: included.length, total: state.missions.length, cargo: totalCargo, reward: totalReward })
+  summary.textContent = missions.length
+    ? t("missionsSummary", { included: included.length, total: missions.length, cargo: totalCargo, reward: totalReward })
     : t("noMissionsYet");
 
   // Ceci est la somme brute de toutes les récupérations, pas la charge réelle
@@ -680,10 +701,90 @@ function renderMissionsTable() {
     : t("capacityNoShip", { cargo: totalCargo });
 }
 
+function renderHistoryTable() {
+  const tbody = document.getElementById("history-tbody");
+  tbody.innerHTML = "";
+  const missions = historyMissions();
+  missions.forEach((m) => {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.textContent = m.name;
+    tr.appendChild(tdName);
+
+    const tdGiver = document.createElement("td");
+    tdGiver.textContent = m.giver || "-";
+    tr.appendChild(tdGiver);
+
+    const tdPickup = document.createElement("td");
+    tdPickup.textContent = missionPickupIds(m)
+      .map((id) => locationLabel(getLocationById(id)))
+      .join(", ");
+    tr.appendChild(tdPickup);
+
+    const tdDropoff = document.createElement("td");
+    tdDropoff.textContent = missionDropoffIds(m)
+      .map((id) => locationLabel(getLocationById(id)))
+      .join(", ");
+    tr.appendChild(tdDropoff);
+
+    const tdCargo = document.createElement("td");
+    const items = m.cargoItems || [];
+    if (items.length) {
+      items.forEach((item) => {
+        const line = document.createElement("div");
+        const pickupLoc = getLocationById(item.pickupId);
+        const dropoffLoc = getLocationById(item.dropoffId);
+        const route = pickupLoc && dropoffLoc ? ` (${pickupLoc.name} → ${dropoffLoc.name})` : "";
+        line.textContent = `${item.quantity || "?"} SCU — ${item.commodity || "?"}${route}`;
+        tdCargo.appendChild(line);
+      });
+    } else {
+      tdCargo.textContent = "-";
+    }
+    tr.appendChild(tdCargo);
+
+    const tdReward = document.createElement("td");
+    tdReward.textContent = m.reward != null && m.reward !== "" ? `${m.reward} aUEC` : "-";
+    tr.appendChild(tdReward);
+
+    const tdActions = document.createElement("td");
+    const restoreBtn = document.createElement("button");
+    restoreBtn.type = "button";
+    restoreBtn.className = "btn-secondary";
+    restoreBtn.textContent = t("restoreBtn");
+    restoreBtn.addEventListener("click", () => {
+      m.completed = false;
+      saveState();
+      renderAll();
+    });
+    tdActions.appendChild(restoreBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn-danger-sm";
+    delBtn.textContent = t("deleteBtn");
+    delBtn.addEventListener("click", () => {
+      removeMission(m.id);
+      renderAll();
+    });
+    tdActions.appendChild(delBtn);
+    tr.appendChild(tdActions);
+
+    tbody.appendChild(tr);
+  });
+
+  const summary = document.getElementById("history-summary");
+  const totalReward = missions.reduce((s, m) => s + (Number(m.reward) || 0), 0);
+  summary.textContent = missions.length
+    ? t("historySummary", { count: missions.length, reward: totalReward })
+    : t("noHistoryYet");
+}
+
 function renderDistanceEditor() {
   const container = document.getElementById("distance-editor");
   container.innerHTML = "";
-  const locIds = computeUniqueLocationIds(state.missions);
+  const locIds = computeUniqueLocationIds(activeMissions());
   if (locIds.length < 2) {
     container.textContent = t("needTwoLocations");
     return;
@@ -908,6 +1009,7 @@ function renderAll() {
   renderShipOptions();
   renderShipCapacity();
   renderMissionsTable();
+  renderHistoryTable();
   renderDistanceEditor();
   renderUexStatus();
   document.getElementById("route-result").innerHTML = "";
@@ -1315,19 +1417,19 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("select-all-missions").addEventListener("click", () => {
-    state.missions.forEach((m) => (m.included = true));
+    activeMissions().forEach((m) => (m.included = true));
     saveState();
     renderAll();
   });
   document.getElementById("deselect-all-missions").addEventListener("click", () => {
-    state.missions.forEach((m) => (m.included = false));
+    activeMissions().forEach((m) => (m.included = false));
     saveState();
     renderAll();
   });
 
   document.getElementById("optimize-btn").addEventListener("click", () => {
     const startId = document.getElementById("start-location").value || null;
-    const included = state.missions.filter((m) => m.included);
+    const included = activeMissions().filter((m) => m.included);
     const result = optimizeRoute(included, startId);
     renderRouteResult(result);
   });

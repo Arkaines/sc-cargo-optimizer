@@ -54,6 +54,11 @@ const TRANSLATIONS = {
 
     newMissionTab: "Nouvelle mission",
     missionsTab: "Missions enregistrées",
+    historyTab: "Historique",
+    completeBtn: "Terminer",
+    restoreBtn: "Restaurer",
+    historySummary: "{count} mission(s) terminée(s) — {reward} aUEC au total.",
+    noHistoryYet: "Aucune mission terminée pour l'instant.",
     missionNameLabel: "Nom (optionnel)",
     missionNamePlaceholder: "Ex : Livraison medgel",
     missionGiverLabel: "Donneur de mission",
@@ -185,6 +190,11 @@ const TRANSLATIONS = {
 
     newMissionTab: "New mission",
     missionsTab: "Saved missions",
+    historyTab: "History",
+    completeBtn: "Complete",
+    restoreBtn: "Restore",
+    historySummary: "{count} completed mission(s) — {reward} aUEC total.",
+    noHistoryYet: "No completed missions yet.",
     missionNameLabel: "Name (optional)",
     missionNamePlaceholder: "E.g.: Medgel delivery",
     missionGiverLabel: "Mission giver",

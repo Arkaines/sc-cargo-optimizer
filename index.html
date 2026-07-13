@@ -68,6 +68,7 @@
     <div class="tab-buttons">
       <button type="button" class="tab-btn active" data-tab="new-mission-tab" data-i18n="newMissionTab"></button>
       <button type="button" class="tab-btn" data-tab="missions-tab" data-i18n="missionsTab"></button>
+      <button type="button" class="tab-btn" data-tab="history-tab" data-i18n="historyTab"></button>
     </div>
 
     <div class="tab-panel" id="new-mission-tab">
@@ -144,6 +145,26 @@
     </div>
     <p id="missions-summary"></p>
     <p id="cargo-capacity-status" class="hint"></p>
+    </div>
+
+    <div class="tab-panel" id="history-tab" style="display:none;">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="colName"></th>
+            <th data-i18n="colGiver"></th>
+            <th data-i18n="colPickup"></th>
+            <th data-i18n="colDropoff"></th>
+            <th data-i18n="colCargo"></th>
+            <th data-i18n="colReward"></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+    <p id="history-summary"></p>
     </div>
   </div>
 
