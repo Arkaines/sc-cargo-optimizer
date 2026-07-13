@@ -393,6 +393,11 @@ th {
   font-size: 0.85rem;
 }
 
+.route-load-overload {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .route-actions {
   margin: 0.25rem 0 0;
   padding-left: 1.1rem;

@@ -419,15 +419,22 @@ function optimizeRoute(missions, startId) {
   // ajoute au retrait, on retire au dépôt. C'est cette charge cumulée le long
   // du trajet qui compte pour la capacité, pas la somme brute de toutes les
   // missions (on décharge en cours de route, ce qui libère de la place).
+  // Une mission avec plusieurs lieux de récupération/dépôt répartit son
+  // cargo à parts égales entre ses occurrences, pour que le total ajouté
+  // corresponde exactement au total retiré (sinon la charge peut passer
+  // sous zéro si un dépôt est compté plusieurs fois en trop).
   let load = 0;
   let maxLoad = 0;
   steps.forEach((step) => {
     step.actions.forEach((a) => {
       const sum = (a.mission.cargoItems || []).reduce((s, item) => s + (Number(item.quantity) || 0), 0);
-      load += a.type === "pickup" ? sum : -sum;
+      const count =
+        (a.type === "pickup" ? (a.mission.pickupIds || []).length : (a.mission.dropoffIds || []).length) || 1;
+      const share = sum / count;
+      load += a.type === "pickup" ? share : -share;
     });
-    step.cargoLoad = load;
-    if (load > maxLoad) maxLoad = load;
+    step.cargoLoad = Math.round(load * 100) / 100;
+    if (step.cargoLoad > maxLoad) maxLoad = step.cargoLoad;
   });
 
   return { steps, total, approximate, stopCount: n, maxCargoLoad: maxLoad };
@@ -819,8 +826,14 @@ function renderRouteResult(result) {
       header.appendChild(legSpan);
     }
     const loadSpan = document.createElement("span");
-    loadSpan.className = "route-load";
-    loadSpan.textContent = ` — ${step.cargoLoad} SCU à bord`;
+    if (ship) {
+      const overHere = step.cargoLoad > ship.scu;
+      loadSpan.className = overHere ? "route-load route-load-overload" : "route-load";
+      loadSpan.textContent = ` — ${step.cargoLoad} SCU à bord sur ${ship.scu} disponibles`;
+    } else {
+      loadSpan.className = "route-load";
+      loadSpan.textContent = ` — ${step.cargoLoad} SCU à bord`;
+    }
     header.appendChild(loadSpan);
     li.appendChild(header);
 
