@@ -329,6 +329,15 @@ details[open] > *:not(summary) {
   animation: fade-in-up 0.2s ease;
 }
 
+.ocr-help-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  margin-top: 0.75rem;
+}
+
 .tab-buttons {
   display: flex;
   gap: 0.5rem;

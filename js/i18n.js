@@ -38,6 +38,10 @@ const TRANSLATIONS = {
       "Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.",
     ocrDropzoneText: "Colle (Ctrl+V) ou dépose une image ici",
     ocrPreviewAlt: "Capture importée",
+    ocrHelpTitle: "Quelle capture faire ?",
+    ocrHelpText:
+      "Capture large tout l'écran de détails du contrat (pas juste recadrée) : elle doit inclure la récompense, le proposeur et la liste complète des objectifs avec leurs quantités, comme dans l'exemple ci-dessous.",
+    ocrHelpImageAlt: "Exemple de capture d'écran de contrat à importer",
     ocrRecognizing: "Reconnaissance en cours...",
     ocrRecognized: "Texte reconnu — vérifie avant d'utiliser.",
     ocrError: "Erreur OCR : {msg}",
@@ -176,6 +180,10 @@ const TRANSLATIONS = {
       "Take a screenshot of the contract details screen in-game (Win+Shift+S), then paste it here (Ctrl+V) or drop the image. Text recognition runs entirely in your browser.",
     ocrDropzoneText: "Paste (Ctrl+V) or drop an image here",
     ocrPreviewAlt: "Imported screenshot",
+    ocrHelpTitle: "What screenshot should I take?",
+    ocrHelpText:
+      "Capture the whole contract details screen (not a cropped-in view): it must include the reward, the giver and the full list of objectives with their quantities, like in the example below.",
+    ocrHelpImageAlt: "Example contract screenshot to import",
     ocrRecognizing: "Recognizing...",
     ocrRecognized: "Text recognized — check before using.",
     ocrError: "OCR error: {msg}",
