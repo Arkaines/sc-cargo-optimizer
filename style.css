@@ -118,6 +118,12 @@ aside#side-panel {
   padding: 0.15rem 0;
 }
 
+.ocr-approx-warning {
+  color: #e0a030;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
 .ocr-raw-text {
   background: #0d1320;
   border: 1px solid var(--panel-border);

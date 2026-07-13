@@ -1110,10 +1110,20 @@ function renderOcrResult(rawText, parsed) {
     row.appendChild(document.createTextNode(value));
     summary.appendChild(row);
   });
+  const hasApproximateSplit = (parsed.cargoItems || []).some((item) => item.approximate);
+  if (hasApproximateSplit) {
+    const warn = document.createElement("p");
+    warn.className = "hint ocr-approx-warning";
+    warn.textContent =
+      "⚠ Marchandise disponible à plusieurs lieux de retrait : la quantité est répartie également à titre d'estimation — vérifie le stock réel en jeu et corrige les quantités si besoin.";
+    container.appendChild(warn);
+  }
+
   (parsed.cargoItems || []).forEach((item) => {
     const row = document.createElement("div");
     row.className = "ocr-summary-row";
-    row.textContent = `${item.quantity || "?"} SCU de ${item.commodity || "?"} : ${item.pickupText || "?"} → ${item.dropoffText || "?"}`;
+    const approxNote = item.approximate ? " (estimation)" : "";
+    row.textContent = `${item.quantity || "?"} SCU de ${item.commodity || "?"} : ${item.pickupText || "?"} → ${item.dropoffText || "?"}${approxNote}`;
     summary.appendChild(row);
   });
   container.appendChild(summary);

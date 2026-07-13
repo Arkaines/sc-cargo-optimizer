@@ -126,49 +126,31 @@ function extractObjectives(normalized) {
   return objectives;
 }
 
-// Assigne à chaque objectif UN lieu de récupération parmi ses options
-// (glouton, comme un ensemble couvrant minimal) : quand un même lieu peut
-// fournir plusieurs marchandises, on le réutilise pour toutes plutôt que de
-// proposer un arrêt supplémentaire inutile. Retourne une Map objectif -> lieu.
-function assignPickupLocations(objectives) {
-  let remaining = objectives.filter((o) => o.pickupOptions.length);
-  const assigned = new Map();
-  while (remaining.length) {
-    const counts = new Map();
-    remaining.forEach((o) =>
-      o.pickupOptions.forEach((loc) => counts.set(loc, (counts.get(loc) || 0) + 1))
-    );
-    let best = null;
-    let bestCount = -1;
-    counts.forEach((count, loc) => {
-      if (count > bestCount) {
-        best = loc;
-        bestCount = count;
-      }
-    });
-    if (!best) break;
-    remaining.forEach((o) => {
-      if (o.pickupOptions.includes(best)) assigned.set(o, best);
-    });
-    remaining = remaining.filter((o) => !o.pickupOptions.includes(best));
-  }
-  return assigned;
-}
-
 function parseOcrText(text) {
   const normalized = normalizeOcrText(text);
   const objectives = extractObjectives(normalized);
-  const pickupAssignment = assignPickupLocations(objectives);
 
-  // Une ligne par objectif (pas de fusion par nom de marchandise) : deux
-  // objectifs de la même marchandise vers deux dépôts différents restent
-  // deux lignes distinctes, chacune avec son propre couple récupération/dépôt.
-  const cargoItems = objectives.map((o) => ({
-    commodity: o.commodity,
-    quantity: o.quantity,
-    pickupText: pickupAssignment.get(o) || o.pickupOptions[0] || "",
-    dropoffText: o.dropoff,
-  }));
+  // Quand une marchandise a plusieurs lieux de retrait possibles, on ne peut
+  // pas savoir comment la quantité totale se répartit entre eux (ça dépend
+  // du stock réellement disponible sur place, connu seulement en jeu) : on
+  // crée une ligne par lieu, avec une répartition égale à titre d'estimation
+  // à corriger une fois sur place — plutôt que de choisir un seul lieu en
+  // silence et perdre l'info que l'autre existe aussi.
+  const cargoItems = [];
+  objectives.forEach((o) => {
+    const options = o.pickupOptions.length ? o.pickupOptions : [""];
+    const approximate = options.length > 1;
+    const share = approximate ? Math.round((o.quantity / options.length) * 100) / 100 : o.quantity;
+    options.forEach((pickupText) => {
+      cargoItems.push({
+        commodity: o.commodity,
+        quantity: share,
+        pickupText,
+        dropoffText: o.dropoff,
+        approximate,
+      });
+    });
+  });
 
   return {
     raw: text,
