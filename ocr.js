@@ -126,13 +126,13 @@ function extractObjectives(normalized) {
   return objectives;
 }
 
-// Choisit un ensemble minimal de lieux de retrait couvrant tous les
-// objectifs (glouton) : quand un même lieu peut fournir plusieurs
-// marchandises (options alternatives), on évite de proposer un arrêt
-// supplémentaire inutile.
-function pickMinimalPickupSet(objectives) {
+// Assigne à chaque objectif UN lieu de récupération parmi ses options
+// (glouton, comme un ensemble couvrant minimal) : quand un même lieu peut
+// fournir plusieurs marchandises, on le réutilise pour toutes plutôt que de
+// proposer un arrêt supplémentaire inutile. Retourne une Map objectif -> lieu.
+function assignPickupLocations(objectives) {
   let remaining = objectives.filter((o) => o.pickupOptions.length);
-  const chosen = [];
+  const assigned = new Map();
   while (remaining.length) {
     const counts = new Map();
     remaining.forEach((o) =>
@@ -147,22 +147,28 @@ function pickMinimalPickupSet(objectives) {
       }
     });
     if (!best) break;
-    chosen.push(best);
+    remaining.forEach((o) => {
+      if (o.pickupOptions.includes(best)) assigned.set(o, best);
+    });
     remaining = remaining.filter((o) => !o.pickupOptions.includes(best));
   }
-  return chosen;
+  return assigned;
 }
 
 function parseOcrText(text) {
   const normalized = normalizeOcrText(text);
   const objectives = extractObjectives(normalized);
+  const pickupAssignment = assignPickupLocations(objectives);
 
-  const dropoffTexts = Array.from(new Set(objectives.map((o) => o.dropoff)));
-  const pickupTexts = pickMinimalPickupSet(objectives);
   // Une ligne par objectif (pas de fusion par nom de marchandise) : deux
   // objectifs de la même marchandise vers deux dépôts différents restent
-  // deux lignes distinctes, plus fidèle au contrat réel.
-  const cargoItems = objectives.map((o) => ({ commodity: o.commodity, quantity: o.quantity }));
+  // deux lignes distinctes, chacune avec son propre couple récupération/dépôt.
+  const cargoItems = objectives.map((o) => ({
+    commodity: o.commodity,
+    quantity: o.quantity,
+    pickupText: pickupAssignment.get(o) || o.pickupOptions[0] || "",
+    dropoffText: o.dropoff,
+  }));
 
   return {
     raw: text,
@@ -170,7 +176,5 @@ function parseOcrText(text) {
     giver: extractGiver(normalized),
     cargoItems,
     reward: extractReward(normalized),
-    pickupTexts,
-    dropoffTexts,
   };
 }

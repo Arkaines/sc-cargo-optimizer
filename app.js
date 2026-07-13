@@ -22,18 +22,34 @@ function defaultState() {
   };
 }
 
-// Ancien format : mission.pickupId/dropoffId (un seul lieu chacun).
-// Nouveau format : mission.pickupIds/dropoffIds (tableaux, plusieurs lieux possibles).
-// Ancien format : mission.commodity/cargo (une seule marchandise en texte).
-// Nouveau format : mission.cargoItems (tableau {commodity, quantity}, une ligne par marchandise).
+// Format actuel : mission.cargoItems, un tableau {commodity, quantity,
+// pickupId, dropoffId} — chaque marchandise porte SON PROPRE lieu de
+// récupération et de dépôt (plus de liste de lieux séparée au niveau de la
+// mission, ce qui créait des doublons de dépose quand il y avait plusieurs
+// lieux et qu'on ne savait pas quelle marchandise allait où).
 function migrateMission(m) {
-  return {
-    ...m,
-    pickupIds: m.pickupIds || (m.pickupId ? [m.pickupId] : []),
-    dropoffIds: m.dropoffIds || (m.dropoffId ? [m.dropoffId] : []),
-    cargoItems:
-      m.cargoItems || (m.commodity || m.cargo ? [{ commodity: m.commodity || "", quantity: m.cargo || "" }] : []),
-  };
+  if (m.cargoItems && m.cargoItems.length && m.cargoItems[0].pickupId !== undefined) {
+    return m;
+  }
+
+  const oldPickupIds = m.pickupIds || (m.pickupId ? [m.pickupId] : []);
+  const oldDropoffIds = m.dropoffIds || (m.dropoffId ? [m.dropoffId] : []);
+  const oldItems =
+    m.cargoItems || (m.commodity || m.cargo ? [{ commodity: m.commodity || "", quantity: m.cargo || "" }] : []);
+
+  // Au mieux : associe chaque marchandise au premier lieu de récupération et
+  // premier lieu de dépôt connus. Une mission migrée qui avait plusieurs
+  // lieux devra être vérifiée : l'ancien format ne permettait pas de savoir
+  // quelle marchandise allait où.
+  const cargoItems = oldItems.map((item) => ({
+    commodity: item.commodity || "",
+    quantity: item.quantity || "",
+    pickupId: oldPickupIds[0] || "",
+    dropoffId: oldDropoffIds[0] || "",
+  }));
+
+  const { pickupIds, dropoffIds, pickupId, dropoffId, commodity, cargo, ...rest } = m;
+  return { ...rest, cargoItems };
 }
 
 function loadState() {
@@ -164,8 +180,6 @@ function addMission(mission) {
     id: state.nextMissionId++,
     name: mission.name || `Mission ${state.nextMissionId - 1}`,
     giver: mission.giver || "",
-    pickupIds: mission.pickupIds,
-    dropoffIds: mission.dropoffIds,
     cargoItems: mission.cargoItems || [],
     reward: mission.reward,
     included: true,
@@ -173,6 +187,14 @@ function addMission(mission) {
   state.missions.push(m);
   saveState();
   return m;
+}
+
+function missionPickupIds(m) {
+  return Array.from(new Set((m.cargoItems || []).map((i) => i.pickupId).filter(Boolean)));
+}
+
+function missionDropoffIds(m) {
+  return Array.from(new Set((m.cargoItems || []).map((i) => i.dropoffId).filter(Boolean)));
 }
 
 function removeMission(id) {
@@ -194,8 +216,10 @@ function setMissionIncluded(id, included) {
 function computeUniqueLocationIds(missions) {
   const set = new Set();
   missions.forEach((m) => {
-    (m.pickupIds || []).forEach((id) => set.add(id));
-    (m.dropoffIds || []).forEach((id) => set.add(id));
+    (m.cargoItems || []).forEach((item) => {
+      if (item.pickupId) set.add(item.pickupId);
+      if (item.dropoffId) set.add(item.dropoffId);
+    });
   });
   return Array.from(set);
 }
@@ -380,15 +404,14 @@ function optimizeRoute(missions, startId) {
     }
   }
 
-  // Chaque lieu de récupération doit être visité avant chaque lieu de dépôt
-  // de la même mission (produit cartésien pickups x dropoffs).
+  // Le lieu de récupération de chaque marchandise doit être visité avant son
+  // propre lieu de dépôt (chaque ligne de cargaison porte ses deux lieux).
   const constraints = [];
   missions.forEach((m) => {
-    (m.pickupIds || []).forEach((pId) => {
-      (m.dropoffIds || []).forEach((dId) => {
-        if (pId === dId) return;
-        constraints.push([idxOf[pId], idxOf[dId]]);
-      });
+    (m.cargoItems || []).forEach((item) => {
+      if (item.pickupId && item.dropoffId && item.pickupId !== item.dropoffId) {
+        constraints.push([idxOf[item.pickupId], idxOf[item.dropoffId]]);
+      }
     });
   });
 
@@ -410,14 +433,20 @@ function optimizeRoute(missions, startId) {
     };
   }
 
+  // Chaque action ne porte que les lignes de cargaison réellement concernées
+  // par ce lieu précis (une marchandise donnée n'apparaît qu'à SON lieu de
+  // récupération et SON lieu de dépôt, plus de doublon sur les autres arrêts
+  // de la même mission).
   let total = 0;
   const steps = order.map((idx, i) => {
     if (i > 0) total += dist[order[i - 1]][idx];
     const locId = locIds[idx];
     const actions = [];
     missions.forEach((m) => {
-      if ((m.pickupIds || []).includes(locId)) actions.push({ type: "pickup", mission: m });
-      if ((m.dropoffIds || []).includes(locId)) actions.push({ type: "dropoff", mission: m });
+      const pickupItems = (m.cargoItems || []).filter((item) => item.pickupId === locId);
+      if (pickupItems.length) actions.push({ type: "pickup", mission: m, items: pickupItems });
+      const dropoffItems = (m.cargoItems || []).filter((item) => item.dropoffId === locId);
+      if (dropoffItems.length) actions.push({ type: "dropoff", mission: m, items: dropoffItems });
     });
     return { locId, actions, legDistance: i > 0 ? dist[order[i - 1]][idx] : 0 };
   });
@@ -426,19 +455,12 @@ function optimizeRoute(missions, startId) {
   // ajoute au retrait, on retire au dépôt. C'est cette charge cumulée le long
   // du trajet qui compte pour la capacité, pas la somme brute de toutes les
   // missions (on décharge en cours de route, ce qui libère de la place).
-  // Une mission avec plusieurs lieux de récupération/dépôt répartit son
-  // cargo à parts égales entre ses occurrences, pour que le total ajouté
-  // corresponde exactement au total retiré (sinon la charge peut passer
-  // sous zéro si un dépôt est compté plusieurs fois en trop).
   let load = 0;
   let maxLoad = 0;
   steps.forEach((step) => {
     step.actions.forEach((a) => {
-      const sum = (a.mission.cargoItems || []).reduce((s, item) => s + (Number(item.quantity) || 0), 0);
-      const count =
-        (a.type === "pickup" ? (a.mission.pickupIds || []).length : (a.mission.dropoffIds || []).length) || 1;
-      const share = sum / count;
-      load += a.type === "pickup" ? share : -share;
+      const sum = a.items.reduce((s, item) => s + (Number(item.quantity) || 0), 0);
+      load += a.type === "pickup" ? sum : -sum;
     });
     step.cargoLoad = roundScu(load);
     if (step.cargoLoad > maxLoad) maxLoad = step.cargoLoad;
@@ -594,13 +616,13 @@ function renderMissionsTable() {
     tr.appendChild(tdGiver);
 
     const tdPickup = document.createElement("td");
-    tdPickup.textContent = (m.pickupIds || [])
+    tdPickup.textContent = missionPickupIds(m)
       .map((id) => locationLabel(getLocationById(id)))
       .join(", ");
     tr.appendChild(tdPickup);
 
     const tdDropoff = document.createElement("td");
-    tdDropoff.textContent = (m.dropoffIds || [])
+    tdDropoff.textContent = missionDropoffIds(m)
       .map((id) => locationLabel(getLocationById(id)))
       .join(", ");
     tr.appendChild(tdDropoff);
@@ -610,7 +632,10 @@ function renderMissionsTable() {
     if (items.length) {
       items.forEach((item) => {
         const line = document.createElement("div");
-        line.textContent = `${item.quantity || "?"} SCU — ${item.commodity || "?"}`;
+        const pickupLoc = getLocationById(item.pickupId);
+        const dropoffLoc = getLocationById(item.dropoffId);
+        const route = pickupLoc && dropoffLoc ? ` (${pickupLoc.name} → ${dropoffLoc.name})` : "";
+        line.textContent = `${item.quantity || "?"} SCU — ${item.commodity || "?"}${route}`;
         tdCargo.appendChild(line);
       });
     } else {
@@ -852,7 +877,7 @@ function renderRouteResult(result) {
         actionLi.className = a.type === "pickup" ? "action-pickup" : "action-dropoff";
         actionLi.textContent = `${a.type === "pickup" ? "Récupérer" : "Déposer"} — ${a.mission.name}`;
 
-        const items = a.mission.cargoItems || [];
+        const items = a.items || [];
         if (items.length) {
           const itemsUl = document.createElement("ul");
           itemsUl.className = "route-cargo-items";
@@ -894,53 +919,22 @@ function renderAll() {
 }
 
 // =========================================================================
-// Champs dynamiques (plusieurs lieux de récupération / dépôt par mission)
+// Champs dynamiques (une ligne par marchandise, avec son propre lieu de
+// récupération et de dépôt)
 // =========================================================================
-function createLocationFieldRow(containerId, value) {
-  const container = document.getElementById(containerId);
-  const row = document.createElement("div");
-  row.className = "field-row";
-
+function createLocationSubInput(row, className, placeholder, value) {
   const input = document.createElement("input");
   input.type = "text";
   input.setAttribute("list", "locations-datalist");
-  input.placeholder = "Tape pour chercher...";
+  input.placeholder = placeholder;
   input.autocomplete = "off";
-  input.className = "location-field-input";
+  input.className = className;
   if (value) input.value = value;
   row.appendChild(input);
-
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "btn-remove-field";
-  removeBtn.textContent = "×";
-  removeBtn.addEventListener("click", () => {
-    row.remove();
-    if (container.children.length === 0) createLocationFieldRow(containerId);
-  });
-  row.appendChild(removeBtn);
-
-  container.appendChild(row);
-  return row;
+  return input;
 }
 
-function resetLocationFields(containerId) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = "";
-  createLocationFieldRow(containerId);
-}
-
-function getLocationFieldValues(containerId) {
-  const container = document.getElementById(containerId);
-  return Array.from(container.querySelectorAll(".location-field-input"))
-    .map((input) => input.value.trim())
-    .filter((v) => v !== "");
-}
-
-// =========================================================================
-// Champs dynamiques (une ligne par marchandise)
-// =========================================================================
-function createCargoFieldRow(commodity, quantity) {
+function createCargoFieldRow(commodity, quantity, pickupText, dropoffText) {
   const container = document.getElementById("cargo-fields");
   const row = document.createElement("div");
   row.className = "field-row cargo-field-row";
@@ -962,6 +956,9 @@ function createCargoFieldRow(commodity, quantity) {
   quantityInput.className = "cargo-quantity-input";
   if (quantity) quantityInput.value = quantity;
   row.appendChild(quantityInput);
+
+  createLocationSubInput(row, "cargo-pickup-input", "Lieu de récupération", pickupText);
+  createLocationSubInput(row, "cargo-dropoff-input", "Lieu de dépôt", dropoffText);
 
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
@@ -989,8 +986,13 @@ function getCargoFieldValues() {
     .map((row) => ({
       commodity: row.querySelector(".cargo-commodity-input").value.trim(),
       quantity: row.querySelector(".cargo-quantity-input").value,
+      pickupText: row.querySelector(".cargo-pickup-input").value.trim(),
+      dropoffText: row.querySelector(".cargo-dropoff-input").value.trim(),
     }))
-    .filter((item) => item.commodity !== "" || item.quantity !== "");
+    .filter(
+      (item) =>
+        item.commodity !== "" || item.quantity !== "" || item.pickupText !== "" || item.dropoffText !== ""
+    );
 }
 
 // =========================================================================
@@ -1068,33 +1070,23 @@ function progressiveTrimMatch(cleaned) {
   return null;
 }
 
-function fillLocationFieldsFromTexts(containerId, texts) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = "";
-  if (!texts.length) {
-    createLocationFieldRow(containerId);
-    return;
-  }
-  texts.forEach((text) => {
-    const loc = looseLocationMatch(text);
-    createLocationFieldRow(containerId, loc ? locationSearchLabel(loc) : text);
-  });
-}
-
 function applyOcrResultToForm(parsed) {
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
   if (parsed.reward) document.getElementById("mission-reward").value = parsed.reward;
-  if (parsed.pickupTexts && parsed.pickupTexts.length) {
-    fillLocationFieldsFromTexts("pickup-fields", parsed.pickupTexts);
-  }
-  if (parsed.dropoffTexts && parsed.dropoffTexts.length) {
-    fillLocationFieldsFromTexts("dropoff-fields", parsed.dropoffTexts);
-  }
   if (parsed.cargoItems && parsed.cargoItems.length) {
     const container = document.getElementById("cargo-fields");
     container.innerHTML = "";
-    parsed.cargoItems.forEach((item) => createCargoFieldRow(item.commodity, item.quantity));
+    parsed.cargoItems.forEach((item) => {
+      const pickupLoc = looseLocationMatch(item.pickupText || "");
+      const dropoffLoc = looseLocationMatch(item.dropoffText || "");
+      createCargoFieldRow(
+        item.commodity,
+        item.quantity,
+        pickupLoc ? locationSearchLabel(pickupLoc) : item.pickupText,
+        dropoffLoc ? locationSearchLabel(dropoffLoc) : item.dropoffText
+      );
+    });
   }
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1105,16 +1097,10 @@ function renderOcrResult(rawText, parsed) {
 
   const summary = document.createElement("div");
   summary.className = "ocr-summary";
-  const cargoSummary = (parsed.cargoItems || [])
-    .map((item) => `${item.quantity || "?"} SCU de ${item.commodity || "?"}`)
-    .join(" / ");
   const rows = [
     ["Nom", parsed.name],
     ["Donneur", parsed.giver],
-    ["Marchandises", cargoSummary],
     ["Récompense", parsed.reward ? `${parsed.reward} aUEC` : ""],
-    ["Récupération", (parsed.pickupTexts || []).join(", ")],
-    ["Dépôt", (parsed.dropoffTexts || []).join(", ")],
   ];
   rows.forEach(([label, value]) => {
     if (!value) return;
@@ -1122,6 +1108,12 @@ function renderOcrResult(rawText, parsed) {
     row.className = "ocr-summary-row";
     row.innerHTML = `<strong>${label} :</strong> `;
     row.appendChild(document.createTextNode(value));
+    summary.appendChild(row);
+  });
+  (parsed.cargoItems || []).forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "ocr-summary-row";
+    row.textContent = `${item.quantity || "?"} SCU de ${item.commodity || "?"} : ${item.pickupText || "?"} → ${item.dropoffText || "?"}`;
     summary.appendChild(row);
   });
   container.appendChild(summary);
@@ -1132,12 +1124,7 @@ function renderOcrResult(rawText, parsed) {
   container.appendChild(pre);
 
   const hasAnyField =
-    parsed.name ||
-    parsed.giver ||
-    parsed.reward ||
-    (parsed.cargoItems && parsed.cargoItems.length) ||
-    (parsed.pickupTexts && parsed.pickupTexts.length) ||
-    (parsed.dropoffTexts && parsed.dropoffTexts.length);
+    parsed.name || parsed.giver || parsed.reward || (parsed.cargoItems && parsed.cargoItems.length);
 
   if (hasAnyField) {
     const useBtn = document.createElement("button");
@@ -1177,8 +1164,6 @@ async function processOcrImage(blob) {
 // =========================================================================
 document.addEventListener("DOMContentLoaded", () => {
   renderAll();
-  resetLocationFields("pickup-fields");
-  resetLocationFields("dropoff-fields");
   resetCargoFields();
 
   document.getElementById("add-cargo-btn").addEventListener("click", () => {
@@ -1223,49 +1208,38 @@ document.addEventListener("DOMContentLoaded", () => {
     if (blob) processOcrImage(blob);
   });
 
-  document.getElementById("add-pickup-btn").addEventListener("click", () => {
-    createLocationFieldRow("pickup-fields");
-  });
-  document.getElementById("add-dropoff-btn").addEventListener("click", () => {
-    createLocationFieldRow("dropoff-fields");
-  });
-
   document.getElementById("mission-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = document.getElementById("mission-name").value.trim();
     const giver = document.getElementById("mission-giver").value.trim();
     const reward = document.getElementById("mission-reward").value;
 
-    const pickupTexts = getLocationFieldValues("pickup-fields");
-    const dropoffTexts = getLocationFieldValues("dropoff-fields");
-    const cargoItems = getCargoFieldValues();
-
-    if (pickupTexts.length === 0 || dropoffTexts.length === 0) {
-      alert("Ajoute au moins un lieu de récupération et un lieu de dépôt.");
+    const rows = getCargoFieldValues();
+    if (rows.length === 0) {
+      alert("Ajoute au moins une marchandise avec son lieu de récupération et de dépôt.");
       return;
     }
 
-    const pickupLocs = pickupTexts.map(findLocationByLabel);
-    const dropoffLocs = dropoffTexts.map(findLocationByLabel);
-
-    if (pickupLocs.some((l) => !l) || dropoffLocs.some((l) => !l)) {
-      alert(
-        "Un des lieux saisis n'a pas été reconnu : choisis-le dans la liste proposée (tape un nom puis sélectionne une suggestion)."
-      );
-      return;
+    const cargoItems = [];
+    for (const row of rows) {
+      const pickupLoc = findLocationByLabel(row.pickupText);
+      const dropoffLoc = findLocationByLabel(row.dropoffText);
+      if (!pickupLoc || !dropoffLoc) {
+        alert(
+          `Le lieu de récupération et le lieu de dépôt doivent être choisis dans la liste proposée (marchandise "${row.commodity || "?"}").`
+        );
+        return;
+      }
+      cargoItems.push({
+        commodity: row.commodity,
+        quantity: row.quantity,
+        pickupId: pickupLoc.id,
+        dropoffId: dropoffLoc.id,
+      });
     }
 
-    addMission({
-      name,
-      giver,
-      pickupIds: pickupLocs.map((l) => l.id),
-      dropoffIds: dropoffLocs.map((l) => l.id),
-      cargoItems,
-      reward,
-    });
+    addMission({ name, giver, cargoItems, reward });
     e.target.reset();
-    resetLocationFields("pickup-fields");
-    resetLocationFields("dropoff-fields");
     resetCargoFields();
     renderAll();
   });

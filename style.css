@@ -251,6 +251,18 @@ button {
   flex: 1;
 }
 
+.cargo-field-row {
+  flex-wrap: wrap;
+  background: #0d1320;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.cargo-field-row input {
+  flex: 1 1 160px;
+}
+
 .cargo-quantity-input {
   flex: none !important;
   width: 90px;
