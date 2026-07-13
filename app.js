@@ -1182,6 +1182,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("distance-filter").addEventListener("input", filterDistanceRows);
 
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => (p.style.display = "none"));
+      btn.classList.add("active");
+      document.getElementById(btn.dataset.tab).style.display = "";
+    });
+  });
+
   document.getElementById("ship-select").addEventListener("change", (e) => {
     state.selectedShip = e.target.value;
     saveState();

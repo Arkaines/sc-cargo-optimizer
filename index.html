@@ -134,25 +134,30 @@
   </details>
   </div>
 
-  <details>
-    <summary>Distances entre lieux utilisés</summary>
-    <input type="text" id="distance-filter" placeholder="Filtrer par nom de lieu..." autocomplete="off" style="margin-bottom:0.75rem;" />
-    <div id="distance-editor"></div>
-  </details>
-
-  <details open>
-    <summary>Optimisation de la route</summary>
-    <div class="optimize-row">
-      <div>
-        <label for="start-location">Point de départ (optionnel)</label>
-        <select id="start-location"></select>
-      </div>
-      <div>
-        <button type="button" id="optimize-btn" class="btn-primary">Optimiser la route</button>
-      </div>
+  <div class="tabs">
+    <div class="tab-buttons">
+      <button type="button" class="tab-btn" data-tab="distances-tab">Distances entre lieux utilisés</button>
+      <button type="button" class="tab-btn active" data-tab="optimize-tab">Optimisation de la route</button>
     </div>
-    <div id="route-result" style="margin-top:1rem;"></div>
-  </details>
+
+    <div class="tab-panel" id="distances-tab" style="display:none;">
+      <input type="text" id="distance-filter" placeholder="Filtrer par nom de lieu..." autocomplete="off" style="margin-bottom:0.75rem;" />
+      <div id="distance-editor"></div>
+    </div>
+
+    <div class="tab-panel" id="optimize-tab">
+      <div class="optimize-row">
+        <div>
+          <label for="start-location">Point de départ (optionnel)</label>
+          <select id="start-location"></select>
+        </div>
+        <div>
+          <button type="button" id="optimize-btn" class="btn-primary">Optimiser la route</button>
+        </div>
+      </div>
+      <div id="route-result" style="margin-top:1rem;"></div>
+    </div>
+  </div>
 </main>
 </div>
 
