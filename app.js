@@ -143,6 +143,7 @@ function addMission(mission) {
     name: mission.name || `Mission ${state.nextMissionId - 1}`,
     pickupId: mission.pickupId,
     dropoffId: mission.dropoffId,
+    commodity: mission.commodity || "",
     cargo: mission.cargo,
     reward: mission.reward,
     included: true,
@@ -418,8 +419,19 @@ function renderLocationDatalist() {
   });
 }
 
+function renderCommodityDatalist() {
+  const datalist = document.getElementById("commodities-datalist");
+  datalist.innerHTML = "";
+  DEFAULT_COMMODITIES.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.name;
+    datalist.appendChild(opt);
+  });
+}
+
 function refreshAllLocationSelects() {
   renderLocationDatalist();
+  renderCommodityDatalist();
   renderStartLocationOptions();
 }
 
@@ -473,6 +485,10 @@ function renderMissionsTable() {
     const tdDropoff = document.createElement("td");
     tdDropoff.textContent = locationLabel(getLocationById(m.dropoffId));
     tr.appendChild(tdDropoff);
+
+    const tdCommodity = document.createElement("td");
+    tdCommodity.textContent = m.commodity || "-";
+    tr.appendChild(tdCommodity);
 
     const tdCargo = document.createElement("td");
     tdCargo.textContent = m.cargo != null && m.cargo !== "" ? `${m.cargo} SCU` : "-";
@@ -698,6 +714,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const name = document.getElementById("mission-name").value.trim();
     const pickupInput = document.getElementById("mission-pickup");
     const dropoffInput = document.getElementById("mission-dropoff");
+    const commodity = document.getElementById("mission-commodity").value.trim();
     const cargo = document.getElementById("mission-cargo").value;
     const reward = document.getElementById("mission-reward").value;
 
@@ -711,7 +728,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    addMission({ name, pickupId: pickupLoc.id, dropoffId: dropoffLoc.id, cargo, reward });
+    addMission({ name, pickupId: pickupLoc.id, dropoffId: dropoffLoc.id, commodity, cargo, reward });
     e.target.reset();
     renderAll();
   });

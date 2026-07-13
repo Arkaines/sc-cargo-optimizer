@@ -45,6 +45,11 @@
         </div>
         <datalist id="locations-datalist"></datalist>
         <div>
+          <label for="mission-commodity">Marchandise</label>
+          <input type="text" id="mission-commodity" list="commodities-datalist" placeholder="Tape pour chercher..." autocomplete="off" />
+          <datalist id="commodities-datalist"></datalist>
+        </div>
+        <div>
           <label for="mission-cargo">Cargo (SCU)</label>
           <input type="number" id="mission-cargo" min="0" step="any" />
         </div>
@@ -92,6 +97,7 @@
           <th>Nom</th>
           <th>Récupération</th>
           <th>Dépôt</th>
+          <th>Marchandise</th>
           <th>Cargo</th>
           <th>Récompense</th>
           <th></th>
@@ -127,6 +133,7 @@
 </footer>
 
 <script src="locations.js"></script>
+<script src="commodities.js"></script>
 <script src="distances.js"></script>
 <script src="uex.js"></script>
 <script src="app.js"></script>
