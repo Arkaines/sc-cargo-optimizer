@@ -786,7 +786,8 @@ function renderHistoryTable() {
     tr.appendChild(tdReward);
 
     const tdActions = document.createElement("td");
-    tdActions.className = "actions-cell";
+    const actionsWrap = document.createElement("div");
+    actionsWrap.className = "actions-cell";
     const restoreBtn = document.createElement("button");
     restoreBtn.type = "button";
     restoreBtn.className = "btn-primary-sm";
@@ -799,7 +800,7 @@ function renderHistoryTable() {
       saveState();
       renderAll();
     });
-    tdActions.appendChild(restoreBtn);
+    actionsWrap.appendChild(restoreBtn);
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
@@ -811,7 +812,8 @@ function renderHistoryTable() {
       saveState();
       renderAll();
     });
-    tdActions.appendChild(delBtn);
+    actionsWrap.appendChild(delBtn);
+    tdActions.appendChild(actionsWrap);
     tr.appendChild(tdActions);
 
     tbody.appendChild(tr);
