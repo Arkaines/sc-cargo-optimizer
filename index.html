@@ -68,6 +68,7 @@
     <div class="tab-buttons">
       <button type="button" class="tab-btn active" data-tab="new-mission-tab" data-i18n="newMissionTab"></button>
       <button type="button" class="tab-btn" data-tab="missions-tab" data-i18n="missionsTab"></button>
+      <button type="button" class="tab-btn" data-tab="optimize-tab" data-i18n="optimizeTab"></button>
       <button type="button" class="tab-btn" data-tab="history-tab" data-i18n="historyTab"></button>
     </div>
 
@@ -147,6 +148,19 @@
     <p id="cargo-capacity-status" class="hint"></p>
     </div>
 
+    <div class="tab-panel" id="optimize-tab" style="display:none;">
+      <div class="optimize-row">
+        <div>
+          <label for="start-location" data-i18n="startLocationLabel"></label>
+          <select id="start-location"></select>
+        </div>
+        <div>
+          <button type="button" id="optimize-btn" class="btn-primary" data-i18n="optimizeBtn"></button>
+        </div>
+      </div>
+      <div id="route-result" style="margin-top:1rem;"></div>
+    </div>
+
     <div class="tab-panel" id="history-tab" style="display:none;">
     <div class="table-scroll">
       <table>
@@ -171,26 +185,12 @@
 
   <div class="tabs">
     <div class="tab-buttons">
-      <button type="button" class="tab-btn" data-tab="distances-tab" data-i18n="distancesTab"></button>
-      <button type="button" class="tab-btn active" data-tab="optimize-tab" data-i18n="optimizeTab"></button>
+      <button type="button" class="tab-btn active" data-tab="distances-tab" data-i18n="distancesTab"></button>
     </div>
 
-    <div class="tab-panel" id="distances-tab" style="display:none;">
+    <div class="tab-panel" id="distances-tab">
       <input type="text" id="distance-filter" data-i18n-placeholder="distanceFilterPlaceholder" autocomplete="off" style="margin-bottom:0.75rem;" />
       <div id="distance-editor"></div>
-    </div>
-
-    <div class="tab-panel" id="optimize-tab">
-      <div class="optimize-row">
-        <div>
-          <label for="start-location" data-i18n="startLocationLabel"></label>
-          <select id="start-location"></select>
-        </div>
-        <div>
-          <button type="button" id="optimize-btn" class="btn-primary" data-i18n="optimizeBtn"></button>
-        </div>
-      </div>
-      <div id="route-result" style="margin-top:1rem;"></div>
     </div>
   </div>
 </main>
