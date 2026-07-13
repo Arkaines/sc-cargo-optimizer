@@ -43,8 +43,8 @@
 </aside>
 
 <main>
-  <section>
-    <h2>Nouvelle mission</h2>
+  <details open>
+    <summary>Nouvelle mission</summary>
     <form id="mission-form">
       <div class="form-grid">
         <div class="full">
@@ -102,10 +102,10 @@
         <button type="submit" class="btn-secondary">Ajouter le lieu</button>
       </div>
     </form>
-  </section>
+  </details>
 
-  <section>
-    <h2>Missions enregistrées</h2>
+  <details open>
+    <summary>Missions enregistrées</summary>
     <div class="toolbar">
       <button type="button" id="select-all-missions" class="btn-secondary">Tout sélectionner</button>
       <button type="button" id="deselect-all-missions" class="btn-secondary">Tout désélectionner</button>
@@ -126,15 +126,15 @@
       <tbody id="missions-tbody"></tbody>
     </table>
     <p id="missions-summary"></p>
-  </section>
+  </details>
 
-  <section>
-    <h2>Distances entre lieux utilisés</h2>
+  <details open>
+    <summary>Distances entre lieux utilisés</summary>
     <div id="distance-editor"></div>
-  </section>
+  </details>
 
-  <section>
-    <h2>Optimisation de la route</h2>
+  <details open>
+    <summary>Optimisation de la route</summary>
     <div class="optimize-row">
       <div>
         <label for="start-location">Point de départ (optionnel)</label>
@@ -145,7 +145,7 @@
       </div>
     </div>
     <div id="route-result" style="margin-top:1rem;"></div>
-  </section>
+  </details>
 </main>
 </div>
 
