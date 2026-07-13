@@ -54,6 +54,7 @@
 </aside>
 
 <main>
+  <div class="top-row">
   <details open>
     <summary>Nouvelle mission</summary>
     <form id="mission-form">
@@ -121,24 +122,27 @@
       <button type="button" id="select-all-missions" class="btn-secondary">Tout sélectionner</button>
       <button type="button" id="deselect-all-missions" class="btn-secondary">Tout désélectionner</button>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Inclure</th>
-          <th>Nom</th>
-          <th>Donneur</th>
-          <th>Récupération</th>
-          <th>Dépôt</th>
-          <th>Cargaison</th>
-          <th>Récompense</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="missions-tbody"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Inclure</th>
+            <th>Nom</th>
+            <th>Donneur</th>
+            <th>Récupération</th>
+            <th>Dépôt</th>
+            <th>Cargaison</th>
+            <th>Récompense</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="missions-tbody"></tbody>
+      </table>
+    </div>
     <p id="missions-summary"></p>
     <p id="cargo-capacity-status" class="hint"></p>
   </details>
+  </div>
 
   <details>
     <summary>Distances entre lieux utilisés</summary>

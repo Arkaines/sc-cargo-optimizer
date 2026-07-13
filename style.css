@@ -38,12 +38,24 @@ header p {
 }
 
 .layout {
-  max-width: 1300px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 1.5rem 2rem;
   display: flex;
   align-items: flex-start;
   gap: 1.5rem;
+}
+
+.top-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.top-row > details {
+  flex: 1;
+  min-width: 380px;
 }
 
 aside#side-panel {
@@ -131,7 +143,7 @@ aside#side-panel {
 }
 
 main {
-  max-width: 900px;
+  max-width: 1250px;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -284,6 +296,10 @@ button {
 .inline-add-location > div {
   flex: 1;
   min-width: 140px;
+}
+
+.table-scroll {
+  overflow-x: auto;
 }
 
 table {
