@@ -102,6 +102,32 @@ button {
   color: #06131c;
 }
 
+.field-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.field-row input {
+  flex: 1;
+}
+
+.btn-remove-field {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex: none;
+}
+
+.btn-add-field {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.8rem;
+}
+
 .btn-secondary {
   background: #26314a;
   color: var(--text);

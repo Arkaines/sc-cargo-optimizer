@@ -35,13 +35,15 @@
           <label for="mission-name">Nom (optionnel)</label>
           <input type="text" id="mission-name" placeholder="Ex : Livraison medgel" />
         </div>
-        <div>
-          <label for="mission-pickup">Lieu de récupération</label>
-          <input type="text" id="mission-pickup" list="locations-datalist" placeholder="Tape pour chercher..." autocomplete="off" required />
+        <div class="full">
+          <label>Lieux de récupération</label>
+          <div id="pickup-fields"></div>
+          <button type="button" id="add-pickup-btn" class="btn-secondary btn-add-field">+ Ajouter un lieu de récupération</button>
         </div>
-        <div>
-          <label for="mission-dropoff">Lieu de dépôt</label>
-          <input type="text" id="mission-dropoff" list="locations-datalist" placeholder="Tape pour chercher..." autocomplete="off" required />
+        <div class="full">
+          <label>Lieux de dépôt</label>
+          <div id="dropoff-fields"></div>
+          <button type="button" id="add-dropoff-btn" class="btn-secondary btn-add-field">+ Ajouter un lieu de dépôt</button>
         </div>
         <datalist id="locations-datalist"></datalist>
         <div>
