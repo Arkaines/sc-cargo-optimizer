@@ -12,10 +12,15 @@ const A_GRAVE = String.fromCharCode(0x00e0); // a accent grave
 
 const MISSION_ID_SRC = "[0-9a-fA-F-]{36}";
 
-const GENERATOR_RE = new RegExp(
+// Capture missionId + donneur + zoneHostId (identifiant stable du lieu
+// physique) pour chaque marqueur d'objectif (recuperation ou depot).
+// zoneHostId ne correspond a aucun nom lisible dans le log : on construit
+// une table de correspondance locale (voir app.js) que l'utilisateur
+// renseigne une fois par lieu, puis qui se reutilise automatiquement.
+const MARKER_RE = new RegExp(
   "CLocalMissionPhaseMarker::CreateMarker.*?missionId \\[(" +
     MISSION_ID_SRC +
-    ")\\], generator name \\[([^\\]]+)\\]"
+    ")\\], generator name \\[([^\\]]+)\\].*?objectiveId \\[(pickup|dropoff)_[^\\]]*\\].*?zoneHostId \\[(\\d+)\\]"
 );
 
 const ACCEPT_RE = new RegExp(
@@ -64,7 +69,14 @@ function humanizeGiverName(raw) {
 function getOrCreateLogRecord(missionsMap, id) {
   let rec = missionsMap.get(id);
   if (!rec) {
-    rec = { id, title: "", giver: "", accepted: false, objectives: [] };
+    rec = {
+      id,
+      title: "",
+      giver: "",
+      accepted: false,
+      objectives: [],
+      zones: { pickup: [], dropoff: [] },
+    };
     missionsMap.set(id, rec);
   }
   return rec;
@@ -77,6 +89,10 @@ function addLogObjective(rec, type, commodity, quantity, place) {
   if (!exists) rec.objectives.push({ type, commodity, quantity, place });
 }
 
+function addLogZone(rec, role, zoneHostId) {
+  if (!rec.zones[role].includes(zoneHostId)) rec.zones[role].push(zoneHostId);
+}
+
 // Analyse une tranche de texte du Game.log et fusionne les infos trouvees
 // dans missionsMap (Map<missionId, record>), qui peut deja contenir des
 // enregistrements partiels issus d'appels precedents.
@@ -85,9 +101,10 @@ function parseGameLogChunk(text, missionsMap) {
   for (const line of lines) {
     let m;
 
-    if ((m = GENERATOR_RE.exec(line))) {
+    if ((m = MARKER_RE.exec(line))) {
       const rec = getOrCreateLogRecord(missionsMap, m[1]);
       if (!rec.giver) rec.giver = humanizeGiverName(m[2]);
+      addLogZone(rec, m[3], m[4]);
       continue;
     }
 

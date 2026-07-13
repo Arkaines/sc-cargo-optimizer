@@ -15,6 +15,7 @@ function defaultState() {
     uexLocations: [],
     uexSyncedAt: null,
     settings: { apiKey: "" },
+    zoneLocationMap: {},
   };
 }
 
@@ -41,6 +42,7 @@ function loadState() {
       uexLocations: parsed.uexLocations || [],
       uexSyncedAt: parsed.uexSyncedAt || null,
       settings: { apiKey: (parsed.settings && parsed.settings.apiKey) || "" },
+      zoneLocationMap: parsed.zoneLocationMap || {},
     };
   } catch (e) {
     return defaultState();
@@ -831,6 +833,24 @@ function importedLogIds() {
   return new Set(state.missions.map((m) => m.sourceLogId).filter(Boolean));
 }
 
+// Table de correspondance zoneHostId -> lieu, construite localement par
+// l'utilisateur (le Game.log ne donne pas de nom de lieu lisible, seulement
+// cet identifiant technique). Une fois un zoneHostId associé une première
+// fois, les missions suivantes qui le référencent se résolvent seules.
+function getZoneLocationId(zoneHostId) {
+  return state.zoneLocationMap[zoneHostId] || null;
+}
+
+function setZoneLocationId(zoneHostId, locationId) {
+  state.zoneLocationMap[zoneHostId] = locationId;
+  saveState();
+}
+
+function forgetZoneLocationId(zoneHostId) {
+  delete state.zoneLocationMap[zoneHostId];
+  saveState();
+}
+
 // Ne lit que les octets ajoutés depuis la dernière vérification (le jeu écrit
 // en continu dans ce fichier) ; repart de zéro si le fichier a rétréci
 // (nouvelle session de jeu, log tourné).
@@ -866,6 +886,58 @@ function startGameLogPolling() {
   stopGameLogPolling();
   gameLogPollTimer = setInterval(scanGameLogOnce, GAMELOG_POLL_MS);
   scanGameLogOnce();
+}
+
+function renderZoneAssignRow(zoneHostId, role) {
+  const row = document.createElement("div");
+  row.className = "zone-assign-row";
+  const roleLabel = role === "pickup" ? "Récupération" : "Dépôt";
+  const locId = getZoneLocationId(zoneHostId);
+
+  if (locId) {
+    const loc = getLocationById(locId);
+    const span = document.createElement("span");
+    span.textContent = `${roleLabel} : ${loc ? loc.name : "(lieu supprimé)"} `;
+    row.appendChild(span);
+
+    const forgetBtn = document.createElement("button");
+    forgetBtn.type = "button";
+    forgetBtn.className = "btn-danger-sm";
+    forgetBtn.textContent = "Corriger";
+    forgetBtn.addEventListener("click", () => {
+      forgetZoneLocationId(zoneHostId);
+      renderDetectedMissions();
+    });
+    row.appendChild(forgetBtn);
+    return row;
+  }
+
+  const label = document.createElement("span");
+  label.textContent = `${roleLabel} inconnu(e) — `;
+  row.appendChild(label);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.setAttribute("list", "locations-datalist");
+  input.placeholder = "Quel est ce lieu ?";
+  input.className = "zone-assign-input";
+  row.appendChild(input);
+
+  const okBtn = document.createElement("button");
+  okBtn.type = "button";
+  okBtn.className = "btn-secondary";
+  okBtn.textContent = "OK";
+  okBtn.addEventListener("click", () => {
+    const loc = findLocationByLabel(input.value);
+    if (!loc) {
+      alert("Choisis un lieu proposé par la liste.");
+      return;
+    }
+    setZoneLocationId(zoneHostId, loc.id);
+    renderDetectedMissions();
+  });
+  row.appendChild(okBtn);
+  return row;
 }
 
 function renderDetectedMissions() {
@@ -922,6 +994,10 @@ function renderDetectedMissions() {
       card.appendChild(ul);
     }
 
+    const zones = rec.zones || { pickup: [], dropoff: [] };
+    zones.pickup.forEach((z) => card.appendChild(renderZoneAssignRow(z, "pickup")));
+    zones.dropoff.forEach((z) => card.appendChild(renderZoneAssignRow(z, "dropoff")));
+
     const addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "btn-primary btn-add-detected";
@@ -934,6 +1010,19 @@ function renderDetectedMissions() {
   });
 }
 
+function fillLocationFieldsFromZones(containerId, zoneHostIds) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  const resolvedLocs = zoneHostIds
+    .map((z) => getLocationById(getZoneLocationId(z)))
+    .filter(Boolean);
+  if (resolvedLocs.length) {
+    resolvedLocs.forEach((loc) => createLocationFieldRow(containerId, locationSearchLabel(loc)));
+  } else {
+    createLocationFieldRow(containerId);
+  }
+}
+
 function prefillMissionForm(rec) {
   document.getElementById("mission-name").value = rec.title || "";
   document.getElementById("mission-giver").value = rec.giver || "";
@@ -941,8 +1030,10 @@ function prefillMissionForm(rec) {
   document.getElementById("mission-commodity").value = commodities.join(", ");
   const totalCargo = rec.objectives.reduce((s, o) => s + (o.quantity || 0), 0);
   document.getElementById("mission-cargo").value = totalCargo || "";
-  resetLocationFields("pickup-fields");
-  resetLocationFields("dropoff-fields");
+
+  const zones = rec.zones || { pickup: [], dropoff: [] };
+  fillLocationFieldsFromZones("pickup-fields", zones.pickup);
+  fillLocationFieldsFromZones("dropoff-fields", zones.dropoff);
   pendingSourceLogId = rec.id;
 
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
