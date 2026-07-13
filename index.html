@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Optimiseur de routes cargo — Star Citizen</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>Optimiseur de routes cargo</h1>
+  <p>Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.</p>
+</header>
+
+<main>
+  <section>
+    <h2>Nouvelle mission</h2>
+    <form id="mission-form">
+      <div class="form-grid">
+        <div class="full">
+          <label for="mission-name">Nom (optionnel)</label>
+          <input type="text" id="mission-name" placeholder="Ex : Livraison medgel" />
+        </div>
+        <div>
+          <label for="mission-pickup">Lieu de récupération</label>
+          <select id="mission-pickup" data-location-select required></select>
+        </div>
+        <div>
+          <label for="mission-dropoff">Lieu de dépôt</label>
+          <select id="mission-dropoff" data-location-select required></select>
+        </div>
+        <div>
+          <label for="mission-cargo">Cargo (SCU)</label>
+          <input type="number" id="mission-cargo" min="0" step="any" />
+        </div>
+        <div>
+          <label for="mission-reward">Récompense (aUEC)</label>
+          <input type="number" id="mission-reward" min="0" step="any" />
+        </div>
+        <div class="full">
+          <button type="submit" class="btn-primary">Ajouter la mission</button>
+        </div>
+      </div>
+    </form>
+
+    <form id="add-location-form" class="inline-add-location">
+      <div>
+        <label for="new-location-name">Ajouter un lieu personnalisé</label>
+        <input type="text" id="new-location-name" placeholder="Nom du lieu" />
+      </div>
+      <div>
+        <label for="new-location-category">Catégorie</label>
+        <select id="new-location-category">
+          <option value="Ville">Ville</option>
+          <option value="Station">Station</option>
+          <option value="Lune">Lune</option>
+          <option value="Avant-poste">Avant-poste</option>
+          <option value="Personnalisé">Autre</option>
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn-secondary">Ajouter le lieu</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Missions enregistrées</h2>
+    <div class="toolbar">
+      <button type="button" id="select-all-missions" class="btn-secondary">Tout sélectionner</button>
+      <button type="button" id="deselect-all-missions" class="btn-secondary">Tout désélectionner</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Inclure</th>
+          <th>Nom</th>
+          <th>Récupération</th>
+          <th>Dépôt</th>
+          <th>Cargo</th>
+          <th>Récompense</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="missions-tbody"></tbody>
+    </table>
+    <p id="missions-summary"></p>
+  </section>
+
+  <section>
+    <h2>Distances entre lieux utilisés</h2>
+    <div id="distance-editor"></div>
+  </section>
+
+  <section>
+    <h2>Optimisation de la route</h2>
+    <div class="optimize-row">
+      <div>
+        <label for="start-location">Point de départ (optionnel)</label>
+        <select id="start-location"></select>
+      </div>
+      <div>
+        <button type="button" id="optimize-btn" class="btn-primary">Optimiser la route</button>
+      </div>
+    </div>
+    <div id="route-result" style="margin-top:1rem;"></div>
+  </section>
+</main>
+
+<footer>
+  <button type="button" id="reset-all">Réinitialiser toutes les données</button>
+</footer>
+
+<script src="locations.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
