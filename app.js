@@ -785,12 +785,50 @@ function getLocationFieldValues(containerId) {
 // =========================================================================
 // Import OCR (capture d'écran du contrat en jeu)
 // =========================================================================
+
+// Le nom de lieu lu par l'OCR ne correspond pas toujours exactement à un
+// lieu de la base (variante de nom, casse, mot manquant) : on tente une
+// correspondance exacte puis, à défaut, une correspondance approximative.
+function looseLocationMatch(rawText) {
+  const cleaned = rawText.trim();
+  if (!cleaned) return null;
+  const exact = findLocationByLabel(cleaned);
+  if (exact) return exact;
+  const lower = cleaned.toLowerCase();
+  const byName = allLocations().find((loc) => loc.name.toLowerCase() === lower);
+  if (byName) return byName;
+  return (
+    allLocations().find(
+      (loc) => loc.name.toLowerCase().includes(lower) || lower.includes(loc.name.toLowerCase())
+    ) || null
+  );
+}
+
+function fillLocationFieldsFromTexts(containerId, texts) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  if (!texts.length) {
+    createLocationFieldRow(containerId);
+    return;
+  }
+  texts.forEach((text) => {
+    const loc = looseLocationMatch(text);
+    createLocationFieldRow(containerId, loc ? locationSearchLabel(loc) : text);
+  });
+}
+
 function applyOcrResultToForm(parsed) {
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
   if (parsed.commodity) document.getElementById("mission-commodity").value = parsed.commodity;
   if (parsed.cargo) document.getElementById("mission-cargo").value = parsed.cargo;
   if (parsed.reward) document.getElementById("mission-reward").value = parsed.reward;
+  if (parsed.pickupTexts && parsed.pickupTexts.length) {
+    fillLocationFieldsFromTexts("pickup-fields", parsed.pickupTexts);
+  }
+  if (parsed.dropoffTexts && parsed.dropoffTexts.length) {
+    fillLocationFieldsFromTexts("dropoff-fields", parsed.dropoffTexts);
+  }
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -798,24 +836,53 @@ function renderOcrResult(rawText, parsed) {
   const container = document.getElementById("ocr-result");
   container.innerHTML = "";
 
+  const summary = document.createElement("div");
+  summary.className = "ocr-summary";
+  const rows = [
+    ["Nom", parsed.name],
+    ["Donneur", parsed.giver],
+    ["Marchandise", parsed.commodity],
+    ["Cargo", parsed.cargo ? `${parsed.cargo} SCU` : ""],
+    ["Récompense", parsed.reward ? `${parsed.reward} aUEC` : ""],
+    ["Récupération", (parsed.pickupTexts || []).join(", ")],
+    ["Dépôt", (parsed.dropoffTexts || []).join(", ")],
+  ];
+  rows.forEach(([label, value]) => {
+    if (!value) return;
+    const row = document.createElement("div");
+    row.className = "ocr-summary-row";
+    row.innerHTML = `<strong>${label} :</strong> `;
+    row.appendChild(document.createTextNode(value));
+    summary.appendChild(row);
+  });
+  container.appendChild(summary);
+
   const pre = document.createElement("pre");
   pre.className = "ocr-raw-text";
   pre.textContent = rawText.trim() || "(aucun texte reconnu)";
   container.appendChild(pre);
 
-  const note = document.createElement("p");
-  note.className = "hint";
-  note.textContent =
-    "Extraction automatique des champs pas encore calibrée sur un vrai écran de contrat — copie les infos utiles à la main pour l'instant.";
-  container.appendChild(note);
+  const hasAnyField =
+    parsed.name ||
+    parsed.giver ||
+    parsed.commodity ||
+    parsed.cargo ||
+    parsed.reward ||
+    (parsed.pickupTexts && parsed.pickupTexts.length) ||
+    (parsed.dropoffTexts && parsed.dropoffTexts.length);
 
-  if (parsed.name || parsed.giver || parsed.commodity || parsed.cargo || parsed.reward) {
+  if (hasAnyField) {
     const useBtn = document.createElement("button");
     useBtn.type = "button";
     useBtn.className = "btn-primary";
     useBtn.textContent = "Utiliser ces champs dans le formulaire";
     useBtn.addEventListener("click", () => applyOcrResultToForm(parsed));
     container.appendChild(useBtn);
+  } else {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "Aucun champ reconnu — vérifie le texte brut ci-dessous et complète à la main.";
+    container.appendChild(note);
   }
 }
 

@@ -91,6 +91,15 @@ aside#ocr-panel code {
   margin-top: 0.75rem;
 }
 
+.ocr-summary {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.ocr-summary-row {
+  padding: 0.15rem 0;
+}
+
 .ocr-raw-text {
   background: #0d1320;
   border: 1px solid var(--panel-border);
