@@ -15,7 +15,6 @@ function defaultState() {
     uexLocations: [],
     uexSyncedAt: null,
     settings: { apiKey: "" },
-    zoneLocationMap: {},
   };
 }
 
@@ -42,7 +41,6 @@ function loadState() {
       uexLocations: parsed.uexLocations || [],
       uexSyncedAt: parsed.uexSyncedAt || null,
       settings: { apiKey: (parsed.settings && parsed.settings.apiKey) || "" },
-      zoneLocationMap: parsed.zoneLocationMap || {},
     };
   } catch (e) {
     return defaultState();
@@ -159,7 +157,6 @@ function addMission(mission) {
     commodity: mission.commodity || "",
     cargo: mission.cargo,
     reward: mission.reward,
-    sourceLogId: mission.sourceLogId || null,
     included: true,
   };
   state.missions.push(m);
@@ -738,7 +735,6 @@ function renderAll() {
   renderMissionsTable();
   renderDistanceEditor();
   renderUexStatus();
-  renderDetectedMissions();
   document.getElementById("route-result").innerHTML = "";
 }
 
@@ -787,258 +783,58 @@ function getLocationFieldValues(containerId) {
 }
 
 // =========================================================================
-// Suivi du Game.log (détection des missions acceptées)
+// Import OCR (capture d'écran du contrat en jeu)
 // =========================================================================
-const GAMELOG_DB_NAME = "sc-cargo-optimizer-handles";
-const GAMELOG_STORE = "handles";
-const GAMELOG_HANDLE_KEY = "gameLogHandle";
-const GAMELOG_POLL_MS = 5000;
-
-let gameLogHandle = null;
-let gameLogLastSize = 0;
-let gameLogPollTimer = null;
-let pendingSourceLogId = null;
-const detectedMissions = new Map();
-
-function openHandleDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(GAMELOG_DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(GAMELOG_STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function saveGameLogHandle(handle) {
-  const db = await openHandleDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(GAMELOG_STORE, "readwrite");
-    tx.objectStore(GAMELOG_STORE).put(handle, GAMELOG_HANDLE_KEY);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function loadGameLogHandle() {
-  const db = await openHandleDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(GAMELOG_STORE, "readonly");
-    const req = tx.objectStore(GAMELOG_STORE).get(GAMELOG_HANDLE_KEY);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function importedLogIds() {
-  return new Set(state.missions.map((m) => m.sourceLogId).filter(Boolean));
-}
-
-// Table de correspondance zoneHostId -> lieu, construite localement par
-// l'utilisateur (le Game.log ne donne pas de nom de lieu lisible, seulement
-// cet identifiant technique). Une fois un zoneHostId associé une première
-// fois, les missions suivantes qui le référencent se résolvent seules.
-function getZoneLocationId(zoneHostId) {
-  return state.zoneLocationMap[zoneHostId] || null;
-}
-
-function setZoneLocationId(zoneHostId, locationId) {
-  state.zoneLocationMap[zoneHostId] = locationId;
-  saveState();
-}
-
-function forgetZoneLocationId(zoneHostId) {
-  delete state.zoneLocationMap[zoneHostId];
-  saveState();
-}
-
-// Ne lit que les octets ajoutés depuis la dernière vérification (le jeu écrit
-// en continu dans ce fichier) ; repart de zéro si le fichier a rétréci
-// (nouvelle session de jeu, log tourné).
-async function readGameLogNewChunk(handle) {
-  const file = await handle.getFile();
-  if (file.size < gameLogLastSize) {
-    gameLogLastSize = 0;
-    detectedMissions.clear();
-  }
-  if (file.size === gameLogLastSize) return false;
-  const chunk = await file.slice(gameLogLastSize, file.size).text();
-  gameLogLastSize = file.size;
-  parseGameLogChunk(chunk, detectedMissions);
-  return true;
-}
-
-async function scanGameLogOnce() {
-  if (!gameLogHandle) return;
-  try {
-    const changed = await readGameLogNewChunk(gameLogHandle);
-    if (changed) renderDetectedMissions();
-  } catch (e) {
-    console.error("Lecture Game.log :", e);
-  }
-}
-
-function stopGameLogPolling() {
-  if (gameLogPollTimer) clearInterval(gameLogPollTimer);
-  gameLogPollTimer = null;
-}
-
-function startGameLogPolling() {
-  stopGameLogPolling();
-  gameLogPollTimer = setInterval(scanGameLogOnce, GAMELOG_POLL_MS);
-  scanGameLogOnce();
-}
-
-function renderZoneAssignRow(zoneHostId, role) {
-  const row = document.createElement("div");
-  row.className = "zone-assign-row";
-  const roleLabel = role === "pickup" ? "Récupération" : "Dépôt";
-  const locId = getZoneLocationId(zoneHostId);
-
-  if (locId) {
-    const loc = getLocationById(locId);
-    const span = document.createElement("span");
-    span.textContent = `${roleLabel} : ${loc ? loc.name : "(lieu supprimé)"} `;
-    row.appendChild(span);
-
-    const forgetBtn = document.createElement("button");
-    forgetBtn.type = "button";
-    forgetBtn.className = "btn-danger-sm";
-    forgetBtn.textContent = "Corriger";
-    forgetBtn.addEventListener("click", () => {
-      forgetZoneLocationId(zoneHostId);
-      renderDetectedMissions();
-    });
-    row.appendChild(forgetBtn);
-    return row;
-  }
-
-  const label = document.createElement("span");
-  label.textContent = `${roleLabel} inconnu(e) — `;
-  row.appendChild(label);
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.setAttribute("list", "locations-datalist");
-  input.placeholder = "Quel est ce lieu ?";
-  input.className = "zone-assign-input";
-  row.appendChild(input);
-
-  const okBtn = document.createElement("button");
-  okBtn.type = "button";
-  okBtn.className = "btn-secondary";
-  okBtn.textContent = "OK";
-  okBtn.addEventListener("click", () => {
-    const loc = findLocationByLabel(input.value);
-    if (!loc) {
-      alert("Choisis un lieu proposé par la liste.");
-      return;
-    }
-    setZoneLocationId(zoneHostId, loc.id);
-    renderDetectedMissions();
-  });
-  row.appendChild(okBtn);
-  return row;
-}
-
-function renderDetectedMissions() {
-  const container = document.getElementById("detected-missions-list");
-  const countEl = document.getElementById("detected-missions-count");
-  const imported = importedLogIds();
-  const list = Array.from(detectedMissions.values())
-    .filter((r) => r.accepted && !imported.has(r.id))
-    .reverse();
-
-  countEl.textContent = list.length ? `${list.length} mission(s) détectée(s)` : "";
-  container.innerHTML = "";
-
-  if (list.length === 0) {
-    const p = document.createElement("p");
-    p.className = "hint";
-    p.textContent = "Aucune mission détectée pour l'instant.";
-    container.appendChild(p);
-    return;
-  }
-
-  list.forEach((rec) => {
-    const card = document.createElement("div");
-    card.className = "detected-mission-card";
-
-    const title = document.createElement("div");
-    title.className = "detected-mission-title";
-    title.textContent = rec.title || "Mission";
-    card.appendChild(title);
-
-    if (rec.giver) {
-      const giver = document.createElement("div");
-      giver.className = "hint";
-      giver.textContent = `Donneur : ${rec.giver}`;
-      card.appendChild(giver);
-    }
-
-    const destinations = Array.from(new Set(rec.objectives.map((o) => o.place))).filter(Boolean);
-    if (destinations.length) {
-      const dest = document.createElement("div");
-      dest.className = "hint";
-      dest.textContent = `Système : ${destinations.join(", ")}`;
-      card.appendChild(dest);
-    }
-
-    if (rec.objectives.length) {
-      const ul = document.createElement("ul");
-      ul.className = "detected-mission-objectives";
-      rec.objectives.forEach((o) => {
-        const li = document.createElement("li");
-        li.textContent = `${o.type === "pickup" ? "Récupérer" : "Livrer"} ${o.quantity} SCU de ${o.commodity}`;
-        ul.appendChild(li);
-      });
-      card.appendChild(ul);
-    }
-
-    const zones = rec.zones || { pickup: [], dropoff: [] };
-    zones.pickup.forEach((z) => card.appendChild(renderZoneAssignRow(z, "pickup")));
-    zones.dropoff.forEach((z) => card.appendChild(renderZoneAssignRow(z, "dropoff")));
-
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.className = "btn-primary btn-add-detected";
-    addBtn.textContent = "+";
-    addBtn.title = "Pré-remplir le formulaire avec cette mission";
-    addBtn.addEventListener("click", () => prefillMissionForm(rec));
-    card.appendChild(addBtn);
-
-    container.appendChild(card);
-  });
-}
-
-function fillLocationFieldsFromZones(containerId, zoneHostIds) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = "";
-  const resolvedLocs = zoneHostIds
-    .map((z) => getLocationById(getZoneLocationId(z)))
-    .filter(Boolean);
-  if (resolvedLocs.length) {
-    resolvedLocs.forEach((loc) => createLocationFieldRow(containerId, locationSearchLabel(loc)));
-  } else {
-    createLocationFieldRow(containerId);
-  }
-}
-
-function prefillMissionForm(rec) {
-  document.getElementById("mission-name").value = rec.title || "";
-  document.getElementById("mission-giver").value = rec.giver || "";
-  const commodities = Array.from(new Set(rec.objectives.map((o) => o.commodity)));
-  document.getElementById("mission-commodity").value = commodities.join(", ");
-  const totalCargo = rec.objectives.reduce((s, o) => s + (o.quantity || 0), 0);
-  document.getElementById("mission-cargo").value = totalCargo || "";
-
-  const zones = rec.zones || { pickup: [], dropoff: [] };
-  fillLocationFieldsFromZones("pickup-fields", zones.pickup);
-  fillLocationFieldsFromZones("dropoff-fields", zones.dropoff);
-  pendingSourceLogId = rec.id;
-
+function applyOcrResultToForm(parsed) {
+  if (parsed.name) document.getElementById("mission-name").value = parsed.name;
+  if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
+  if (parsed.commodity) document.getElementById("mission-commodity").value = parsed.commodity;
+  if (parsed.cargo) document.getElementById("mission-cargo").value = parsed.cargo;
+  if (parsed.reward) document.getElementById("mission-reward").value = parsed.reward;
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
-  const firstPickupInput = document.querySelector("#pickup-fields .location-field-input");
-  if (firstPickupInput) firstPickupInput.focus();
+}
+
+function renderOcrResult(rawText, parsed) {
+  const container = document.getElementById("ocr-result");
+  container.innerHTML = "";
+
+  const pre = document.createElement("pre");
+  pre.className = "ocr-raw-text";
+  pre.textContent = rawText.trim() || "(aucun texte reconnu)";
+  container.appendChild(pre);
+
+  const note = document.createElement("p");
+  note.className = "hint";
+  note.textContent =
+    "Extraction automatique des champs pas encore calibrée sur un vrai écran de contrat — copie les infos utiles à la main pour l'instant.";
+  container.appendChild(note);
+
+  if (parsed.name || parsed.giver || parsed.commodity || parsed.cargo || parsed.reward) {
+    const useBtn = document.createElement("button");
+    useBtn.type = "button";
+    useBtn.className = "btn-primary";
+    useBtn.textContent = "Utiliser ces champs dans le formulaire";
+    useBtn.addEventListener("click", () => applyOcrResultToForm(parsed));
+    container.appendChild(useBtn);
+  }
+}
+
+async function processOcrImage(blob) {
+  const status = document.getElementById("ocr-status");
+  const preview = document.getElementById("ocr-preview");
+
+  preview.src = URL.createObjectURL(blob);
+  preview.style.display = "block";
+  status.textContent = "Reconnaissance en cours...";
+
+  try {
+    const rawText = await runOcrOnImage(blob);
+    const parsed = parseOcrText(rawText);
+    status.textContent = "Texte reconnu — vérifie avant d'utiliser.";
+    renderOcrResult(rawText, parsed);
+  } catch (e) {
+    status.textContent = `Erreur OCR : ${e.message}`;
+  }
 }
 
 // =========================================================================
@@ -1049,55 +845,34 @@ document.addEventListener("DOMContentLoaded", () => {
   resetLocationFields("pickup-fields");
   resetLocationFields("dropoff-fields");
 
-  const gamelogStatus = document.getElementById("gamelog-status");
-  const selectGameLogBtn = document.getElementById("select-gamelog-btn");
-  const gameLogFileInput = document.getElementById("gamelog-file-input");
+  const ocrDropzone = document.getElementById("ocr-dropzone");
+  const ocrFileInput = document.getElementById("ocr-file-input");
 
-  if (window.showOpenFilePicker) {
-    selectGameLogBtn.addEventListener("click", async () => {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          types: [{ description: "Game.log", accept: { "text/plain": [".log"] } }],
-        });
-        gameLogHandle = handle;
-        gameLogLastSize = 0;
-        detectedMissions.clear();
-        await saveGameLogHandle(handle);
-        gamelogStatus.textContent = `Suivi actif : ${handle.name}`;
-        startGameLogPolling();
-      } catch (e) {
-        if (e.name !== "AbortError") gamelogStatus.textContent = `Erreur : ${e.message}`;
-      }
-    });
+  ocrDropzone.addEventListener("click", () => ocrFileInput.click());
 
-    loadGameLogHandle()
-      .then(async (handle) => {
-        if (!handle) return;
-        const perm = await handle.queryPermission({ mode: "read" });
-        if (perm === "granted") {
-          gameLogHandle = handle;
-          gamelogStatus.textContent = `Suivi actif : ${handle.name}`;
-          startGameLogPolling();
-        } else {
-          gamelogStatus.textContent = `Clique sur "Sélectionner Game.log" pour reprendre le suivi de ${handle.name}.`;
-        }
-      })
-      .catch(() => {});
-  } else {
-    // Navigateur sans File System Access API (ex : Firefox) : sélection manuelle,
-    // pas de suivi automatique possible, l'utilisateur doit ré-analyser lui-même.
-    selectGameLogBtn.textContent = "Importer Game.log";
-    selectGameLogBtn.addEventListener("click", () => gameLogFileInput.click());
-    gameLogFileInput.addEventListener("change", async () => {
-      const file = gameLogFileInput.files[0];
-      if (!file) return;
-      detectedMissions.clear();
-      const text = await file.text();
-      parseGameLogChunk(text, detectedMissions);
-      gamelogStatus.textContent = `${file.name} analysé (pas de suivi automatique sur ce navigateur — réimporte le fichier pour rafraîchir).`;
-      renderDetectedMissions();
-    });
-  }
+  ocrFileInput.addEventListener("change", () => {
+    const file = ocrFileInput.files[0];
+    if (file) processOcrImage(file);
+  });
+
+  ocrDropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    ocrDropzone.classList.add("dragover");
+  });
+  ocrDropzone.addEventListener("dragleave", () => ocrDropzone.classList.remove("dragover"));
+  ocrDropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    ocrDropzone.classList.remove("dragover");
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) processOcrImage(file);
+  });
+
+  document.addEventListener("paste", (e) => {
+    const items = Array.from(e.clipboardData.items).filter((i) => i.type.startsWith("image/"));
+    if (items.length === 0) return;
+    const blob = items[0].getAsFile();
+    if (blob) processOcrImage(blob);
+  });
 
   document.getElementById("add-pickup-btn").addEventListener("click", () => {
     createLocationFieldRow("pickup-fields");
@@ -1140,9 +915,7 @@ document.addEventListener("DOMContentLoaded", () => {
       commodity,
       cargo,
       reward,
-      sourceLogId: pendingSourceLogId,
     });
-    pendingSourceLogId = null;
     e.target.reset();
     resetLocationFields("pickup-fields");
     resetLocationFields("dropoff-fields");

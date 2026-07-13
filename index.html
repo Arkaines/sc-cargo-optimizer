@@ -27,17 +27,19 @@
 </header>
 
 <div class="layout">
-<aside id="gamelog-panel">
-  <h2>Missions détectées (Game.log)</h2>
+<aside id="ocr-panel">
+  <h2>Importer une mission (capture d'écran)</h2>
   <p class="hint">
-    Chemin habituel : <code>...\StarCitizen\LIVE\Game.log</code>. Le navigateur ne peut pas lire
-    ce fichier sans ton accord — clique ci-dessous pour le sélectionner toi-même.
+    Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici
+    (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.
   </p>
-  <button type="button" id="select-gamelog-btn" class="btn-primary">Sélectionner Game.log</button>
-  <input type="file" id="gamelog-file-input" accept=".log" style="display:none;" />
-  <p id="gamelog-status" class="hint" style="margin-top:0.5rem;"></p>
-  <p id="detected-missions-count" class="hint"></p>
-  <div id="detected-missions-list"></div>
+  <div id="ocr-dropzone" tabindex="0">
+    Colle (Ctrl+V) ou dépose une image ici
+    <input type="file" id="ocr-file-input" accept="image/*" style="display:none;" />
+  </div>
+  <p id="ocr-status" class="hint" style="margin-top:0.5rem;"></p>
+  <img id="ocr-preview" style="display:none;" alt="Capture importée" />
+  <div id="ocr-result"></div>
 </aside>
 
 <main>
@@ -155,12 +157,13 @@
   <button type="button" id="reset-all">Réinitialiser toutes les données</button>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="locations.js"></script>
 <script src="commodities.js"></script>
 <script src="companies.js"></script>
 <script src="distances.js"></script>
 <script src="uex.js"></script>
-<script src="gamelog.js"></script>
+<script src="ocr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
