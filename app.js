@@ -1192,6 +1192,16 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAll();
   resetCargoFields();
 
+  const themeToggle = document.getElementById("theme-toggle");
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  themeToggle.textContent = currentTheme === "light" ? "🌙" : "☀️";
+  themeToggle.addEventListener("click", () => {
+    const next = (document.documentElement.getAttribute("data-theme") || "dark") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("sc-cargo-optimizer-theme", next);
+    themeToggle.textContent = next === "light" ? "🌙" : "☀️";
+  });
+
   document.getElementById("add-cargo-btn").addEventListener("click", () => {
     createCargoFieldRow();
   });

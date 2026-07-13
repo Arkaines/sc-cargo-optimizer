@@ -8,7 +8,27 @@
   --accent: #4fc3f7;
   --accent-2: #7ee787;
   --danger: #ff6b6b;
+  --warning: #e0a030;
+  --input-bg: #0d1320;
+  --btn-secondary-bg: #26314a;
+  --on-accent: #06131c;
   font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --panel-border: #d7dee8;
+  --text: #1a2233;
+  --muted: #5b6478;
+  --accent: #0d7fb0;
+  --accent-2: #187a41;
+  --danger: #c62828;
+  --warning: #a3690a;
+  --input-bg: #eef1f6;
+  --btn-secondary-bg: #e2e8f0;
+  --on-accent: #ffffff;
 }
 
 * {
@@ -20,6 +40,26 @@ body {
   color: var(--text);
   margin: 0;
   padding: 0 0 4rem;
+}
+
+#theme-toggle {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 100;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 header {
@@ -107,13 +147,13 @@ aside#side-panel {
 }
 
 .ocr-approx-warning {
-  color: #e0a030;
+  color: var(--warning);
   font-weight: 600;
   margin-top: 0.5rem;
 }
 
 .ocr-raw-text {
-  background: #0d1320;
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 0.6rem;
@@ -235,7 +275,7 @@ label {
 
 input,
 select {
-  background: #0d1320;
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   color: var(--text);
   border-radius: 6px;
@@ -266,7 +306,7 @@ button {
 
 .btn-primary {
   background: var(--accent);
-  color: #06131c;
+  color: var(--on-accent);
 }
 
 .field-row {
@@ -282,7 +322,7 @@ button {
 
 .cargo-field-row {
   flex-wrap: wrap;
-  background: #0d1320;
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 0.5rem;
@@ -313,7 +353,7 @@ button {
 }
 
 .btn-secondary {
-  background: #26314a;
+  background: var(--btn-secondary-bg);
   color: var(--text);
 }
 

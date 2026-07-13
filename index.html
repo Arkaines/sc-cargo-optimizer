@@ -5,8 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Optimiseur de routes cargo — Star Citizen</title>
 <link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var saved = localStorage.getItem("sc-cargo-optimizer-theme");
+    var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
 </head>
 <body>
+<button type="button" id="theme-toggle" aria-label="Basculer le thème clair/sombre"></button>
 <header>
   <h1>Optimiseur de routes cargo</h1>
   <p>Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.</p>
