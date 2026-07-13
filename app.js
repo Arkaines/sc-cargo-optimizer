@@ -151,6 +151,7 @@ function addMission(mission) {
   const m = {
     id: state.nextMissionId++,
     name: mission.name || `Mission ${state.nextMissionId - 1}`,
+    giver: mission.giver || "",
     pickupIds: mission.pickupIds,
     dropoffIds: mission.dropoffIds,
     commodity: mission.commodity || "",
@@ -444,9 +445,20 @@ function renderCommodityDatalist() {
   });
 }
 
+function renderCompanyDatalist() {
+  const datalist = document.getElementById("companies-datalist");
+  datalist.innerHTML = "";
+  DEFAULT_COMPANIES.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.name;
+    datalist.appendChild(opt);
+  });
+}
+
 function refreshAllLocationSelects() {
   renderLocationDatalist();
   renderCommodityDatalist();
+  renderCompanyDatalist();
   renderStartLocationOptions();
 }
 
@@ -492,6 +504,10 @@ function renderMissionsTable() {
     const tdName = document.createElement("td");
     tdName.textContent = m.name;
     tr.appendChild(tdName);
+
+    const tdGiver = document.createElement("td");
+    tdGiver.textContent = m.giver || "-";
+    tr.appendChild(tdGiver);
 
     const tdPickup = document.createElement("td");
     tdPickup.textContent = (m.pickupIds || [])
@@ -784,6 +800,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("mission-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = document.getElementById("mission-name").value.trim();
+    const giver = document.getElementById("mission-giver").value.trim();
     const commodity = document.getElementById("mission-commodity").value.trim();
     const cargo = document.getElementById("mission-cargo").value;
     const reward = document.getElementById("mission-reward").value;
@@ -808,6 +825,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     addMission({
       name,
+      giver,
       pickupIds: pickupLocs.map((l) => l.id),
       dropoffIds: dropoffLocs.map((l) => l.id),
       commodity,

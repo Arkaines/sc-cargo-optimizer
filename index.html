@@ -35,6 +35,11 @@
           <label for="mission-name">Nom (optionnel)</label>
           <input type="text" id="mission-name" placeholder="Ex : Livraison medgel" />
         </div>
+        <div>
+          <label for="mission-giver">Donneur de mission</label>
+          <input type="text" id="mission-giver" list="companies-datalist" placeholder="Ex : Covalex" autocomplete="off" />
+          <datalist id="companies-datalist"></datalist>
+        </div>
         <div class="full">
           <label>Lieux de récupération</label>
           <div id="pickup-fields"></div>
@@ -97,6 +102,7 @@
         <tr>
           <th>Inclure</th>
           <th>Nom</th>
+          <th>Donneur</th>
           <th>Récupération</th>
           <th>Dépôt</th>
           <th>Marchandise</th>
@@ -136,6 +142,7 @@
 
 <script src="locations.js"></script>
 <script src="commodities.js"></script>
+<script src="companies.js"></script>
 <script src="distances.js"></script>
 <script src="uex.js"></script>
 <script src="app.js"></script>
