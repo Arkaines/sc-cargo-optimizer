@@ -46,18 +46,6 @@ header p {
   gap: 1.5rem;
 }
 
-.top-row {
-  display: flex;
-  gap: 1.5rem;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-.top-row > details {
-  flex: 1;
-  min-width: 380px;
-}
-
 aside#side-panel {
   width: 300px;
   flex: none;

@@ -49,9 +49,13 @@
 </aside>
 
 <main>
-  <div class="top-row">
-  <details open>
-    <summary>Nouvelle mission</summary>
+  <div class="tabs">
+    <div class="tab-buttons">
+      <button type="button" class="tab-btn active" data-tab="new-mission-tab">Nouvelle mission</button>
+      <button type="button" class="tab-btn" data-tab="missions-tab">Missions enregistrées</button>
+    </div>
+
+    <div class="tab-panel" id="new-mission-tab">
     <form id="mission-form">
       <div class="form-grid">
         <div class="full">
@@ -99,10 +103,9 @@
         <button type="submit" class="btn-secondary">Ajouter le lieu</button>
       </div>
     </form>
-  </details>
+    </div>
 
-  <details open>
-    <summary>Missions enregistrées</summary>
+    <div class="tab-panel" id="missions-tab" style="display:none;">
     <div class="toolbar">
       <button type="button" id="select-all-missions" class="btn-secondary">Tout sélectionner</button>
       <button type="button" id="deselect-all-missions" class="btn-secondary">Tout désélectionner</button>
@@ -126,7 +129,7 @@
     </div>
     <p id="missions-summary"></p>
     <p id="cargo-capacity-status" class="hint"></p>
-  </details>
+    </div>
   </div>
 
   <div class="tabs">
