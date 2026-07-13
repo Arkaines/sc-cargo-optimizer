@@ -38,7 +38,7 @@ header p {
 }
 
 .layout {
-  max-width: 1600px;
+  max-width: 1920px;
   margin: 0 auto;
   padding: 1.5rem 2rem;
   display: flex;
@@ -149,7 +149,6 @@ aside#side-panel {
 }
 
 main {
-  max-width: 1250px;
   flex: 1;
   min-width: 0;
   display: flex;
