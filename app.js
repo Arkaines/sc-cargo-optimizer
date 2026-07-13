@@ -15,6 +15,7 @@ function defaultState() {
     uexLocations: [],
     uexSyncedAt: null,
     settings: { apiKey: "" },
+    selectedShip: "",
   };
 }
 
@@ -45,6 +46,7 @@ function loadState() {
       uexLocations: parsed.uexLocations || [],
       uexSyncedAt: parsed.uexSyncedAt || null,
       settings: { apiKey: (parsed.settings && parsed.settings.apiKey) || "" },
+      selectedShip: parsed.selectedShip || "",
     };
   } catch (e) {
     return defaultState();
@@ -465,6 +467,36 @@ function refreshAllLocationSelects() {
   renderStartLocationOptions();
 }
 
+function getSelectedShip() {
+  if (!state.selectedShip) return null;
+  return DEFAULT_SHIPS.find((s) => s.name === state.selectedShip) || null;
+}
+
+function renderShipOptions() {
+  const sel = document.getElementById("ship-select");
+  const prev = state.selectedShip;
+  sel.innerHTML = "";
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "-- Aucun --";
+  sel.appendChild(none);
+  DEFAULT_SHIPS.slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((ship) => {
+      const opt = document.createElement("option");
+      opt.value = ship.name;
+      opt.textContent = `${ship.name} (${ship.scu} SCU)`;
+      if (ship.name === prev) opt.selected = true;
+      sel.appendChild(opt);
+    });
+}
+
+function renderShipCapacity() {
+  const el = document.getElementById("ship-capacity");
+  const ship = getSelectedShip();
+  el.textContent = ship ? `Capacité : ${ship.scu} SCU` : "Sélectionne un vaisseau pour voir sa capacité.";
+}
+
 function renderStartLocationOptions() {
   const sel = document.getElementById("start-location");
   const prev = sel.value;
@@ -500,6 +532,7 @@ function renderMissionsTable() {
     cb.addEventListener("change", () => {
       setMissionIncluded(m.id, cb.checked);
       renderStartLocationOptions();
+      renderMissionsTable();
     });
     tdCheck.appendChild(cb);
     tr.appendChild(tdCheck);
@@ -566,6 +599,20 @@ function renderMissionsTable() {
   summary.textContent = state.missions.length
     ? `${included.length}/${state.missions.length} mission(s) sélectionnée(s) — ${totalCargo} SCU — ${totalReward} aUEC`
     : "Aucune mission enregistrée pour l'instant.";
+
+  const capacityEl = document.getElementById("cargo-capacity-status");
+  const ship = getSelectedShip();
+  if (!ship) {
+    capacityEl.textContent = "Sélectionne un vaisseau (menu de gauche) pour voir si ta cargaison tient.";
+    capacityEl.className = "hint";
+  } else {
+    const remaining = ship.scu - totalCargo;
+    capacityEl.textContent =
+      remaining >= 0
+        ? `${totalCargo} / ${ship.scu} SCU chargés avec le ${ship.name} — il reste ${remaining} SCU de place.`
+        : `${totalCargo} / ${ship.scu} SCU chargés avec le ${ship.name} — dépassement de ${-remaining} SCU !`;
+    capacityEl.className = remaining >= 0 ? "hint cargo-ok" : "hint cargo-overload";
+  }
 }
 
 function renderDistanceEditor() {
@@ -756,6 +803,8 @@ function renderUexStatus() {
 
 function renderAll() {
   refreshAllLocationSelects();
+  renderShipOptions();
+  renderShipCapacity();
   renderMissionsTable();
   renderDistanceEditor();
   renderUexStatus();
@@ -1052,6 +1101,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("add-cargo-btn").addEventListener("click", () => {
     createCargoFieldRow();
+  });
+
+  document.getElementById("ship-select").addEventListener("change", (e) => {
+    state.selectedShip = e.target.value;
+    saveState();
+    renderShipCapacity();
+    renderMissionsTable();
   });
 
   const ocrDropzone = document.getElementById("ocr-dropzone");

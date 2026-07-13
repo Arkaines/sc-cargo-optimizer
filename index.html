@@ -28,7 +28,14 @@
 
 <div class="layout">
 <aside id="ocr-panel">
-  <h2>Importer une mission (capture d'écran)</h2>
+  <h2>Mon vaisseau</h2>
+  <label for="ship-select">Vaisseau utilisé</label>
+  <select id="ship-select">
+    <option value="">-- Aucun --</option>
+  </select>
+  <p id="ship-capacity" class="hint" style="margin-top:0.5rem;"></p>
+
+  <h2 style="margin-top:1.5rem;">Importer une mission (capture d'écran)</h2>
   <p class="hint">
     Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici
     (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.
@@ -126,6 +133,7 @@
       <tbody id="missions-tbody"></tbody>
     </table>
     <p id="missions-summary"></p>
+    <p id="cargo-capacity-status" class="hint"></p>
   </details>
 
   <details open>
@@ -157,6 +165,7 @@
 <script src="locations.js"></script>
 <script src="commodities.js"></script>
 <script src="companies.js"></script>
+<script src="ships.js"></script>
 <script src="distances.js"></script>
 <script src="uex.js"></script>
 <script src="ocr.js"></script>

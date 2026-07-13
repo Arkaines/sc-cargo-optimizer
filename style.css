@@ -320,6 +320,16 @@ th {
   font-weight: 600;
 }
 
+.cargo-ok {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.cargo-overload {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .optimize-row {
   display: flex;
   gap: 1rem;
