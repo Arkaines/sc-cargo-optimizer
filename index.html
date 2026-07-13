@@ -14,12 +14,13 @@
 </script>
 </head>
 <body>
-<button type="button" id="theme-toggle" aria-label="Basculer le thème clair/sombre"></button>
+<button type="button" id="theme-toggle" data-i18n-aria-label="themeToggleLabel"></button>
+<button type="button" id="lang-toggle" data-i18n-aria-label="langToggleLabel"></button>
 <header>
-  <h1>Optimiseur de routes cargo</h1>
-  <p>Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.</p>
+  <h1 data-i18n="appTitle"></h1>
+  <p data-i18n="appSubtitle"></p>
   <p class="hint">
-    Données fournies par l'API publique
+    <span data-i18n="poweredByPrefix"></span>
     <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>.
   </p>
 </header>
@@ -27,31 +28,28 @@
 <div class="layout">
 <aside id="side-panel">
   <div class="side-block">
-    <h2>Mon vaisseau</h2>
-    <label for="ship-select">Vaisseau utilisé</label>
+    <h2 data-i18n="myShipTitle"></h2>
+    <label for="ship-select" data-i18n="shipUsedLabel"></label>
     <select id="ship-select">
-      <option value="">-- Aucun --</option>
+      <option value="" data-i18n="noneOption"></option>
     </select>
     <p id="ship-capacity" class="hint" style="margin-top:0.5rem;"></p>
   </div>
 
   <div class="side-block">
-    <button type="button" id="uex-sync-all-btn" class="btn-primary" style="width:100%;">Tout synchroniser (UEX Corp)</button>
+    <button type="button" id="uex-sync-all-btn" class="btn-primary" style="width:100%;" data-i18n="syncAllBtn"></button>
     <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
   </div>
 
   <div class="side-block">
-    <h2>Importer une mission (capture d'écran)</h2>
-    <p class="hint">
-      Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici
-      (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.
-    </p>
+    <h2 data-i18n="importMissionTitle"></h2>
+    <p class="hint" data-i18n="importMissionHint"></p>
     <div id="ocr-dropzone" tabindex="0">
-      Colle (Ctrl+V) ou dépose une image ici
+      <span data-i18n="ocrDropzoneText"></span>
       <input type="file" id="ocr-file-input" accept="image/*" style="display:none;" />
     </div>
     <p id="ocr-status" class="hint" style="margin-top:0.5rem;"></p>
-    <img id="ocr-preview" style="display:none;" alt="Capture importée" />
+    <img id="ocr-preview" style="display:none;" data-i18n-alt="ocrPreviewAlt" alt="" />
     <div id="ocr-result"></div>
   </div>
 </aside>
@@ -59,46 +57,46 @@
 <main>
   <div class="tabs">
     <div class="tab-buttons">
-      <button type="button" class="tab-btn active" data-tab="new-mission-tab">Nouvelle mission</button>
-      <button type="button" class="tab-btn" data-tab="missions-tab">Missions enregistrées</button>
+      <button type="button" class="tab-btn active" data-tab="new-mission-tab" data-i18n="newMissionTab"></button>
+      <button type="button" class="tab-btn" data-tab="missions-tab" data-i18n="missionsTab"></button>
     </div>
 
     <div class="tab-panel" id="new-mission-tab">
     <form id="mission-form">
       <div class="form-grid">
         <div class="full">
-          <label for="mission-name">Nom (optionnel)</label>
-          <input type="text" id="mission-name" placeholder="Ex : Livraison medgel" />
+          <label for="mission-name" data-i18n="missionNameLabel"></label>
+          <input type="text" id="mission-name" data-i18n-placeholder="missionNamePlaceholder" />
         </div>
         <div>
-          <label for="mission-giver">Donneur de mission</label>
-          <input type="text" id="mission-giver" list="companies-datalist" placeholder="Ex : Covalex" autocomplete="off" />
+          <label for="mission-giver" data-i18n="missionGiverLabel"></label>
+          <input type="text" id="mission-giver" list="companies-datalist" data-i18n-placeholder="missionGiverPlaceholder" autocomplete="off" />
           <datalist id="companies-datalist"></datalist>
         </div>
         <datalist id="locations-datalist"></datalist>
         <div class="full">
-          <label>Marchandises (chacune avec son lieu de récupération et de dépôt)</label>
+          <label data-i18n="cargoItemsLabel"></label>
           <div id="cargo-fields"></div>
-          <button type="button" id="add-cargo-btn" class="btn-secondary btn-add-field">+ Ajouter une marchandise</button>
+          <button type="button" id="add-cargo-btn" class="btn-secondary btn-add-field" data-i18n="addCargoBtn"></button>
           <datalist id="commodities-datalist"></datalist>
         </div>
         <div>
-          <label for="mission-reward">Récompense (aUEC)</label>
+          <label for="mission-reward" data-i18n="rewardLabel"></label>
           <input type="number" id="mission-reward" min="0" step="any" />
         </div>
         <div class="full">
-          <button type="submit" class="btn-primary">Ajouter la mission</button>
+          <button type="submit" class="btn-primary" data-i18n="addMissionBtn"></button>
         </div>
       </div>
     </form>
 
     <form id="add-location-form" class="inline-add-location">
       <div>
-        <label for="new-location-name">Ajouter un lieu personnalisé</label>
-        <input type="text" id="new-location-name" placeholder="Nom du lieu" />
+        <label for="new-location-name" data-i18n="addLocationLabel"></label>
+        <input type="text" id="new-location-name" data-i18n-placeholder="locationNamePlaceholder" />
       </div>
       <div>
-        <label for="new-location-category">Catégorie</label>
+        <label for="new-location-category" data-i18n="categoryLabel"></label>
         <select id="new-location-category">
           <option value="Ville">Ville</option>
           <option value="Station">Station</option>
@@ -108,27 +106,27 @@
         </select>
       </div>
       <div>
-        <button type="submit" class="btn-secondary">Ajouter le lieu</button>
+        <button type="submit" class="btn-secondary" data-i18n="addLocationBtn"></button>
       </div>
     </form>
     </div>
 
     <div class="tab-panel" id="missions-tab" style="display:none;">
     <div class="toolbar">
-      <button type="button" id="select-all-missions" class="btn-secondary">Tout sélectionner</button>
-      <button type="button" id="deselect-all-missions" class="btn-secondary">Tout désélectionner</button>
+      <button type="button" id="select-all-missions" class="btn-secondary" data-i18n="selectAllBtn"></button>
+      <button type="button" id="deselect-all-missions" class="btn-secondary" data-i18n="deselectAllBtn"></button>
     </div>
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Inclure</th>
-            <th>Nom</th>
-            <th>Donneur</th>
-            <th>Récupération</th>
-            <th>Dépôt</th>
-            <th>Cargaison</th>
-            <th>Récompense</th>
+            <th data-i18n="colInclude"></th>
+            <th data-i18n="colName"></th>
+            <th data-i18n="colGiver"></th>
+            <th data-i18n="colPickup"></th>
+            <th data-i18n="colDropoff"></th>
+            <th data-i18n="colCargo"></th>
+            <th data-i18n="colReward"></th>
             <th></th>
           </tr>
         </thead>
@@ -142,23 +140,23 @@
 
   <div class="tabs">
     <div class="tab-buttons">
-      <button type="button" class="tab-btn" data-tab="distances-tab">Distances entre lieux utilisés</button>
-      <button type="button" class="tab-btn active" data-tab="optimize-tab">Optimisation de la route</button>
+      <button type="button" class="tab-btn" data-tab="distances-tab" data-i18n="distancesTab"></button>
+      <button type="button" class="tab-btn active" data-tab="optimize-tab" data-i18n="optimizeTab"></button>
     </div>
 
     <div class="tab-panel" id="distances-tab" style="display:none;">
-      <input type="text" id="distance-filter" placeholder="Filtrer par nom de lieu..." autocomplete="off" style="margin-bottom:0.75rem;" />
+      <input type="text" id="distance-filter" data-i18n-placeholder="distanceFilterPlaceholder" autocomplete="off" style="margin-bottom:0.75rem;" />
       <div id="distance-editor"></div>
     </div>
 
     <div class="tab-panel" id="optimize-tab">
       <div class="optimize-row">
         <div>
-          <label for="start-location">Point de départ (optionnel)</label>
+          <label for="start-location" data-i18n="startLocationLabel"></label>
           <select id="start-location"></select>
         </div>
         <div>
-          <button type="button" id="optimize-btn" class="btn-primary">Optimiser la route</button>
+          <button type="button" id="optimize-btn" class="btn-primary" data-i18n="optimizeBtn"></button>
         </div>
       </div>
       <div id="route-result" style="margin-top:1rem;"></div>
@@ -168,10 +166,11 @@
 </div>
 
 <footer>
-  <button type="button" id="reset-all">Réinitialiser toutes les données</button>
+  <button type="button" id="reset-all" data-i18n="resetAllBtn"></button>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="i18n.js"></script>
 <script src="locations.js"></script>
 <script src="commodities.js"></script>
 <script src="companies.js"></script>

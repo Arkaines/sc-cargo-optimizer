@@ -154,10 +154,10 @@ function getDistance(aId, bId) {
 }
 
 function getDistanceSource(aId, bId) {
-  if (aId === bId) return "identique";
-  if (hasCustomDistance(aId, bId)) return "manuel";
+  if (aId === bId) return t("sourceIdentical");
+  if (hasCustomDistance(aId, bId)) return t("sourceManual");
   if (hasBakedDistance(aId, bId)) return "UEX";
-  return "défaut";
+  return t("sourceDefault");
 }
 
 function setDistance(aId, bId, value) {
@@ -387,7 +387,7 @@ function roundScu(n) {
 }
 
 function optimizeRoute(missions, startId) {
-  if (missions.length === 0) return { error: "Sélectionne au moins une mission." };
+  if (missions.length === 0) return { error: t("selectMissionError") };
 
   const locIds = computeUniqueLocationIds(missions);
   const n = locIds.length;
@@ -425,10 +425,7 @@ function optimizeRoute(missions, startId) {
   }
 
   if (!order) {
-    return {
-      error:
-        "Impossible de trouver un ordre valide : vérifie que le point de départ choisi n'est pas un dépôt sans récupération préalable.",
-    };
+    return { error: t("noValidOrderError") };
   }
 
   // Chaque action ne porte que les lignes de cargaison réellement concernées
@@ -545,7 +542,7 @@ function renderShipOptions() {
   sel.innerHTML = "";
   const none = document.createElement("option");
   none.value = "";
-  none.textContent = "-- Aucun --";
+  none.textContent = t("noneOption");
   sel.appendChild(none);
   allShips()
     .slice()
@@ -562,7 +559,7 @@ function renderShipOptions() {
 function renderShipCapacity() {
   const el = document.getElementById("ship-capacity");
   const ship = getSelectedShip();
-  el.textContent = ship ? `Capacité : ${ship.scu} SCU` : "Sélectionne un vaisseau pour voir sa capacité.";
+  el.textContent = ship ? t("shipCapacityPrefix", { scu: ship.scu }) : t("shipCapacityNone");
 }
 
 function renderStartLocationOptions() {
@@ -572,7 +569,7 @@ function renderStartLocationOptions() {
   sel.innerHTML = "";
   const free = document.createElement("option");
   free.value = "";
-  free.textContent = "Libre (meilleur choix automatique)";
+  free.textContent = t("freeStart");
   sel.appendChild(free);
   usedIds
     .map((id) => getLocationById(id))
@@ -649,7 +646,7 @@ function renderMissionsTable() {
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "btn-danger-sm";
-    delBtn.textContent = "Supprimer";
+    delBtn.textContent = t("deleteBtn");
     delBtn.addEventListener("click", () => {
       removeMission(m.id);
       renderAll();
@@ -668,8 +665,8 @@ function renderMissionsTable() {
   );
   const totalReward = included.reduce((s, m) => s + (Number(m.reward) || 0), 0);
   summary.textContent = state.missions.length
-    ? `${included.length}/${state.missions.length} mission(s) sélectionnée(s) — ${totalCargo} SCU — ${totalReward} aUEC`
-    : "Aucune mission enregistrée pour l'instant.";
+    ? t("missionsSummary", { included: included.length, total: state.missions.length, cargo: totalCargo, reward: totalReward })
+    : t("noMissionsYet");
 
   // Ceci est la somme brute de toutes les récupérations, pas la charge réelle
   // à un instant donné (on décharge en cours de route, ce qui libère de la
@@ -679,8 +676,8 @@ function renderMissionsTable() {
   const ship = getSelectedShip();
   capacityEl.className = "hint";
   capacityEl.textContent = ship
-    ? `${totalCargo} SCU à transporter au total (${ship.name}, ${ship.scu} SCU) — la charge réelle à bord dépend de l'ordre du trajet, vérifie via "Optimiser la route".`
-    : `${totalCargo} SCU à transporter au total — sélectionne un vaisseau (menu de gauche) puis optimise la route pour vérifier que ça tient.`;
+    ? t("capacityWithShip", { cargo: totalCargo, shipName: ship.name, shipScu: ship.scu })
+    : t("capacityNoShip", { cargo: totalCargo });
 }
 
 function renderDistanceEditor() {
@@ -688,7 +685,7 @@ function renderDistanceEditor() {
   container.innerHTML = "";
   const locIds = computeUniqueLocationIds(state.missions);
   if (locIds.length < 2) {
-    container.textContent = "Ajoute au moins deux lieux différents via tes missions pour renseigner des distances.";
+    container.textContent = t("needTwoLocations");
     return;
   }
   const locs = locIds.map((id) => getLocationById(id)).filter(Boolean);
@@ -704,12 +701,12 @@ function renderDistanceEditor() {
     const bulkBtn = document.createElement("button");
     bulkBtn.type = "button";
     bulkBtn.className = "btn-secondary";
-    bulkBtn.textContent = "Remplir les distances manquantes via UEX";
+    bulkBtn.textContent = t("fillMissingDistancesBtn");
     bulkBtn.addEventListener("click", async () => {
       bulkBtn.disabled = true;
-      bulkBtn.textContent = "Récupération en cours...";
+      bulkBtn.textContent = t("fetchingInProgress");
       await syncMissingDistances((done, total) => {
-        bulkBtn.textContent = `Récupération en cours... ${done}/${total}`;
+        bulkBtn.textContent = t("fetchingProgress", { done, total });
       });
       renderDistanceEditor();
     });
@@ -719,7 +716,7 @@ function renderDistanceEditor() {
   const table = document.createElement("table");
   table.className = "distance-table";
   const thead = document.createElement("thead");
-  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance (Gm)</th><th>Source</th><th></th></tr>";
+  thead.innerHTML = `<tr><th>${t("colLocA")}</th><th>${t("colLocB")}</th><th>${t("colDistanceGm")}</th><th>${t("colSource")}</th><th></th></tr>`;
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
 
@@ -761,7 +758,7 @@ function renderDistanceEditor() {
       const uexBtn = document.createElement("button");
       uexBtn.type = "button";
       uexBtn.className = "btn-secondary";
-      uexBtn.textContent = "via UEX";
+      uexBtn.textContent = t("viaUexBtn");
       uexBtn.addEventListener("click", async () => {
         uexBtn.disabled = true;
         try {
@@ -770,7 +767,7 @@ function renderDistanceEditor() {
           setDistance(a.id, b.id, d);
           refreshSource();
         } catch (e) {
-          alert(`Impossible de récupérer la distance UEX : ${e.message}`);
+          alert(t("uexDistanceError", { msg: e.message }));
         }
         uexBtn.disabled = false;
       });
@@ -784,7 +781,7 @@ function renderDistanceEditor() {
 
   const note = document.createElement("p");
   note.className = "hint";
-  note.textContent = `Les paires sans donnée UEX ni valeur manuelle utilisent une valeur par défaut de ${DEFAULT_DISTANCE} Gm.`;
+  note.textContent = t("defaultDistanceNote", { default: DEFAULT_DISTANCE });
   container.appendChild(note);
 
   filterDistanceRows();
@@ -818,13 +815,13 @@ function renderRouteResult(result) {
   if (result.approximate) {
     const p = document.createElement("p");
     p.className = "hint";
-    p.textContent = `${result.stopCount} lieux distincts : résultat approché (heuristique), pas garanti optimal à 100%.`;
+    p.textContent = t("approximateResultNote", { count: result.stopCount });
     container.appendChild(p);
   }
 
   const totalP = document.createElement("p");
   totalP.className = "route-total";
-  totalP.textContent = `Distance totale estimée : ${result.total} Gm — ${result.steps.length} arrêt(s)`;
+  totalP.textContent = t("routeTotal", { total: result.total, stops: result.steps.length });
   container.appendChild(totalP);
 
   const ship = getSelectedShip();
@@ -833,11 +830,11 @@ function renderRouteResult(result) {
     const over = result.maxCargoLoad > ship.scu;
     loadP.className = over ? "cargo-overload" : "cargo-ok";
     loadP.textContent = over
-      ? `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — dépassement de ${roundScu(result.maxCargoLoad - ship.scu)} SCU à un moment du trajet !`
-      : `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — ça tient à tout moment du trajet.`;
+      ? t("maxLoadOverload", { load: result.maxCargoLoad, scu: ship.scu, over: roundScu(result.maxCargoLoad - ship.scu) })
+      : t("maxLoadOk", { load: result.maxCargoLoad, scu: ship.scu });
   } else {
     loadP.className = "hint";
-    loadP.textContent = `Charge maximale sur le trajet : ${result.maxCargoLoad} SCU — sélectionne un vaisseau (menu de gauche) pour vérifier que ça tient.`;
+    loadP.textContent = t("maxLoadNoShip", { load: result.maxCargoLoad });
   }
   container.appendChild(loadP);
 
@@ -859,10 +856,10 @@ function renderRouteResult(result) {
     if (ship) {
       const overHere = step.cargoLoad > ship.scu;
       loadSpan.className = overHere ? "route-load route-load-overload" : "route-load";
-      loadSpan.textContent = ` — ${step.cargoLoad} SCU à bord sur ${ship.scu} disponibles`;
+      loadSpan.textContent = t("onBoardWithShip", { load: step.cargoLoad, scu: ship.scu });
     } else {
       loadSpan.className = "route-load";
-      loadSpan.textContent = ` — ${step.cargoLoad} SCU à bord`;
+      loadSpan.textContent = t("onBoardNoShip", { load: step.cargoLoad });
     }
     header.appendChild(loadSpan);
     li.appendChild(header);
@@ -873,7 +870,7 @@ function renderRouteResult(result) {
       step.actions.forEach((a) => {
         const actionLi = document.createElement("li");
         actionLi.className = a.type === "pickup" ? "action-pickup" : "action-dropoff";
-        actionLi.textContent = `${a.type === "pickup" ? "Récupérer" : "Déposer"} — ${a.mission.name}`;
+        actionLi.textContent = `${a.type === "pickup" ? t("pickupAction") : t("dropoffAction")} — ${a.mission.name}`;
 
         const items = a.items || [];
         if (items.length) {
@@ -881,7 +878,7 @@ function renderRouteResult(result) {
           itemsUl.className = "route-cargo-items";
           items.forEach((item) => {
             const itemLi = document.createElement("li");
-            itemLi.textContent = `${item.quantity || "?"} SCU de ${item.commodity || "?"}`;
+            itemLi.textContent = t("scuOf", { qty: item.quantity || "?", commodity: item.commodity || "?" });
             itemsUl.appendChild(itemLi);
           });
           actionLi.appendChild(itemsUl);
@@ -899,10 +896,10 @@ function renderRouteResult(result) {
 function renderUexStatus() {
   const status = document.getElementById("uex-status");
   if (state.uexLocations.length) {
-    const date = new Date(state.uexSyncedAt).toLocaleString("fr-FR");
-    status.textContent = `${state.uexLocations.length} lieux chargés depuis UEX Corp (dernière synchro : ${date}).`;
+    const date = new Date(state.uexSyncedAt).toLocaleString(getLang() === "en" ? "en-US" : "fr-FR");
+    status.textContent = t("uexLocationsLoaded", { count: state.uexLocations.length, date });
   } else {
-    status.textContent = `${DEFAULT_LOCATIONS.length} lieux intégrés par défaut (données UEX Corp). Utilise "Tout synchroniser" pour les rafraîchir.`;
+    status.textContent = t("uexLocationsDefault", { count: DEFAULT_LOCATIONS.length });
   }
 }
 
@@ -940,7 +937,7 @@ function createCargoFieldRow(commodity, quantity, pickupText, dropoffText) {
   const commodityInput = document.createElement("input");
   commodityInput.type = "text";
   commodityInput.setAttribute("list", "commodities-datalist");
-  commodityInput.placeholder = "Marchandise";
+  commodityInput.placeholder = t("cargoCommodityPlaceholder");
   commodityInput.autocomplete = "off";
   commodityInput.className = "cargo-commodity-input";
   if (commodity) commodityInput.value = commodity;
@@ -950,13 +947,13 @@ function createCargoFieldRow(commodity, quantity, pickupText, dropoffText) {
   quantityInput.type = "number";
   quantityInput.min = "0";
   quantityInput.step = "any";
-  quantityInput.placeholder = "SCU";
+  quantityInput.placeholder = t("cargoScuPlaceholder");
   quantityInput.className = "cargo-quantity-input";
   if (quantity) quantityInput.value = quantity;
   row.appendChild(quantityInput);
 
-  createLocationSubInput(row, "cargo-pickup-input", "Lieu de récupération", pickupText);
-  createLocationSubInput(row, "cargo-dropoff-input", "Lieu de dépôt", dropoffText);
+  createLocationSubInput(row, "cargo-pickup-input", t("cargoPickupPlaceholder"), pickupText);
+  createLocationSubInput(row, "cargo-dropoff-input", t("cargoDropoffPlaceholder"), dropoffText);
 
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
@@ -1114,9 +1111,9 @@ function renderOcrResult(rawText, parsed) {
   const summary = document.createElement("div");
   summary.className = "ocr-summary";
   const rows = [
-    ["Nom", parsed.name],
-    ["Donneur", parsed.giver],
-    ["Récompense", parsed.reward ? `${parsed.reward} aUEC` : ""],
+    [t("ocrLabelName"), parsed.name],
+    [t("ocrLabelGiver"), parsed.giver],
+    [t("ocrLabelReward"), parsed.reward ? `${parsed.reward} aUEC` : ""],
   ];
   rows.forEach(([label, value]) => {
     if (!value) return;
@@ -1130,23 +1127,28 @@ function renderOcrResult(rawText, parsed) {
   if (hasApproximateSplit) {
     const warn = document.createElement("p");
     warn.className = "hint ocr-approx-warning";
-    warn.textContent =
-      "⚠ Marchandise disponible à plusieurs lieux de retrait : la quantité est répartie également à titre d'estimation — vérifie le stock réel en jeu et corrige les quantités si besoin.";
+    warn.textContent = t("ocrApproxWarning");
     container.appendChild(warn);
   }
 
   (parsed.cargoItems || []).forEach((item) => {
     const row = document.createElement("div");
     row.className = "ocr-summary-row";
-    const approxNote = item.approximate ? " (estimation)" : "";
-    row.textContent = `${item.quantity || "?"} SCU de ${item.commodity || "?"} : ${item.pickupText || "?"} → ${item.dropoffText || "?"}${approxNote}`;
+    const approxNote = item.approximate ? t("ocrEstimationSuffix") : "";
+    row.textContent = t("ocrItemLine", {
+      qty: item.quantity || "?",
+      commodity: item.commodity || "?",
+      pickup: item.pickupText || "?",
+      dropoff: item.dropoffText || "?",
+      approx: approxNote,
+    });
     summary.appendChild(row);
   });
   container.appendChild(summary);
 
   const pre = document.createElement("pre");
   pre.className = "ocr-raw-text";
-  pre.textContent = rawText.trim() || "(aucun texte reconnu)";
+  pre.textContent = rawText.trim() || t("ocrNoTextRecognized");
   container.appendChild(pre);
 
   const hasAnyField =
@@ -1156,13 +1158,13 @@ function renderOcrResult(rawText, parsed) {
     const useBtn = document.createElement("button");
     useBtn.type = "button";
     useBtn.className = "btn-primary";
-    useBtn.textContent = "Utiliser ces champs dans le formulaire";
+    useBtn.textContent = t("ocrUseFieldsBtn");
     useBtn.addEventListener("click", () => applyOcrResultToForm(parsed));
     container.appendChild(useBtn);
   } else {
     const note = document.createElement("p");
     note.className = "hint";
-    note.textContent = "Aucun champ reconnu — vérifie le texte brut ci-dessous et complète à la main.";
+    note.textContent = t("ocrNoFieldsRecognized");
     container.appendChild(note);
   }
 }
@@ -1173,15 +1175,15 @@ async function processOcrImage(blob) {
 
   preview.src = URL.createObjectURL(blob);
   preview.style.display = "block";
-  status.textContent = "Reconnaissance en cours...";
+  status.textContent = t("ocrRecognizing");
 
   try {
     const rawText = await runOcrOnImage(blob);
     const parsed = parseOcrText(rawText);
-    status.textContent = "Texte reconnu — vérifie avant d'utiliser.";
+    status.textContent = t("ocrRecognized");
     renderOcrResult(rawText, parsed);
   } catch (e) {
-    status.textContent = `Erreur OCR : ${e.message}`;
+    status.textContent = t("ocrError", { msg: e.message });
   }
 }
 
@@ -1189,6 +1191,7 @@ async function processOcrImage(blob) {
 // Câblage des événements
 // =========================================================================
 document.addEventListener("DOMContentLoaded", () => {
+  applyStaticTranslations();
   renderAll();
   resetCargoFields();
 
@@ -1200,6 +1203,21 @@ document.addEventListener("DOMContentLoaded", () => {
     document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("sc-cargo-optimizer-theme", next);
     themeToggle.textContent = next === "light" ? "🌙" : "☀️";
+  });
+
+  const langToggle = document.getElementById("lang-toggle");
+  langToggle.textContent = getLang() === "en" ? "FR" : "EN";
+  langToggle.addEventListener("click", () => {
+    setLang(getLang() === "en" ? "fr" : "en");
+    langToggle.textContent = getLang() === "en" ? "FR" : "EN";
+    applyStaticTranslations();
+    // Rafraîchit aussi les textes des champs marchandise déjà présents dans
+    // le formulaire (leurs placeholders ne sont pas couverts par data-i18n).
+    document.querySelectorAll(".cargo-commodity-input").forEach((i) => (i.placeholder = t("cargoCommodityPlaceholder")));
+    document.querySelectorAll(".cargo-quantity-input").forEach((i) => (i.placeholder = t("cargoScuPlaceholder")));
+    document.querySelectorAll(".cargo-pickup-input").forEach((i) => (i.placeholder = t("cargoPickupPlaceholder")));
+    document.querySelectorAll(".cargo-dropoff-input").forEach((i) => (i.placeholder = t("cargoDropoffPlaceholder")));
+    renderAll();
   });
 
   document.getElementById("add-cargo-btn").addEventListener("click", () => {
@@ -1259,7 +1277,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rows = getCargoFieldValues();
     if (rows.length === 0) {
-      alert("Ajoute au moins une marchandise avec son lieu de récupération et de dépôt.");
+      alert(t("addAtLeastOneCargoError"));
       return;
     }
 
@@ -1268,9 +1286,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const pickupLoc = findLocationByLabel(row.pickupText);
       const dropoffLoc = findLocationByLabel(row.dropoffText);
       if (!pickupLoc || !dropoffLoc) {
-        alert(
-          `Le lieu de récupération et le lieu de dépôt doivent être choisis dans la liste proposée (marchandise "${row.commodity || "?"}").`
-        );
+        alert(t("locationNotFoundError", { commodity: row.commodity || "?" }));
         return;
       }
       cargoItems.push({
@@ -1317,7 +1333,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("reset-all").addEventListener("click", () => {
-    if (confirm("Supprimer toutes les missions, lieux personnalisés et distances enregistrées ?")) {
+    if (confirm(t("confirmResetAll"))) {
       localStorage.removeItem(STORAGE_KEY);
       state = loadState();
       renderAll();
@@ -1329,33 +1345,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const status = document.getElementById("uex-status");
     btn.disabled = true;
     try {
-      btn.textContent = "Synchronisation des lieux...";
+      btn.textContent = t("syncingLocations");
       await syncUexLocations();
       renderAll();
 
-      btn.textContent = "Synchronisation des marchandises...";
+      btn.textContent = t("syncingCommodities");
       await syncUexCommodities();
 
-      btn.textContent = "Synchronisation des entreprises...";
+      btn.textContent = t("syncingCompanies");
       await syncUexCompanies();
 
-      btn.textContent = "Synchronisation des vaisseaux...";
+      btn.textContent = t("syncingShips");
       await syncUexShips();
       renderAll();
 
-      btn.textContent = "Synchronisation des distances...";
+      btn.textContent = t("syncingDistances");
       const fetched = await syncMissingDistances((done, total) => {
-        btn.textContent = `Synchronisation des distances... ${done}/${total}`;
+        btn.textContent = t("syncingDistancesProgress", { done, total });
       });
       renderDistanceEditor();
-      status.textContent =
-        `${state.uexLocations.length} lieux, ${state.uexCommodities.length} marchandises, ` +
-        `${state.uexCompanies.length} entreprises, ${state.uexShips.length} vaisseaux à jour — ` +
-        `${fetched} distance(s) manquante(s) récupérée(s) via UEX.`;
+      status.textContent = t("syncSummary", {
+        locs: state.uexLocations.length,
+        commodities: state.uexCommodities.length,
+        companies: state.uexCompanies.length,
+        ships: state.uexShips.length,
+        fetched,
+      });
     } catch (err) {
-      alert(`Échec de la synchronisation UEX : ${err.message}`);
+      alert(t("syncFailed", { msg: err.message }));
     }
     btn.disabled = false;
-    btn.textContent = "Tout synchroniser (UEX Corp)";
+    btn.textContent = t("syncAllBtn");
   });
 });
