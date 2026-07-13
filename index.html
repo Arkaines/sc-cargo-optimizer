@@ -26,6 +26,20 @@
   </p>
 </header>
 
+<div class="layout">
+<aside id="gamelog-panel">
+  <h2>Missions détectées (Game.log)</h2>
+  <p class="hint">
+    Chemin habituel : <code>...\StarCitizen\LIVE\Game.log</code>. Le navigateur ne peut pas lire
+    ce fichier sans ton accord — clique ci-dessous pour le sélectionner toi-même.
+  </p>
+  <button type="button" id="select-gamelog-btn" class="btn-primary">Sélectionner Game.log</button>
+  <input type="file" id="gamelog-file-input" accept=".log" style="display:none;" />
+  <p id="gamelog-status" class="hint" style="margin-top:0.5rem;"></p>
+  <p id="detected-missions-count" class="hint"></p>
+  <div id="detected-missions-list"></div>
+</aside>
+
 <main>
   <section>
     <h2>Nouvelle mission</h2>
@@ -135,6 +149,7 @@
     <div id="route-result" style="margin-top:1rem;"></div>
   </section>
 </main>
+</div>
 
 <footer>
   <button type="button" id="reset-all">Réinitialiser toutes les données</button>
@@ -145,6 +160,7 @@
 <script src="companies.js"></script>
 <script src="distances.js"></script>
 <script src="uex.js"></script>
+<script src="gamelog.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

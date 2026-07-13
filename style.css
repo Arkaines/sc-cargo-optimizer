@@ -37,10 +37,86 @@ header p {
   color: var(--muted);
 }
 
-main {
-  max-width: 900px;
+.layout {
+  max-width: 1300px;
   margin: 0 auto;
   padding: 1.5rem 2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+aside#gamelog-panel {
+  width: 300px;
+  flex: none;
+  position: sticky;
+  top: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+aside#gamelog-panel h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+aside#gamelog-panel code {
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.detected-mission-card {
+  background: #0d1320;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
+  position: relative;
+}
+
+.detected-mission-title {
+  font-weight: 600;
+  padding-right: 2rem;
+}
+
+.detected-mission-objectives {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.btn-add-detected {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    flex-direction: column;
+  }
+  aside#gamelog-panel {
+    width: 100%;
+    position: static;
+    max-height: none;
+  }
+}
+
+main {
+  max-width: 900px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
