@@ -719,7 +719,7 @@ function renderDistanceEditor() {
   const table = document.createElement("table");
   table.className = "distance-table";
   const thead = document.createElement("thead");
-  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance</th><th>Source</th><th></th></tr>";
+  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance (Gm)</th><th>Source</th><th></th></tr>";
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
 
@@ -784,7 +784,7 @@ function renderDistanceEditor() {
 
   const note = document.createElement("p");
   note.className = "hint";
-  note.textContent = `Les paires sans donnée UEX ni valeur manuelle utilisent une valeur par défaut de ${DEFAULT_DISTANCE}.`;
+  note.textContent = `Les paires sans donnée UEX ni valeur manuelle utilisent une valeur par défaut de ${DEFAULT_DISTANCE} Gm.`;
   container.appendChild(note);
 
   filterDistanceRows();
@@ -824,7 +824,7 @@ function renderRouteResult(result) {
 
   const totalP = document.createElement("p");
   totalP.className = "route-total";
-  totalP.textContent = `Distance totale estimée : ${result.total} — ${result.steps.length} arrêt(s)`;
+  totalP.textContent = `Distance totale estimée : ${result.total} Gm — ${result.steps.length} arrêt(s)`;
   container.appendChild(totalP);
 
   const ship = getSelectedShip();
@@ -852,7 +852,7 @@ function renderRouteResult(result) {
     if (step.legDistance) {
       const legSpan = document.createElement("span");
       legSpan.className = "route-leg";
-      legSpan.textContent = ` (+${step.legDistance})`;
+      legSpan.textContent = ` (+${step.legDistance} Gm)`;
       header.appendChild(legSpan);
     }
     const loadSpan = document.createElement("span");
