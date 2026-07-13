@@ -1281,6 +1281,6 @@ document.addEventListener("DOMContentLoaded", () => {
       alert(`Échec de la synchronisation UEX : ${err.message}`);
     }
     btn.disabled = false;
-    btn.textContent = "Tout synchroniser (lieux + distances)";
+    btn.textContent = "Tout synchroniser (UEX Corp)";
   });
 });
