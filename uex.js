@@ -43,7 +43,7 @@ function locationCategoryFromTerminal(t) {
   else if (t.id_city) base = "Ville";
   else if (t.id_moon) base = "Lune (surface)";
   if (t.star_system_name && t.star_system_name !== "Stanton") {
-    base += ` · ${t.star_system_name}`;
+    base += ` - ${t.star_system_name}`;
   }
   return base;
 }
