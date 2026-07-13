@@ -786,9 +786,10 @@ function renderHistoryTable() {
     tr.appendChild(tdReward);
 
     const tdActions = document.createElement("td");
+    tdActions.className = "actions-cell";
     const restoreBtn = document.createElement("button");
     restoreBtn.type = "button";
-    restoreBtn.className = "btn-secondary";
+    restoreBtn.className = "btn-primary-sm";
     restoreBtn.textContent = t("restoreBtn");
     restoreBtn.addEventListener("click", () => {
       // Ne restaure qu'une seule occurrence du groupe (la dernière terminée).

@@ -495,6 +495,21 @@ button:active {
   font-weight: 500;
 }
 
+.btn-primary-sm {
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 .inline-add-location {
   display: flex;
   gap: 0.5rem;
