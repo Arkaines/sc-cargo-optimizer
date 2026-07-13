@@ -2,21 +2,13 @@
 
 // =========================================================================
 // Intégration API UEX Corp (https://uexcorp.space/api/documentation/)
-// Lecture seule : liste des terminaux (pour les lieux) et distances entre
-// terminaux. Ces endpoints répondent publiquement, la clé API est optionnelle
-// (utile surtout pour des limites de débit plus confortables).
+// Lecture seule : terminaux (lieux), distances, marchandises, entreprises,
+// vaisseaux. Ces endpoints répondent publiquement, sans clé API.
 // =========================================================================
 const UEX_API_BASE = "https://api.uexcorp.uk/2.0";
 
-function uexHeaders() {
-  const headers = { Accept: "application/json" };
-  const key = state.settings && state.settings.apiKey;
-  if (key) headers["Authorization"] = `Bearer ${key}`;
-  return headers;
-}
-
 async function uexGet(path) {
-  const res = await fetch(`${UEX_API_BASE}/${path}`, { headers: uexHeaders() });
+  const res = await fetch(`${UEX_API_BASE}/${path}`, { headers: { Accept: "application/json" } });
   const json = await res.json();
   if (json.status !== "ok") {
     throw new Error(json.message || `Erreur UEX (${json.status})`);

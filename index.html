@@ -10,16 +10,6 @@
 <header>
   <h1>Optimiseur de routes cargo</h1>
   <p>Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.</p>
-  <div class="optimize-row" style="margin-top:1rem;">
-    <div>
-      <label for="uex-api-key">Clé API UEX (optionnelle)</label>
-      <input type="text" id="uex-api-key" placeholder="Laisser vide si non nécessaire" autocomplete="off" />
-    </div>
-    <div>
-      <button type="button" id="uex-sync-all-btn" class="btn-primary">Tout synchroniser (UEX Corp)</button>
-    </div>
-  </div>
-  <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
   <p class="hint">
     Données fournies par l'API publique
     <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>.
@@ -35,6 +25,11 @@
       <option value="">-- Aucun --</option>
     </select>
     <p id="ship-capacity" class="hint" style="margin-top:0.5rem;"></p>
+  </div>
+
+  <div class="side-block">
+    <button type="button" id="uex-sync-all-btn" class="btn-primary" style="width:100%;">Tout synchroniser (UEX Corp)</button>
+    <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
   </div>
 
   <div class="side-block">

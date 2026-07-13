@@ -14,7 +14,6 @@ function defaultState() {
     nextMissionId: 1,
     uexLocations: [],
     uexSyncedAt: null,
-    settings: { apiKey: "" },
     selectedShip: "",
     uexCommodities: [],
     uexCompanies: [],
@@ -64,7 +63,6 @@ function loadState() {
       nextMissionId: parsed.nextMissionId || 1,
       uexLocations: parsed.uexLocations || [],
       uexSyncedAt: parsed.uexSyncedAt || null,
-      settings: { apiKey: (parsed.settings && parsed.settings.apiKey) || "" },
       selectedShip: parsed.selectedShip || "",
       uexCommodities: parsed.uexCommodities || [],
       uexCompanies: parsed.uexCompanies || [],
@@ -1298,13 +1296,6 @@ document.addEventListener("DOMContentLoaded", () => {
       state = loadState();
       renderAll();
     }
-  });
-
-  const apiKeyInput = document.getElementById("uex-api-key");
-  apiKeyInput.value = state.settings.apiKey || "";
-  apiKeyInput.addEventListener("change", () => {
-    state.settings.apiKey = apiKeyInput.value.trim();
-    saveState();
   });
 
   document.getElementById("uex-sync-all-btn").addEventListener("click", async (e) => {
