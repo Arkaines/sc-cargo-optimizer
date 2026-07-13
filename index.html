@@ -27,26 +27,30 @@
 </header>
 
 <div class="layout">
-<aside id="ocr-panel">
-  <h2>Mon vaisseau</h2>
-  <label for="ship-select">Vaisseau utilisé</label>
-  <select id="ship-select">
-    <option value="">-- Aucun --</option>
-  </select>
-  <p id="ship-capacity" class="hint" style="margin-top:0.5rem;"></p>
-
-  <h2 style="margin-top:1.5rem;">Importer une mission (capture d'écran)</h2>
-  <p class="hint">
-    Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici
-    (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.
-  </p>
-  <div id="ocr-dropzone" tabindex="0">
-    Colle (Ctrl+V) ou dépose une image ici
-    <input type="file" id="ocr-file-input" accept="image/*" style="display:none;" />
+<aside id="side-panel">
+  <div class="side-block">
+    <h2>Mon vaisseau</h2>
+    <label for="ship-select">Vaisseau utilisé</label>
+    <select id="ship-select">
+      <option value="">-- Aucun --</option>
+    </select>
+    <p id="ship-capacity" class="hint" style="margin-top:0.5rem;"></p>
   </div>
-  <p id="ocr-status" class="hint" style="margin-top:0.5rem;"></p>
-  <img id="ocr-preview" style="display:none;" alt="Capture importée" />
-  <div id="ocr-result"></div>
+
+  <div class="side-block">
+    <h2>Importer une mission (capture d'écran)</h2>
+    <p class="hint">
+      Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici
+      (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.
+    </p>
+    <div id="ocr-dropzone" tabindex="0">
+      Colle (Ctrl+V) ou dépose une image ici
+      <input type="file" id="ocr-file-input" accept="image/*" style="display:none;" />
+    </div>
+    <p id="ocr-status" class="hint" style="margin-top:0.5rem;"></p>
+    <img id="ocr-preview" style="display:none;" alt="Capture importée" />
+    <div id="ocr-result"></div>
+  </div>
 </aside>
 
 <main>
@@ -136,8 +140,9 @@
     <p id="cargo-capacity-status" class="hint"></p>
   </details>
 
-  <details open>
+  <details>
     <summary>Distances entre lieux utilisés</summary>
+    <input type="text" id="distance-filter" placeholder="Filtrer par nom de lieu..." autocomplete="off" style="margin-bottom:0.75rem;" />
     <div id="distance-editor"></div>
   </details>
 

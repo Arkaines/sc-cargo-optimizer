@@ -737,6 +737,19 @@ function renderDistanceEditor() {
   note.className = "hint";
   note.textContent = `Les paires sans donnée UEX ni valeur manuelle utilisent une valeur par défaut de ${DEFAULT_DISTANCE}.`;
   container.appendChild(note);
+
+  filterDistanceRows();
+}
+
+// Filtre en direct les lignes de la table des distances par nom de lieu
+// (n'importe lequel des deux lieux de la paire), sans tout re-rendre.
+function filterDistanceRows() {
+  const filterInput = document.getElementById("distance-filter");
+  const query = filterInput.value.trim().toLowerCase();
+  document.querySelectorAll("#distance-editor .distance-table tbody tr").forEach((tr) => {
+    const matches = !query || tr.textContent.toLowerCase().includes(query);
+    tr.style.display = matches ? "" : "none";
+  });
 }
 
 function renderRouteResult(result) {
@@ -1121,6 +1134,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("add-cargo-btn").addEventListener("click", () => {
     createCargoFieldRow();
   });
+
+  document.getElementById("distance-filter").addEventListener("input", filterDistanceRows);
 
   document.getElementById("ship-select").addEventListener("change", (e) => {
     state.selectedShip = e.target.value;
