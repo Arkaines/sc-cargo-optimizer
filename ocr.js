@@ -154,15 +154,16 @@ function parseOcrText(text) {
 
   const dropoffTexts = Array.from(new Set(objectives.map((o) => o.dropoff)));
   const pickupTexts = pickMinimalPickupSet(objectives);
-  const commodities = Array.from(new Set(objectives.map((o) => o.commodity)));
-  const totalCargo = objectives.reduce((s, o) => s + (o.quantity || 0), 0);
+  // Une ligne par objectif (pas de fusion par nom de marchandise) : deux
+  // objectifs de la même marchandise vers deux dépôts différents restent
+  // deux lignes distinctes, plus fidèle au contrat réel.
+  const cargoItems = objectives.map((o) => ({ commodity: o.commodity, quantity: o.quantity }));
 
   return {
     raw: text,
     name: extractContractTitle(text),
     giver: extractGiver(normalized),
-    commodity: commodities.join(", "),
-    cargo: totalCargo || "",
+    cargoItems,
     reward: extractReward(normalized),
     pickupTexts,
     dropoffTexts,

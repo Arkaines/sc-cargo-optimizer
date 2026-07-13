@@ -20,11 +20,15 @@ function defaultState() {
 
 // Ancien format : mission.pickupId/dropoffId (un seul lieu chacun).
 // Nouveau format : mission.pickupIds/dropoffIds (tableaux, plusieurs lieux possibles).
+// Ancien format : mission.commodity/cargo (une seule marchandise en texte).
+// Nouveau format : mission.cargoItems (tableau {commodity, quantity}, une ligne par marchandise).
 function migrateMission(m) {
   return {
     ...m,
     pickupIds: m.pickupIds || (m.pickupId ? [m.pickupId] : []),
     dropoffIds: m.dropoffIds || (m.dropoffId ? [m.dropoffId] : []),
+    cargoItems:
+      m.cargoItems || (m.commodity || m.cargo ? [{ commodity: m.commodity || "", quantity: m.cargo || "" }] : []),
   };
 }
 
@@ -154,8 +158,7 @@ function addMission(mission) {
     giver: mission.giver || "",
     pickupIds: mission.pickupIds,
     dropoffIds: mission.dropoffIds,
-    commodity: mission.commodity || "",
-    cargo: mission.cargo,
+    cargoItems: mission.cargoItems || [],
     reward: mission.reward,
     included: true,
   };
@@ -521,12 +524,17 @@ function renderMissionsTable() {
       .join(", ");
     tr.appendChild(tdDropoff);
 
-    const tdCommodity = document.createElement("td");
-    tdCommodity.textContent = m.commodity || "-";
-    tr.appendChild(tdCommodity);
-
     const tdCargo = document.createElement("td");
-    tdCargo.textContent = m.cargo != null && m.cargo !== "" ? `${m.cargo} SCU` : "-";
+    const items = m.cargoItems || [];
+    if (items.length) {
+      items.forEach((item) => {
+        const line = document.createElement("div");
+        line.textContent = `${item.quantity || "?"} SCU — ${item.commodity || "?"}`;
+        tdCargo.appendChild(line);
+      });
+    } else {
+      tdCargo.textContent = "-";
+    }
     tr.appendChild(tdCargo);
 
     const tdReward = document.createElement("td");
@@ -550,7 +558,10 @@ function renderMissionsTable() {
 
   const summary = document.getElementById("missions-summary");
   const included = state.missions.filter((m) => m.included);
-  const totalCargo = included.reduce((s, m) => s + (Number(m.cargo) || 0), 0);
+  const totalCargo = included.reduce(
+    (s, m) => s + (m.cargoItems || []).reduce((s2, item) => s2 + (Number(item.quantity) || 0), 0),
+    0
+  );
   const totalReward = included.reduce((s, m) => s + (Number(m.reward) || 0), 0);
   summary.textContent = state.missions.length
     ? `${included.length}/${state.missions.length} mission(s) sélectionnée(s) — ${totalCargo} SCU — ${totalReward} aUEC`
@@ -783,12 +794,105 @@ function getLocationFieldValues(containerId) {
 }
 
 // =========================================================================
+// Champs dynamiques (une ligne par marchandise)
+// =========================================================================
+function createCargoFieldRow(commodity, quantity) {
+  const container = document.getElementById("cargo-fields");
+  const row = document.createElement("div");
+  row.className = "field-row cargo-field-row";
+
+  const commodityInput = document.createElement("input");
+  commodityInput.type = "text";
+  commodityInput.setAttribute("list", "commodities-datalist");
+  commodityInput.placeholder = "Marchandise";
+  commodityInput.autocomplete = "off";
+  commodityInput.className = "cargo-commodity-input";
+  if (commodity) commodityInput.value = commodity;
+  row.appendChild(commodityInput);
+
+  const quantityInput = document.createElement("input");
+  quantityInput.type = "number";
+  quantityInput.min = "0";
+  quantityInput.step = "any";
+  quantityInput.placeholder = "SCU";
+  quantityInput.className = "cargo-quantity-input";
+  if (quantity) quantityInput.value = quantity;
+  row.appendChild(quantityInput);
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn-remove-field";
+  removeBtn.textContent = "×";
+  removeBtn.addEventListener("click", () => {
+    row.remove();
+    if (container.children.length === 0) createCargoFieldRow();
+  });
+  row.appendChild(removeBtn);
+
+  container.appendChild(row);
+  return row;
+}
+
+function resetCargoFields() {
+  const container = document.getElementById("cargo-fields");
+  container.innerHTML = "";
+  createCargoFieldRow();
+}
+
+function getCargoFieldValues() {
+  const container = document.getElementById("cargo-fields");
+  return Array.from(container.querySelectorAll(".cargo-field-row"))
+    .map((row) => ({
+      commodity: row.querySelector(".cargo-commodity-input").value.trim(),
+      quantity: row.querySelector(".cargo-quantity-input").value,
+    }))
+    .filter((item) => item.commodity !== "" || item.quantity !== "");
+}
+
+// =========================================================================
 // Import OCR (capture d'écran du contrat en jeu)
 // =========================================================================
 
+// Distance d'édition (Levenshtein) pour rattraper les petites variantes de
+// nom (ex : "CRU-L4 Shallow Field Station" lu par l'OCR contre "CRU-L4
+// Shallow Fields Station" dans la base) qu'une simple recherche de
+// sous-chaîne ne peut pas détecter quand la différence est au milieu du nom.
+function levenshteinDistance(a, b) {
+  const m = a.length;
+  const n = b.length;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+function fuzzyLocationMatch(cleaned) {
+  const lower = cleaned.toLowerCase();
+  let best = null;
+  let bestDist = Infinity;
+  allLocations().forEach((loc) => {
+    const dist = levenshteinDistance(lower, loc.name.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = loc;
+    }
+  });
+  if (!best) return null;
+  const threshold = Math.max(3, Math.round(best.name.length * 0.15));
+  return bestDist <= threshold ? best : null;
+}
+
 // Le nom de lieu lu par l'OCR ne correspond pas toujours exactement à un
 // lieu de la base (variante de nom, casse, mot manquant) : on tente une
-// correspondance exacte puis, à défaut, une correspondance approximative.
+// correspondance exacte, puis approximative, puis floue (distance d'édition).
 function looseLocationMatch(rawText) {
   const cleaned = rawText.trim();
   if (!cleaned) return null;
@@ -797,11 +901,11 @@ function looseLocationMatch(rawText) {
   const lower = cleaned.toLowerCase();
   const byName = allLocations().find((loc) => loc.name.toLowerCase() === lower);
   if (byName) return byName;
-  return (
-    allLocations().find(
-      (loc) => loc.name.toLowerCase().includes(lower) || lower.includes(loc.name.toLowerCase())
-    ) || null
+  const bySubstring = allLocations().find(
+    (loc) => loc.name.toLowerCase().includes(lower) || lower.includes(loc.name.toLowerCase())
   );
+  if (bySubstring) return bySubstring;
+  return fuzzyLocationMatch(cleaned);
 }
 
 function fillLocationFieldsFromTexts(containerId, texts) {
@@ -820,14 +924,17 @@ function fillLocationFieldsFromTexts(containerId, texts) {
 function applyOcrResultToForm(parsed) {
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
-  if (parsed.commodity) document.getElementById("mission-commodity").value = parsed.commodity;
-  if (parsed.cargo) document.getElementById("mission-cargo").value = parsed.cargo;
   if (parsed.reward) document.getElementById("mission-reward").value = parsed.reward;
   if (parsed.pickupTexts && parsed.pickupTexts.length) {
     fillLocationFieldsFromTexts("pickup-fields", parsed.pickupTexts);
   }
   if (parsed.dropoffTexts && parsed.dropoffTexts.length) {
     fillLocationFieldsFromTexts("dropoff-fields", parsed.dropoffTexts);
+  }
+  if (parsed.cargoItems && parsed.cargoItems.length) {
+    const container = document.getElementById("cargo-fields");
+    container.innerHTML = "";
+    parsed.cargoItems.forEach((item) => createCargoFieldRow(item.commodity, item.quantity));
   }
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -838,11 +945,13 @@ function renderOcrResult(rawText, parsed) {
 
   const summary = document.createElement("div");
   summary.className = "ocr-summary";
+  const cargoSummary = (parsed.cargoItems || [])
+    .map((item) => `${item.quantity || "?"} SCU de ${item.commodity || "?"}`)
+    .join(" / ");
   const rows = [
     ["Nom", parsed.name],
     ["Donneur", parsed.giver],
-    ["Marchandise", parsed.commodity],
-    ["Cargo", parsed.cargo ? `${parsed.cargo} SCU` : ""],
+    ["Marchandises", cargoSummary],
     ["Récompense", parsed.reward ? `${parsed.reward} aUEC` : ""],
     ["Récupération", (parsed.pickupTexts || []).join(", ")],
     ["Dépôt", (parsed.dropoffTexts || []).join(", ")],
@@ -865,9 +974,8 @@ function renderOcrResult(rawText, parsed) {
   const hasAnyField =
     parsed.name ||
     parsed.giver ||
-    parsed.commodity ||
-    parsed.cargo ||
     parsed.reward ||
+    (parsed.cargoItems && parsed.cargoItems.length) ||
     (parsed.pickupTexts && parsed.pickupTexts.length) ||
     (parsed.dropoffTexts && parsed.dropoffTexts.length);
 
@@ -911,6 +1019,11 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAll();
   resetLocationFields("pickup-fields");
   resetLocationFields("dropoff-fields");
+  resetCargoFields();
+
+  document.getElementById("add-cargo-btn").addEventListener("click", () => {
+    createCargoFieldRow();
+  });
 
   const ocrDropzone = document.getElementById("ocr-dropzone");
   const ocrFileInput = document.getElementById("ocr-file-input");
@@ -952,12 +1065,11 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const name = document.getElementById("mission-name").value.trim();
     const giver = document.getElementById("mission-giver").value.trim();
-    const commodity = document.getElementById("mission-commodity").value.trim();
-    const cargo = document.getElementById("mission-cargo").value;
     const reward = document.getElementById("mission-reward").value;
 
     const pickupTexts = getLocationFieldValues("pickup-fields");
     const dropoffTexts = getLocationFieldValues("dropoff-fields");
+    const cargoItems = getCargoFieldValues();
 
     if (pickupTexts.length === 0 || dropoffTexts.length === 0) {
       alert("Ajoute au moins un lieu de récupération et un lieu de dépôt.");
@@ -979,13 +1091,13 @@ document.addEventListener("DOMContentLoaded", () => {
       giver,
       pickupIds: pickupLocs.map((l) => l.id),
       dropoffIds: dropoffLocs.map((l) => l.id),
-      commodity,
-      cargo,
+      cargoItems,
       reward,
     });
     e.target.reset();
     resetLocationFields("pickup-fields");
     resetLocationFields("dropoff-fields");
+    resetCargoFields();
     renderAll();
   });
 

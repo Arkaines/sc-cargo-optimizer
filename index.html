@@ -67,14 +67,11 @@
           <button type="button" id="add-dropoff-btn" class="btn-secondary btn-add-field">+ Ajouter un lieu de dépôt</button>
         </div>
         <datalist id="locations-datalist"></datalist>
-        <div>
-          <label for="mission-commodity">Marchandise</label>
-          <input type="text" id="mission-commodity" list="commodities-datalist" placeholder="Tape pour chercher..." autocomplete="off" />
+        <div class="full">
+          <label>Marchandises</label>
+          <div id="cargo-fields"></div>
+          <button type="button" id="add-cargo-btn" class="btn-secondary btn-add-field">+ Ajouter une marchandise</button>
           <datalist id="commodities-datalist"></datalist>
-        </div>
-        <div>
-          <label for="mission-cargo">Cargo (SCU)</label>
-          <input type="number" id="mission-cargo" min="0" step="any" />
         </div>
         <div>
           <label for="mission-reward">Récompense (aUEC)</label>
@@ -121,8 +118,7 @@
           <th>Donneur</th>
           <th>Récupération</th>
           <th>Dépôt</th>
-          <th>Marchandise</th>
-          <th>Cargo</th>
+          <th>Cargaison</th>
           <th>Récompense</th>
           <th></th>
         </tr>

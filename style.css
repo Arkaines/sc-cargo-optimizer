@@ -200,6 +200,11 @@ button {
   flex: 1;
 }
 
+.cargo-quantity-input {
+  flex: none !important;
+  width: 90px;
+}
+
 .btn-remove-field {
   background: transparent;
   border: 1px solid var(--danger);
