@@ -905,7 +905,23 @@ function looseLocationMatch(rawText) {
     (loc) => loc.name.toLowerCase().includes(lower) || lower.includes(loc.name.toLowerCase())
   );
   if (bySubstring) return bySubstring;
-  return fuzzyLocationMatch(cleaned);
+  const fuzzy = fuzzyLocationMatch(cleaned);
+  if (fuzzy) return fuzzy;
+  return progressiveTrimMatch(cleaned);
+}
+
+// Filet de sécurité pour les suffixes de position pas encore rencontrés
+// (ex : "au-dessus de X", "sur X", ou une autre tournure future) : on
+// retire progressivement le dernier mot jusqu'à trouver une correspondance
+// exacte, en partant du texte complet.
+function progressiveTrimMatch(cleaned) {
+  const words = cleaned.split(/\s+/);
+  for (let end = words.length - 1; end >= 1; end--) {
+    const candidate = words.slice(0, end).join(" ").toLowerCase();
+    const loc = allLocations().find((l) => l.name.toLowerCase() === candidate);
+    if (loc) return loc;
+  }
+  return null;
 }
 
 function fillLocationFieldsFromTexts(containerId, texts) {

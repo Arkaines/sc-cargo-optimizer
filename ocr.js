@@ -70,8 +70,13 @@ function extractReward(normalized) {
 
 // Retire le suffixe "sur <corps céleste>" (ex : "sur Pyro IV", "sur Cellin")
 // que le jeu ajoute au nom du lieu mais qui n'en fait pas partie.
+// Le jeu ajoute au nom du lieu une précision de position qui n'en fait pas
+// partie : "sur <corps>" pour un lieu en surface, "au-dessus de/d'<corps>"
+// pour une station en orbite. On coupe tout ce qui suit ce mot-clé.
+const LOCATION_SUFFIX_RE = /\s+(?:sur|au-dessus)\b.*$/i;
+
 function stripSystemSuffix(text) {
-  return text.replace(/\s+sur\s+.+$/i, "").trim();
+  return text.replace(LOCATION_SUFFIX_RE, "").trim();
 }
 
 // Extrait les objectifs (dépôt + marchandise + quantité, avec leurs lieux de
