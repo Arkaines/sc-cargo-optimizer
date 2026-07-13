@@ -944,6 +944,7 @@ function renderRouteResult(result) {
     p.className = "error";
     p.textContent = result.error;
     container.appendChild(p);
+    triggerFadeIn(container);
     return;
   }
 
@@ -1026,6 +1027,7 @@ function renderRouteResult(result) {
     ol.appendChild(li);
   });
   container.appendChild(ol);
+  triggerFadeIn(container);
 }
 
 function renderUexStatus() {
@@ -1209,13 +1211,32 @@ function activateTab(tabId) {
   if (!panel) return;
   const group = panel.closest(".tabs");
   if (!group) return;
-  const buttons = group.querySelectorAll(".tab-btn");
-  const panels = group.querySelectorAll(".tab-panel");
-  buttons.forEach((b) => b.classList.remove("active"));
-  panels.forEach((p) => (p.style.display = "none"));
-  panel.style.display = "";
-  const btn = Array.from(buttons).find((b) => b.dataset.tab === tabId);
-  if (btn) btn.classList.add("active");
+
+  const applySwitch = () => {
+    const buttons = group.querySelectorAll(".tab-btn");
+    const panels = group.querySelectorAll(".tab-panel");
+    buttons.forEach((b) => b.classList.remove("active"));
+    panels.forEach((p) => (p.style.display = "none"));
+    panel.style.display = "";
+    const btn = Array.from(buttons).find((b) => b.dataset.tab === tabId);
+    if (btn) btn.classList.add("active");
+  };
+
+  // Transition animée native (Chrome/Edge) ; se rabat sur un changement
+  // instantané dans les navigateurs qui ne la supportent pas encore.
+  if (document.startViewTransition) {
+    document.startViewTransition(applySwitch);
+  } else {
+    applySwitch();
+  }
+}
+
+// Petit utilitaire pour rejouer une animation d'apparition sur un conteneur
+// dont le contenu vient d'être remplacé (résultat OCR, résultat de trajet...).
+function triggerFadeIn(el) {
+  el.classList.remove("fade-in");
+  void el.offsetWidth; // force le reflow pour pouvoir rejouer l'animation
+  el.classList.add("fade-in");
 }
 
 function applyOcrResultToForm(parsed) {
@@ -1303,6 +1324,7 @@ function renderOcrResult(rawText, parsed) {
     note.textContent = t("ocrNoFieldsRecognized");
     container.appendChild(note);
   }
+  triggerFadeIn(container);
 }
 
 async function processOcrImage(blob) {

@@ -40,6 +40,40 @@
   box-sizing: border-box;
 }
 
+/* =========================================================================
+   Animations (V2) : transitions natives via la View Transitions API pour le
+   changement d'onglet, fondu d'apparition pour les résultats dynamiques, et
+   micro-interactions sur les éléments interactifs. Se dégrade proprement
+   dans les navigateurs qui ne supportent pas ces API (comportement instantané).
+   ========================================================================= */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
+  animation-timing-function: ease;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fade-in-up 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  details[open] > *:not(summary) {
+    animation: none !important;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -65,6 +99,18 @@ body {
   cursor: pointer;
   padding: 0;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#theme-toggle:hover,
+#lang-toggle:hover {
+  transform: scale(1.1);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+#theme-toggle:active,
+#lang-toggle:active {
+  transform: scale(0.95);
 }
 
 #theme-toggle {
@@ -279,6 +325,10 @@ details > summary + * {
   margin-top: 1.25rem;
 }
 
+details[open] > *:not(summary) {
+  animation: fade-in-up 0.2s ease;
+}
+
 .tab-buttons {
   display: flex;
   gap: 0.5rem;
@@ -300,6 +350,11 @@ details > summary + * {
   letter-spacing: 0.02em;
   color: var(--muted);
   cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-btn:active {
+  transform: none;
 }
 
 .tab-btn:hover {
@@ -327,6 +382,14 @@ select {
   padding: 0.45rem 0.6rem;
   font-size: 0.95rem;
   width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 25%, transparent);
 }
 
 .form-grid {
@@ -349,6 +412,16 @@ button {
   font-weight: 600;
   font-family: var(--heading-font);
   letter-spacing: 0.01em;
+  transition: transform 0.1s ease, filter 0.15s ease, background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:active {
+  transform: scale(0.96);
 }
 
 .btn-primary {
