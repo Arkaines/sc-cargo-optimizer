@@ -21,6 +21,21 @@ Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir di
 
 Ouvre simplement `index.html` dans un navigateur (Chrome/Edge recommandés pour la reconnaissance de texte). Toutes les données (missions, lieux personnalisés, distances, préférences) sont sauvegardées dans le stockage local du navigateur.
 
+## Déploiement avec Docker
+
+```bash
+docker compose up -d --build
+```
+
+L'outil est alors accessible sur `http://<adresse-du-serveur>:8080`. Le port exposé se change dans `docker-compose.yml`.
+
+Sans docker compose :
+
+```bash
+docker build -t sc-cargo-optimizer .
+docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
+```
+
 ## Structure du projet
 
 | Fichier | Rôle |
