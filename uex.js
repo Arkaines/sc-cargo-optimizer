@@ -70,6 +70,7 @@ function buildUexLocations(terminals) {
       name: locationNameFromTerminal(t),
       category: locationCategoryFromTerminal(t),
       uexTerminalId: t.id,
+      orbitId: t.id_orbit || 0,
     });
   });
   return Array.from(byGroup.values());
@@ -89,4 +90,32 @@ async function fetchUexDistance(terminalIdA, terminalIdB) {
     `terminals_distances?id_terminal_origin=${terminalIdA}&id_terminal_destination=${terminalIdB}`
   );
   return Number(data.distance);
+}
+
+// Complète via l'API les distances manquantes pour les paires de lieux utilisées
+// par les missions enregistrées (ignore les paires déjà couvertes par les données
+// de base ou déjà fixées manuellement). onProgress(done, total) est appelé à chaque paire.
+async function syncMissingDistances(onProgress) {
+  const locIds = computeUniqueLocationIds(state.missions);
+  const locs = locIds.map((id) => getLocationById(id)).filter(Boolean);
+  const pairs = [];
+  for (let i = 0; i < locs.length; i++) {
+    for (let j = i + 1; j < locs.length; j++) pairs.push([locs[i], locs[j]]);
+  }
+  let fetched = 0;
+  for (let k = 0; k < pairs.length; k++) {
+    const [a, b] = pairs[k];
+    if (onProgress) onProgress(k + 1, pairs.length);
+    if (!a.uexTerminalId || !b.uexTerminalId) continue;
+    if (hasCustomDistance(a.id, b.id)) continue;
+    if (distanceKey(a.id, b.id) in DEFAULT_DISTANCE_MAP) continue;
+    try {
+      const d = await fetchUexDistance(a.uexTerminalId, b.uexTerminalId);
+      setDistance(a.id, b.id, d);
+      fetched++;
+    } catch (e) {
+      console.error(`Distance UEX ${a.name} -> ${b.name} :`, e);
+    }
+  }
+  return fetched;
 }

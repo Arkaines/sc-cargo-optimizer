@@ -92,14 +92,36 @@ function distanceKey(aId, bId) {
   return [aId, bId].sort().join("|");
 }
 
-function getDistance(aId, bId) {
-  if (aId === bId) return 0;
-  const v = state.distances[distanceKey(aId, bId)];
-  return typeof v === "number" && !isNaN(v) ? v : DEFAULT_DISTANCE;
-}
+// Distances de base dérivées du graphe d'orbites UEX Corp (voir distances.js),
+// indexées une fois au chargement avec la même clé normalisée que les distances manuelles.
+const DEFAULT_DISTANCE_MAP = {};
+DEFAULT_DISTANCE_TRIPLETS.forEach(([a, b, d]) => {
+  DEFAULT_DISTANCE_MAP[distanceKey(a, b)] = d;
+});
 
 function hasCustomDistance(aId, bId) {
   return distanceKey(aId, bId) in state.distances;
+}
+
+function hasBakedDistance(aId, bId) {
+  return distanceKey(aId, bId) in DEFAULT_DISTANCE_MAP;
+}
+
+function getDistance(aId, bId) {
+  if (aId === bId) return 0;
+  const key = distanceKey(aId, bId);
+  const manual = state.distances[key];
+  if (typeof manual === "number" && !isNaN(manual)) return manual;
+  const baked = DEFAULT_DISTANCE_MAP[key];
+  if (typeof baked === "number" && !isNaN(baked)) return baked;
+  return DEFAULT_DISTANCE;
+}
+
+function getDistanceSource(aId, bId) {
+  if (aId === bId) return "identique";
+  if (hasCustomDistance(aId, bId)) return "manuel";
+  if (hasBakedDistance(aId, bId)) return "UEX";
+  return "défaut";
 }
 
 function setDistance(aId, bId, value) {
@@ -375,40 +397,29 @@ function locationLabel(loc) {
   return loc ? `${loc.name} (${loc.category})` : "?";
 }
 
-function renderLocationOptions(selectEl, selectedId) {
-  const byCategory = {};
-  allLocations().forEach((loc) => {
-    if (!byCategory[loc.category]) byCategory[loc.category] = [];
-    byCategory[loc.category].push(loc);
+function locationSearchLabel(loc) {
+  return `${loc.name} (${loc.category})`;
+}
+
+function findLocationByLabel(text) {
+  const needle = text.trim().toLowerCase();
+  if (!needle) return null;
+  return allLocations().find((loc) => locationSearchLabel(loc).toLowerCase() === needle) || null;
+}
+
+function renderLocationDatalist() {
+  const datalist = document.getElementById("locations-datalist");
+  const locs = allLocations().slice().sort((a, b) => a.name.localeCompare(b.name));
+  datalist.innerHTML = "";
+  locs.forEach((loc) => {
+    const opt = document.createElement("option");
+    opt.value = locationSearchLabel(loc);
+    datalist.appendChild(opt);
   });
-  selectEl.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "-- Choisir un lieu --";
-  selectEl.appendChild(placeholder);
-  Object.keys(byCategory)
-    .sort()
-    .forEach((cat) => {
-      const group = document.createElement("optgroup");
-      group.label = cat;
-      byCategory[cat]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach((loc) => {
-          const opt = document.createElement("option");
-          opt.value = loc.id;
-          opt.textContent = loc.name;
-          if (loc.id === selectedId) opt.selected = true;
-          group.appendChild(opt);
-        });
-      selectEl.appendChild(group);
-    });
 }
 
 function refreshAllLocationSelects() {
-  document.querySelectorAll("[data-location-select]").forEach((sel) => {
-    const prev = sel.value;
-    renderLocationOptions(sel, prev);
-  });
+  renderLocationDatalist();
   renderStartLocationOptions();
 }
 
@@ -520,16 +531,9 @@ function renderDistanceEditor() {
     bulkBtn.addEventListener("click", async () => {
       bulkBtn.disabled = true;
       bulkBtn.textContent = "Récupération en cours...";
-      for (const [a, b] of pairs) {
-        if (!a.uexTerminalId || !b.uexTerminalId) continue;
-        if (hasCustomDistance(a.id, b.id)) continue;
-        try {
-          const d = await fetchUexDistance(a.uexTerminalId, b.uexTerminalId);
-          setDistance(a.id, b.id, d);
-        } catch (e) {
-          console.error(`Distance UEX ${a.name} -> ${b.name} :`, e);
-        }
-      }
+      await syncMissingDistances((done, total) => {
+        bulkBtn.textContent = `Récupération en cours... ${done}/${total}`;
+      });
       renderDistanceEditor();
     });
     container.appendChild(bulkBtn);
@@ -538,7 +542,7 @@ function renderDistanceEditor() {
   const table = document.createElement("table");
   table.className = "distance-table";
   const thead = document.createElement("thead");
-  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance</th><th></th></tr>";
+  thead.innerHTML = "<tr><th>Lieu A</th><th>Lieu B</th><th>Distance</th><th>Source</th><th></th></tr>";
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
 
@@ -554,14 +558,26 @@ function renderDistanceEditor() {
     input.min = "0";
     input.step = "any";
     input.placeholder = String(DEFAULT_DISTANCE);
-    if (hasCustomDistance(a.id, b.id)) input.value = state.distances[distanceKey(a.id, b.id)];
+    input.value = getDistance(a.id, b.id);
+
+    const tdSource = document.createElement("td");
+    tdSource.className = "hint";
+
+    const refreshSource = () => {
+      tdSource.textContent = getDistanceSource(a.id, b.id);
+    };
+    refreshSource();
+
     input.addEventListener("change", () => {
       setDistance(a.id, b.id, input.value);
+      if (input.value === "") input.value = getDistance(a.id, b.id);
+      refreshSource();
     });
     tdInput.appendChild(input);
     tr.appendChild(tdA);
     tr.appendChild(tdB);
     tr.appendChild(tdInput);
+    tr.appendChild(tdSource);
 
     const tdAction = document.createElement("td");
     if (a.uexTerminalId && b.uexTerminalId) {
@@ -575,6 +591,7 @@ function renderDistanceEditor() {
           const d = await fetchUexDistance(a.uexTerminalId, b.uexTerminalId);
           input.value = d;
           setDistance(a.id, b.id, d);
+          refreshSource();
         } catch (e) {
           alert(`Impossible de récupérer la distance UEX : ${e.message}`);
         }
@@ -590,7 +607,7 @@ function renderDistanceEditor() {
 
   const note = document.createElement("p");
   note.className = "hint";
-  note.textContent = `Les paires non renseignées utilisent une valeur par défaut de ${DEFAULT_DISTANCE}.`;
+  note.textContent = `Les paires sans donnée UEX ni valeur manuelle utilisent une valeur par défaut de ${DEFAULT_DISTANCE}.`;
   container.appendChild(note);
 }
 
@@ -656,9 +673,9 @@ function renderUexStatus() {
   const status = document.getElementById("uex-status");
   if (state.uexLocations.length) {
     const date = new Date(state.uexSyncedAt).toLocaleString("fr-FR");
-    status.textContent = `${state.uexLocations.length} lieux chargés depuis UEX Corp (synchro : ${date}).`;
+    status.textContent = `${state.uexLocations.length} lieux chargés depuis UEX Corp (dernière synchro : ${date}).`;
   } else {
-    status.textContent = "Pas encore synchronisé — la liste de lieux par défaut (Stanton) est utilisée.";
+    status.textContent = `${DEFAULT_LOCATIONS.length} lieux intégrés par défaut (données UEX Corp). Utilise "Tout synchroniser" pour les rafraîchir.`;
   }
 }
 
@@ -679,17 +696,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("mission-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const name = document.getElementById("mission-name").value.trim();
-    const pickupId = document.getElementById("mission-pickup").value;
-    const dropoffId = document.getElementById("mission-dropoff").value;
+    const pickupInput = document.getElementById("mission-pickup");
+    const dropoffInput = document.getElementById("mission-dropoff");
     const cargo = document.getElementById("mission-cargo").value;
     const reward = document.getElementById("mission-reward").value;
 
-    if (!pickupId || !dropoffId) {
-      alert("Choisis un lieu de récupération et un lieu de dépôt.");
+    const pickupLoc = findLocationByLabel(pickupInput.value);
+    const dropoffLoc = findLocationByLabel(dropoffInput.value);
+
+    if (!pickupLoc || !dropoffLoc) {
+      alert(
+        "Choisis un lieu de récupération et un lieu de dépôt dans la liste proposée (tape un nom puis sélectionne une suggestion)."
+      );
       return;
     }
 
-    addMission({ name, pickupId, dropoffId, cargo, reward });
+    addMission({ name, pickupId: pickupLoc.id, dropoffId: dropoffLoc.id, cargo, reward });
     e.target.reset();
     renderAll();
   });
@@ -738,17 +760,25 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
   });
 
-  document.getElementById("uex-sync-btn").addEventListener("click", async (e) => {
+  document.getElementById("uex-sync-all-btn").addEventListener("click", async (e) => {
     const btn = e.target;
+    const status = document.getElementById("uex-status");
     btn.disabled = true;
-    btn.textContent = "Synchronisation...";
     try {
+      btn.textContent = "Synchronisation des lieux...";
       await syncUexLocations();
       renderAll();
+
+      btn.textContent = "Synchronisation des distances...";
+      const fetched = await syncMissingDistances((done, total) => {
+        btn.textContent = `Synchronisation des distances... ${done}/${total}`;
+      });
+      renderDistanceEditor();
+      status.textContent = `${state.uexLocations.length} lieux à jour — ${fetched} distance(s) manquante(s) récupérée(s) via UEX.`;
     } catch (err) {
       alert(`Échec de la synchronisation UEX : ${err.message}`);
     }
     btn.disabled = false;
-    btn.textContent = "Synchroniser les lieux depuis UEX Corp";
+    btn.textContent = "Tout synchroniser (lieux + distances)";
   });
 });

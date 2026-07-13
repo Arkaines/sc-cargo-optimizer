@@ -10,27 +10,23 @@
 <header>
   <h1>Optimiseur de routes cargo</h1>
   <p>Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.</p>
+  <div class="optimize-row" style="margin-top:1rem;">
+    <div>
+      <label for="uex-api-key">Clé API UEX (optionnelle)</label>
+      <input type="text" id="uex-api-key" placeholder="Laisser vide si non nécessaire" autocomplete="off" />
+    </div>
+    <div>
+      <button type="button" id="uex-sync-all-btn" class="btn-primary">Tout synchroniser (lieux + distances)</button>
+    </div>
+  </div>
+  <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
+  <p class="hint">
+    Données fournies par l'API publique
+    <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>.
+  </p>
 </header>
 
 <main>
-  <section>
-    <h2>Source de données — UEX Corp</h2>
-    <p class="hint">
-      Synchronise la liste des lieux (stations, villes, avant-postes) et récupère les distances réelles
-      via l'API publique <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>.
-    </p>
-    <div class="optimize-row">
-      <div>
-        <label for="uex-api-key">Clé API UEX (optionnelle)</label>
-        <input type="text" id="uex-api-key" placeholder="Laisser vide si non nécessaire" autocomplete="off" />
-      </div>
-      <div>
-        <button type="button" id="uex-sync-btn" class="btn-primary">Synchroniser les lieux depuis UEX Corp</button>
-      </div>
-    </div>
-    <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
-  </section>
-
   <section>
     <h2>Nouvelle mission</h2>
     <form id="mission-form">
@@ -41,12 +37,13 @@
         </div>
         <div>
           <label for="mission-pickup">Lieu de récupération</label>
-          <select id="mission-pickup" data-location-select required></select>
+          <input type="text" id="mission-pickup" list="locations-datalist" placeholder="Tape pour chercher..." autocomplete="off" required />
         </div>
         <div>
           <label for="mission-dropoff">Lieu de dépôt</label>
-          <select id="mission-dropoff" data-location-select required></select>
+          <input type="text" id="mission-dropoff" list="locations-datalist" placeholder="Tape pour chercher..." autocomplete="off" required />
         </div>
+        <datalist id="locations-datalist"></datalist>
         <div>
           <label for="mission-cargo">Cargo (SCU)</label>
           <input type="number" id="mission-cargo" min="0" step="any" />
@@ -130,6 +127,7 @@
 </footer>
 
 <script src="locations.js"></script>
+<script src="distances.js"></script>
 <script src="uex.js"></script>
 <script src="app.js"></script>
 </body>
