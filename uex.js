@@ -92,6 +92,36 @@ async function fetchUexDistance(terminalIdA, terminalIdB) {
   return Number(data.distance);
 }
 
+async function syncUexCommodities() {
+  const commodities = await uexGet("commodities");
+  const mapped = commodities
+    .filter((c) => c.is_available)
+    .map((c) => ({ name: c.name, kind: c.kind || "", illegal: !!c.is_illegal }));
+  state.uexCommodities = mapped;
+  saveState();
+  return mapped;
+}
+
+async function syncUexCompanies() {
+  const companies = await uexGet("companies");
+  const mapped = companies.map((c) => ({ name: c.name, industry: c.industry || "" }));
+  state.uexCompanies = mapped;
+  saveState();
+  return mapped;
+}
+
+// Seuls les vaisseaux canoniques (hors variantes peinture/édition) spatiaux
+// (hors véhicules terrestres) avec une capacité cargo non nulle sont retenus.
+async function syncUexShips() {
+  const vehicles = await uexGet("vehicles");
+  const mapped = vehicles
+    .filter((v) => v.id === v.id_parent && !v.is_ground_vehicle && v.scu > 0)
+    .map((v) => ({ name: v.name, scu: v.scu, company: v.company_name || "" }));
+  state.uexShips = mapped;
+  saveState();
+  return mapped;
+}
+
 // Complète via l'API les distances manquantes pour les paires de lieux utilisées
 // par les missions enregistrées (ignore les paires déjà couvertes par les données
 // de base ou déjà fixées manuellement). onProgress(done, total) est appelé à chaque paire.

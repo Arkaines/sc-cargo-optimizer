@@ -16,6 +16,9 @@ function defaultState() {
     uexSyncedAt: null,
     settings: { apiKey: "" },
     selectedShip: "",
+    uexCommodities: [],
+    uexCompanies: [],
+    uexShips: [],
   };
 }
 
@@ -47,6 +50,9 @@ function loadState() {
       uexSyncedAt: parsed.uexSyncedAt || null,
       settings: { apiKey: (parsed.settings && parsed.settings.apiKey) || "" },
       selectedShip: parsed.selectedShip || "",
+      uexCommodities: parsed.uexCommodities || [],
+      uexCompanies: parsed.uexCompanies || [],
+      uexShips: parsed.uexShips || [],
     };
   } catch (e) {
     return defaultState();
@@ -440,10 +446,22 @@ function renderLocationDatalist() {
   });
 }
 
+function allCommodities() {
+  return state.uexCommodities.length ? state.uexCommodities : DEFAULT_COMMODITIES;
+}
+
+function allCompanies() {
+  return state.uexCompanies.length ? state.uexCompanies : DEFAULT_COMPANIES;
+}
+
+function allShips() {
+  return state.uexShips.length ? state.uexShips : DEFAULT_SHIPS;
+}
+
 function renderCommodityDatalist() {
   const datalist = document.getElementById("commodities-datalist");
   datalist.innerHTML = "";
-  DEFAULT_COMMODITIES.forEach((c) => {
+  allCommodities().forEach((c) => {
     const opt = document.createElement("option");
     opt.value = c.name;
     datalist.appendChild(opt);
@@ -453,7 +471,7 @@ function renderCommodityDatalist() {
 function renderCompanyDatalist() {
   const datalist = document.getElementById("companies-datalist");
   datalist.innerHTML = "";
-  DEFAULT_COMPANIES.forEach((c) => {
+  allCompanies().forEach((c) => {
     const opt = document.createElement("option");
     opt.value = c.name;
     datalist.appendChild(opt);
@@ -469,7 +487,7 @@ function refreshAllLocationSelects() {
 
 function getSelectedShip() {
   if (!state.selectedShip) return null;
-  return DEFAULT_SHIPS.find((s) => s.name === state.selectedShip) || null;
+  return allShips().find((s) => s.name === state.selectedShip) || null;
 }
 
 function renderShipOptions() {
@@ -480,7 +498,8 @@ function renderShipOptions() {
   none.value = "";
   none.textContent = "-- Aucun --";
   sel.appendChild(none);
-  DEFAULT_SHIPS.slice()
+  allShips()
+    .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
     .forEach((ship) => {
       const opt = document.createElement("option");
@@ -1239,12 +1258,25 @@ document.addEventListener("DOMContentLoaded", () => {
       await syncUexLocations();
       renderAll();
 
+      btn.textContent = "Synchronisation des marchandises...";
+      await syncUexCommodities();
+
+      btn.textContent = "Synchronisation des entreprises...";
+      await syncUexCompanies();
+
+      btn.textContent = "Synchronisation des vaisseaux...";
+      await syncUexShips();
+      renderAll();
+
       btn.textContent = "Synchronisation des distances...";
       const fetched = await syncMissingDistances((done, total) => {
         btn.textContent = `Synchronisation des distances... ${done}/${total}`;
       });
       renderDistanceEditor();
-      status.textContent = `${state.uexLocations.length} lieux à jour — ${fetched} distance(s) manquante(s) récupérée(s) via UEX.`;
+      status.textContent =
+        `${state.uexLocations.length} lieux, ${state.uexCommodities.length} marchandises, ` +
+        `${state.uexCompanies.length} entreprises, ${state.uexShips.length} vaisseaux à jour — ` +
+        `${fetched} distance(s) manquante(s) récupérée(s) via UEX.`;
     } catch (err) {
       alert(`Échec de la synchronisation UEX : ${err.message}`);
     }
