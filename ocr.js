@@ -126,6 +126,15 @@ function extractObjectives(normalized) {
   return objectives;
 }
 
+// Répartit une quantité (en SCU, toujours entier) le plus également possible
+// entre plusieurs lieux : ex. 9 réparti sur 2 lieux -> [5, 4], jamais de
+// décimales puisque le SCU est une unité entière.
+function splitQuantityEvenly(quantity, count) {
+  const base = Math.floor(quantity / count);
+  const remainder = quantity - base * count;
+  return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
 function parseOcrText(text) {
   const normalized = normalizeOcrText(text);
   const objectives = extractObjectives(normalized);
@@ -133,18 +142,18 @@ function parseOcrText(text) {
   // Quand une marchandise a plusieurs lieux de retrait possibles, on ne peut
   // pas savoir comment la quantité totale se répartit entre eux (ça dépend
   // du stock réellement disponible sur place, connu seulement en jeu) : on
-  // crée une ligne par lieu, avec une répartition égale à titre d'estimation
-  // à corriger une fois sur place — plutôt que de choisir un seul lieu en
-  // silence et perdre l'info que l'autre existe aussi.
+  // crée une ligne par lieu, avec une répartition égale (en SCU entiers) à
+  // titre d'estimation à corriger une fois sur place — plutôt que de choisir
+  // un seul lieu en silence et perdre l'info que l'autre existe aussi.
   const cargoItems = [];
   objectives.forEach((o) => {
     const options = o.pickupOptions.length ? o.pickupOptions : [""];
     const approximate = options.length > 1;
-    const share = approximate ? Math.round((o.quantity / options.length) * 100) / 100 : o.quantity;
-    options.forEach((pickupText) => {
+    const shares = approximate ? splitQuantityEvenly(o.quantity, options.length) : [o.quantity];
+    options.forEach((pickupText, i) => {
       cargoItems.push({
         commodity: o.commodity,
-        quantity: share,
+        quantity: shares[i],
         pickupText,
         dropoffText: o.dropoff,
         approximate,
