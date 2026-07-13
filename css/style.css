@@ -546,6 +546,10 @@ th {
   font-weight: 600;
 }
 
+tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--panel-border) 18%, transparent);
+}
+
 .toolbar {
   display: flex;
   gap: 0.5rem;
