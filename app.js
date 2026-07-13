@@ -357,6 +357,13 @@ function solveHeuristic(n, dist, constraints, startIdx) {
 
 const EXACT_DP_MAX_LOCATIONS = 16;
 
+// Arrondit à 2 décimales pour l'affichage : évite les artefacts de virgule
+// flottante (ex : 2.6700000000000017) qui apparaissent après des divisions
+// (répartition du cargo entre plusieurs lieux) suivies de soustractions.
+function roundScu(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 function optimizeRoute(missions, startId) {
   if (missions.length === 0) return { error: "Sélectionne au moins une mission." };
 
@@ -433,7 +440,7 @@ function optimizeRoute(missions, startId) {
       const share = sum / count;
       load += a.type === "pickup" ? share : -share;
     });
-    step.cargoLoad = Math.round(load * 100) / 100;
+    step.cargoLoad = roundScu(load);
     if (step.cargoLoad > maxLoad) maxLoad = step.cargoLoad;
   });
 
@@ -803,7 +810,7 @@ function renderRouteResult(result) {
     const over = result.maxCargoLoad > ship.scu;
     loadP.className = over ? "cargo-overload" : "cargo-ok";
     loadP.textContent = over
-      ? `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — dépassement de ${result.maxCargoLoad - ship.scu} SCU à un moment du trajet !`
+      ? `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — dépassement de ${roundScu(result.maxCargoLoad - ship.scu)} SCU à un moment du trajet !`
       : `Charge maximale sur le trajet : ${result.maxCargoLoad} / ${ship.scu} SCU — ça tient à tout moment du trajet.`;
   } else {
     loadP.className = "hint";
