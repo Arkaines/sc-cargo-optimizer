@@ -1316,6 +1316,19 @@ function triggerFadeIn(el) {
   el.classList.add("fade-in");
 }
 
+// Résout un lieu OCR pour préremplir le formulaire : correspondance connue en
+// premier, sinon secours Star Citizen Wiki — créé directement puisque c'est un
+// lieu réel confirmé (pas juste du texte brut approximatif). Si même ça ne
+// correspond à rien, le champ garde le texte brut pour correction manuelle.
+function resolveLocationForOcrForm(rawText) {
+  if (!rawText) return null;
+  const existing = looseLocationMatch(rawText);
+  if (existing) return existing;
+  const scwiki = scwikiLocationMatch(rawText);
+  if (scwiki) return addCustomLocation(scwiki.name, scwikiCategory(scwiki));
+  return null;
+}
+
 function applyOcrResultToForm(parsed) {
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
@@ -1324,8 +1337,8 @@ function applyOcrResultToForm(parsed) {
     const container = document.getElementById("cargo-fields");
     container.innerHTML = "";
     parsed.cargoItems.forEach((item) => {
-      const pickupLoc = looseLocationMatch(item.pickupText || "");
-      const dropoffLoc = looseLocationMatch(item.dropoffText || "");
+      const pickupLoc = resolveLocationForOcrForm(item.pickupText || "");
+      const dropoffLoc = resolveLocationForOcrForm(item.dropoffText || "");
       createCargoFieldRow(
         item.commodity,
         item.quantity,
@@ -1333,6 +1346,7 @@ function applyOcrResultToForm(parsed) {
         dropoffLoc ? locationSearchLabel(dropoffLoc) : item.dropoffText
       );
     });
+    refreshAllLocationSelects();
   }
   activateTab("new-mission-tab");
   document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
