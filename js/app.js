@@ -1157,7 +1157,9 @@ function renderCargoItemRow(item, mission, type) {
   partialInput.step = "1";
   partialInput.value = item.quantity;
   partialInput.className = "route-cargo-partial-input";
-  partialInput.style.display = "none";
+  // visibility (pas display) : l'espace reste toujours réservé à côté de
+  // "Rien", pour que la ligne ne se décale jamais selon l'état du bouton.
+  partialInput.style.visibility = "hidden";
   partialInput.addEventListener("change", () => applyQuantity(Number(partialInput.value) || 0));
 
   const fullBtn = document.createElement("button");
@@ -1171,7 +1173,7 @@ function renderCargoItemRow(item, mission, type) {
   partialBtn.className = "route-cargo-btn route-cargo-btn-partial";
   partialBtn.textContent = t("routeCargoPartialBtn");
   partialBtn.addEventListener("click", () => {
-    partialInput.style.display = "";
+    partialInput.style.visibility = "visible";
     partialInput.focus();
   });
 
@@ -1195,7 +1197,7 @@ function renderCargoItemRow(item, mission, type) {
   fullBtn.classList.toggle("active", state === "full");
   partialBtn.classList.toggle("active", state === "partial");
   noneBtn.classList.toggle("active", state === "none");
-  if (state === "partial") partialInput.style.display = "";
+  if (state === "partial") partialInput.style.visibility = "visible";
 
   btnGroup.appendChild(fullBtn);
   btnGroup.appendChild(partialBtn);
