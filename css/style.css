@@ -141,10 +141,15 @@ header {
 }
 
 .header-brand {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 1rem;
-  flex-wrap: wrap;
+  flex: 1;
+}
+
+.header-text {
+  text-align: center;
 }
 
 .header-actions {
@@ -158,6 +163,13 @@ header {
   width: 96px;
   height: 96px;
   flex: none;
+}
+
+.made-by-community-logo {
+  width: 64px;
+  height: 64px;
+  opacity: 0.85;
+  justify-self: end;
 }
 
 header h1 {
