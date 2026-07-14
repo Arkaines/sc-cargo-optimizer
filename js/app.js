@@ -111,7 +111,11 @@ function slugify(str) {
     .replace(/(^-|-$)/g, "");
 }
 
-function addCustomLocation(name, category) {
+// planetHint (optionnel) : nom de la planète/lune parente (champ "parent" de
+// l'API Star Citizen Wiki) pour les lieux créés via ce secours — permet
+// d'estimer une distance plus juste que la valeur par défaut générique (voir
+// planetAnchorLocationId et getDistance).
+function addCustomLocation(name, category, planetHint) {
   const trimmed = name.trim();
   if (!trimmed) return null;
   let id = slugify(trimmed) || "lieu";
@@ -123,6 +127,7 @@ function addCustomLocation(name, category) {
     suffix++;
   }
   const loc = { id: candidate, name: trimmed, category: category || "Personnalisé" };
+  if (planetHint) loc.planetHint = planetHint;
   state.customLocations.push(loc);
   saveState();
   return loc;
@@ -147,6 +152,27 @@ function hasBakedDistance(aId, bId) {
   return distanceKey(aId, bId) in DEFAULT_DISTANCE_MAP;
 }
 
+// Associe une planète/lune (nom donné par le champ "parent" de l'API Star
+// Citizen Wiki) à un lieu de notre propre base qui s'y trouve et dispose donc
+// de vraies distances calculées — en recoupant automatiquement les deux jeux
+// de données par nom. Sert d'ancre pour estimer une distance à un lieu dont on
+// ne connaît que la planète parente (lieux créés via le secours Star Citizen
+// Wiki, sans distance UEX). Recalculé à la demande, invalidé après synchro.
+let planetAnchorCache = null;
+function planetAnchorLocationId(planetName) {
+  if (!planetName) return null;
+  if (!planetAnchorCache) {
+    planetAnchorCache = new Map();
+    const knownLocations = state.uexLocations.length ? state.uexLocations : DEFAULT_LOCATIONS;
+    allScwikiLocations().forEach((entry) => {
+      if (!entry.parent || planetAnchorCache.has(entry.parent)) return;
+      const match = knownLocations.find((loc) => loc.name.toLowerCase() === entry.name.toLowerCase());
+      if (match) planetAnchorCache.set(entry.parent, match.id);
+    });
+  }
+  return planetAnchorCache.get(planetName) || null;
+}
+
 function getDistance(aId, bId) {
   if (aId === bId) return 0;
   const key = distanceKey(aId, bId);
@@ -154,6 +180,19 @@ function getDistance(aId, bId) {
   if (typeof manual === "number" && !isNaN(manual)) return manual;
   const baked = DEFAULT_DISTANCE_MAP[key];
   if (typeof baked === "number" && !isNaN(baked)) return baked;
+
+  // Ni distance manuelle ni distance UEX connue : si l'un des deux lieux (ou
+  // les deux) vient du secours Star Citizen Wiki, on se rabat sur sa planète
+  // parente plutôt que sur la valeur par défaut générique, sans rapport avec
+  // la position réelle du lieu.
+  const locA = getLocationById(aId);
+  const locB = getLocationById(bId);
+  if (locA && locB && locA.planetHint && locA.planetHint === locB.planetHint) return 0;
+  const anchorA = locA && locA.planetHint ? planetAnchorLocationId(locA.planetHint) : null;
+  if (anchorA && anchorA !== bId) return getDistance(anchorA, bId);
+  const anchorB = locB && locB.planetHint ? planetAnchorLocationId(locB.planetHint) : null;
+  if (anchorB && anchorB !== aId) return getDistance(aId, anchorB);
+
   return DEFAULT_DISTANCE;
 }
 
@@ -161,6 +200,9 @@ function getDistanceSource(aId, bId) {
   if (aId === bId) return t("sourceIdentical");
   if (hasCustomDistance(aId, bId)) return t("sourceManual");
   if (hasBakedDistance(aId, bId)) return "UEX";
+  const locA = getLocationById(aId);
+  const locB = getLocationById(bId);
+  if ((locA && locA.planetHint) || (locB && locB.planetHint)) return t("sourcePlanetEstimate");
   return t("sourceDefault");
 }
 
@@ -1325,7 +1367,7 @@ function resolveLocationForOcrForm(rawText) {
   const existing = looseLocationMatch(rawText);
   if (existing) return existing;
   const scwiki = scwikiLocationMatch(rawText);
-  if (scwiki) return addCustomLocation(scwiki.name, scwikiCategory(scwiki));
+  if (scwiki) return addCustomLocation(scwiki.name, scwikiCategory(scwiki), scwiki.parent);
   return null;
 }
 
@@ -1492,7 +1534,7 @@ function resolveOrCreateLocation(rawText, notes) {
   if (existing) return existing;
   const scwiki = scwikiLocationMatch(rawText);
   if (scwiki) {
-    const created = addCustomLocation(scwiki.name, scwikiCategory(scwiki));
+    const created = addCustomLocation(scwiki.name, scwikiCategory(scwiki), scwiki.parent);
     if (created) notes.push(t("ocrBatchLocationCreated", { name: created.name }));
     return created;
   }

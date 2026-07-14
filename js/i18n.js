@@ -133,6 +133,7 @@ const TRANSLATIONS = {
     sourceIdentical: "identique",
     sourceManual: "manuel",
     sourceDefault: "défaut",
+    sourcePlanetEstimate: "estimée (planète)",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -285,6 +286,7 @@ const TRANSLATIONS = {
     sourceIdentical: "same",
     sourceManual: "manual",
     sourceDefault: "default",
+    sourcePlanetEstimate: "estimated (planet)",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",

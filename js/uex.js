@@ -73,6 +73,7 @@ async function syncUexLocations() {
   const locations = buildUexLocations(terminals);
   state.uexLocations = locations;
   state.uexSyncedAt = Date.now();
+  planetAnchorCache = null;
   saveState();
   return locations;
 }

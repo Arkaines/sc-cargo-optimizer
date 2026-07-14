@@ -36,6 +36,7 @@ async function syncScwikiLocations() {
 
   state.scwikiLocations = collected;
   state.scwikiSyncedAt = Date.now();
+  planetAnchorCache = null;
   saveState();
   return collected;
 }
