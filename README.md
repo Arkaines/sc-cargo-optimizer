@@ -19,7 +19,36 @@ Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir di
 
 ## Utilisation
 
-Ouvre simplement `index.html` dans un navigateur (Chrome/Edge recommandés pour la reconnaissance de texte). Toutes les données (missions, lieux personnalisés, distances, préférences) sont sauvegardées dans le stockage local du navigateur.
+Ouvre simplement `index.html` dans un navigateur (Chrome/Edge recommandés pour la reconnaissance de texte), ou utilise directement le site en ligne. Toutes les données (missions, lieux personnalisés, distances, préférences) sont sauvegardées dans le stockage local du navigateur — rien n'est envoyé à un serveur.
+
+## Tutoriel
+
+### 1. Choisir son vaisseau
+
+Dans l'encart **Mon vaisseau** (panneau de gauche), sélectionne ton vaisseau dans la liste : sa capacité en SCU s'affiche et sert de référence pour détecter les surcharges de cargo.
+
+### 2. Ajouter des missions
+
+Deux façons de faire, dans l'onglet **Nouvelle mission** :
+
+- **À la main** : renseigne le nom, le donneur, la récompense, puis ajoute une ou plusieurs lignes de marchandise (bouton "Ajouter une marchandise") en précisant pour chacune la quantité, le lieu de récupération et le lieu de dépôt.
+- **Par capture d'écran (OCR)** : dans le panneau de gauche, colle (Ctrl+V) ou dépose l'image d'une capture d'écran du détail du contrat en jeu. L'outil extrait automatiquement les champs — vérifie-les puis clique sur "Utiliser ces champs dans le formulaire". Tu peux aussi coller/déposer **plusieurs captures en une fois** : dans ce cas, une mission est créée automatiquement pour chacune (un résumé indique ce qui a été créé et les points à vérifier). Un mode d'emploi avec un exemple de capture est disponible dans le panneau d'import.
+
+### 3. Gérer les missions enregistrées
+
+Dans l'onglet **Missions enregistrées** : coche/décoche les missions à inclure dans le calcul de trajet, termine une mission (elle passe dans l'Historique) ou supprime-la. Un avertissement apparaît au-delà de 10 missions actives (le jeu limite les contrats acceptés simultanément).
+
+### 4. Optimiser la route
+
+Dans l'onglet **Optimisation de la route**, choisis éventuellement un lieu de départ puis clique sur "Optimiser la route". L'outil calcule l'ordre d'arrêts qui minimise la distance totale, en respectant l'ordre récupération → dépôt de chaque marchandise, et affiche la charge du vaisseau à chaque étape. En cas de surcharge, une ligne indique quelle(s) mission(s) la provoquent, avec un bouton pour la/les désélectionner et recalculer aussitôt.
+
+### 5. Historique et lieux personnalisés
+
+L'onglet **Historique** liste les missions terminées (regroupées si identiques, avec un compteur "× N"), avec possibilité de les restaurer. Si un lieu n'existe pas dans la liste, tu peux en ajouter un manuellement depuis l'onglet Nouvelle mission. Le menu "Distances entre lieux utilisés" (en bas de page) permet de corriger une distance à la main si besoin.
+
+### 6. Synchronisation, langue et thème
+
+Le bouton "Tout synchroniser" (panneau de gauche) met à jour lieux, distances, marchandises, entreprises et vaisseaux depuis UEX Corp. Les boutons en haut du header permettent de basculer entre français/anglais et thème clair/sombre ; les préférences sont mémorisées.
 
 ## Déploiement avec Docker
 
