@@ -22,7 +22,7 @@ const TRANSLATIONS = {
     shipCapacityPrefix: "Capacité : {scu} SCU",
     shipCapacityNone: "Sélectionne un vaisseau pour voir sa capacité.",
 
-    syncAllBtn: "Tout synchroniser (UEX Corp)",
+    syncAllBtn: "Tout synchroniser (UEX Corp et Star Citizen API)",
     syncingLocations: "Synchronisation des lieux...",
     syncingCommodities: "Synchronisation des marchandises...",
     syncingCompanies: "Synchronisation des entreprises...",
@@ -184,7 +184,7 @@ const TRANSLATIONS = {
     shipCapacityPrefix: "Capacity: {scu} SCU",
     shipCapacityNone: "Select a ship to see its capacity.",
 
-    syncAllBtn: "Sync everything (UEX Corp)",
+    syncAllBtn: "Sync everything (UEX Corp and Star Citizen API)",
     syncingLocations: "Syncing locations...",
     syncingCommodities: "Syncing commodities...",
     syncingCompanies: "Syncing companies...",
