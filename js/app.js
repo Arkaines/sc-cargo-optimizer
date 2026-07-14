@@ -1371,7 +1371,13 @@ function renderRouteResult(result) {
           itemsUl.className = "route-cargo-items";
           items.forEach((item) => {
             const itemLi = document.createElement("li");
-            itemLi.textContent = describeCargoItemQuantity(item, a.mission);
+            // "Déjà récupéré ailleurs" n'a de sens qu'au retrait : au dépôt,
+            // une quantité nulle signifie juste que ce lieu ne fait pas partie
+            // du dépôt final de cette marchandise (jamais "récupéré ailleurs").
+            itemLi.textContent =
+              a.type === "pickup"
+                ? describeCargoItemQuantity(item, a.mission)
+                : t("scuOf", { qty: Number(item.quantity) || 0, commodity: item.commodity || "?" });
             itemsUl.appendChild(itemLi);
           });
           actionLi.appendChild(itemsUl);
