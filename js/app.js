@@ -53,15 +53,25 @@ function migrateMission(m) {
   return { ...rest, cargoItems, completed: m.completed || false };
 }
 
-// Complète le planetHint des lieux personnalisés créés avant l'introduction
-// de ce champ (voir addCustomLocation), en recoupant leur nom avec le jeu de
-// données Star Citizen Wiki de base — ne dépend pas de `state` (pas encore
-// initialisé à ce stade) donc utilise directement les données par défaut.
-function migrateCustomLocation(loc) {
+// Complète le planetHint des lieux personnalisés créés avant l'introduction de
+// ce champ (voir addCustomLocation), en recoupant leur nom avec un jeu de
+// données Star Citizen Wiki (celui déjà synchronisé si disponible, sinon les
+// données par défaut). N'écrase jamais un planetHint déjà présent.
+function migrateCustomLocation(loc, scwikiEntries) {
   if (loc.planetHint) return loc;
-  const scwiki = DEFAULT_SCWIKI_LOCATIONS.find((e) => e.name.toLowerCase() === loc.name.toLowerCase());
+  const scwiki = scwikiEntries.find((e) => e.name.toLowerCase() === loc.name.toLowerCase());
   if (scwiki && scwiki.parent) return { ...loc, planetHint: scwiki.parent };
   return loc;
+}
+
+// Repasse sur tous les lieux personnalisés pour compléter ceux dont le
+// planetHint manque encore, avec les données les plus fraîches (utilisé après
+// "Tout synchroniser" pour rattraper d'éventuels lieux créés avant un premier
+// import du jeu de données Star Citizen Wiki).
+function backfillCustomLocationPlanetHints() {
+  const scwikiEntries = allScwikiLocations();
+  state.customLocations = state.customLocations.map((loc) => migrateCustomLocation(loc, scwikiEntries));
+  planetAnchorCache = null;
 }
 
 function loadState() {
@@ -69,9 +79,13 @@ function loadState() {
   if (!raw) return defaultState();
   try {
     const parsed = JSON.parse(raw);
+    // Pas encore de `state` global à ce stade : on utilise les données déjà
+    // synchronisées si ce blob en contient, sinon les données par défaut.
+    const scwikiEntries =
+      parsed.scwikiLocations && parsed.scwikiLocations.length ? parsed.scwikiLocations : DEFAULT_SCWIKI_LOCATIONS;
     return {
       missions: (parsed.missions || []).map(migrateMission),
-      customLocations: (parsed.customLocations || []).map(migrateCustomLocation),
+      customLocations: (parsed.customLocations || []).map((loc) => migrateCustomLocation(loc, scwikiEntries)),
       distances: parsed.distances || {},
       nextMissionId: parsed.nextMissionId || 1,
       uexLocations: parsed.uexLocations || [],
@@ -1820,6 +1834,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       btn.textContent = t("syncingScwiki");
       await syncScwikiLocations();
+      backfillCustomLocationPlanetHints();
+      saveState();
+      renderDistanceEditor();
 
       status.textContent = t("syncSummary", {
         locs: state.uexLocations.length,
