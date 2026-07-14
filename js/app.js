@@ -2067,6 +2067,13 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
     renderAll();
   });
+  document.getElementById("complete-selected-missions").addEventListener("click", () => {
+    activeMissions()
+      .filter((m) => m.included)
+      .forEach((m) => (m.completed = true));
+    saveState();
+    renderAll();
+  });
 
   document.getElementById("optimize-btn").addEventListener("click", runOptimize);
 

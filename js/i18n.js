@@ -104,6 +104,7 @@ const TRANSLATIONS = {
 
     selectAllBtn: "Tout sélectionner",
     deselectAllBtn: "Tout désélectionner",
+    completeSelectedBtn: "Terminer les missions sélectionnées",
     colInclude: "Inclure",
     colName: "Nom",
     colGiver: "Donneur",
@@ -265,6 +266,7 @@ const TRANSLATIONS = {
 
     selectAllBtn: "Select all",
     deselectAllBtn: "Deselect all",
+    completeSelectedBtn: "Complete selected missions",
     colInclude: "Include",
     colName: "Name",
     colGiver: "Giver",
