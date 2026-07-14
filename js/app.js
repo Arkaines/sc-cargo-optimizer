@@ -1804,6 +1804,17 @@ function renderOcrResult(rawText, parsed) {
   triggerFadeIn(container);
 }
 
+// Vide le panneau d'import OCR (capture, texte reconnu, champs extraits) une
+// fois qu'une mission a été enregistrée à partir de son contenu, pour ne pas
+// laisser trainer des données devenues inutiles dans le panneau latéral.
+function clearOcrPanel() {
+  document.getElementById("ocr-status").textContent = "";
+  const preview = document.getElementById("ocr-preview");
+  preview.style.display = "none";
+  preview.src = "";
+  document.getElementById("ocr-result").innerHTML = "";
+}
+
 async function processOcrImage(blob) {
   const status = document.getElementById("ocr-status");
   const preview = document.getElementById("ocr-preview");
@@ -1970,6 +1981,10 @@ async function processOcrImagesBatch(files) {
 
   const created = results.filter((r) => r.mission).length;
   status.textContent = t("ocrBatchDone", { count: created, total: files.length });
+  // Les missions sont déjà enregistrées à ce stade : inutile de garder la
+  // dernière capture affichée, seul le résumé (créé/ignoré) reste utile.
+  preview.style.display = "none";
+  preview.src = "";
   renderOcrBatchResult(results);
   renderAll();
   activateTab("missions-tab");
@@ -2112,6 +2127,9 @@ document.addEventListener("DOMContentLoaded", () => {
       addMission({ name, giver, cargoItems, reward });
       e.target.reset();
       resetCargoFields();
+      // La mission est enregistrée : la capture/le texte reconnu qui a servi
+      // à la préremplir n'a plus d'utilité, on nettoie le panneau d'import.
+      clearOcrPanel();
     }
     renderAll();
   });
