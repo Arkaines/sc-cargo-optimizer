@@ -1218,6 +1218,27 @@ function filterDistanceRows() {
   });
 }
 
+// Décrit une ligne de cargaison dans le résultat de trajet. Quantité nulle
+// (corrigée dans l'onglet Suivi cargo, ex : tout récupéré à un seul endroit
+// au lieu de plusieurs) : indique où la marchandise a réellement été
+// récupérée plutôt que d'afficher "? SCU", qui laisserait croire à une
+// quantité inconnue.
+function describeCargoItemQuantity(item, mission) {
+  const qty = Number(item.quantity) || 0;
+  if (qty > 0) return t("scuOf", { qty, commodity: item.commodity || "?" });
+  const siblings = (mission.cargoItems || []).filter(
+    (other) =>
+      other !== item &&
+      other.commodity === item.commodity &&
+      other.dropoffId === item.dropoffId &&
+      (Number(other.quantity) || 0) > 0
+  );
+  if (siblings.length) {
+    return t("cargoAlreadyPickedUpElsewhere", { commodity: item.commodity || "?", count: siblings.length });
+  }
+  return t("scuOf", { qty: "?", commodity: item.commodity || "?" });
+}
+
 function renderRouteResult(result) {
   const container = document.getElementById("route-result");
   container.innerHTML = "";
@@ -1333,7 +1354,7 @@ function renderRouteResult(result) {
           itemsUl.className = "route-cargo-items";
           items.forEach((item) => {
             const itemLi = document.createElement("li");
-            itemLi.textContent = t("scuOf", { qty: item.quantity || "?", commodity: item.commodity || "?" });
+            itemLi.textContent = describeCargoItemQuantity(item, a.mission);
             itemsUl.appendChild(itemLi);
           });
           actionLi.appendChild(itemsUl);
