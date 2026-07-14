@@ -43,25 +43,33 @@ function extractContractTitle(rawText) {
   return line.replace(/\[\s*\d+\s*xp\s*\]/i, "").trim();
 }
 
-// "Proposé Par" (ou "Émis Par" selon le donneur de contrat) suivi du nom du
-// donneur, jusqu'au prochain titre de section.
+// "Proposé Par" (ou "Émis Par"/"Contracted By" selon le donneur de contrat,
+// ou la langue du client) suivi du nom du donneur, jusqu'au prochain titre
+// de section.
 function extractGiver(normalized) {
   const re = new RegExp(
-    "(?:Propos" + E_ACUTE + "|[E" + E_ACUTE_UP + "]mis)\\s*Par\\s+(.+?)(?=\\s+(?:D" + E_ACUTE_UP + "TAILS|OBJECTIFS|$))",
+    "(?:Propos" +
+      E_ACUTE +
+      "\\s*Par|[E" +
+      E_ACUTE_UP +
+      "]mis\\s*Par|Contracted\\s*By)\\s+(.+?)(?=\\s+(?:D" +
+      E_ACUTE_UP +
+      "TAILS|OBJECTIFS|DETAILS|OBJECTIVES|PRIMARY|$))",
     "i"
   );
   const m = re.exec(normalized);
   return m ? m[1].trim() : "";
 }
 
-// "RÉCOMPENSE" (ou "Paiement" selon le donneur de contrat) ... montant en aUEC
-// (ex : ¤ 322,500). Le symbole aUEC est stylisé et souvent mal reconnu par
-// l'OCR : on se base uniquement sur le nombre à séparateurs de milliers qui
-// suit, avec une fenêtre large car d'autres libellés (Échéance, Proposé
-// Par...) peuvent s'intercaler selon l'ordre de lecture choisi par l'OCR.
+// "RÉCOMPENSE"/"Paiement"/"Reward" selon le donneur de contrat ou la langue du
+// client ... montant en aUEC (ex : ¤ 322,500). Le symbole aUEC est stylisé et
+// souvent mal reconnu par l'OCR : on se base uniquement sur le nombre à
+// séparateurs de milliers qui suit, avec une fenêtre large car d'autres
+// libellés (Échéance, Proposé Par...) peuvent s'intercaler selon l'ordre de
+// lecture choisi par l'OCR.
 function extractReward(normalized) {
   const re = new RegExp(
-    "(?:R" + E_ACUTE_UP + "COMPENSE|Paiement)[\\s\\S]{0,60}?([0-9]{1,3}(?:[,.\\s][0-9]{3})+)",
+    "(?:R" + E_ACUTE_UP + "COMPENSE|Paiement|Reward)[\\s\\S]{0,60}?([0-9]{1,3}(?:[,.\\s][0-9]{3})+)",
     "i"
   );
   const m = re.exec(normalized);
@@ -70,11 +78,12 @@ function extractReward(normalized) {
 }
 
 // Le jeu ajoute au nom du lieu une précision de position qui n'en fait pas
-// partie : "sur <corps>" pour un lieu en surface, "au-dessus de/d'<corps>" ou
-// "au L4 Lagrange de <corps>" pour un point stellaire. "au" couvre les deux
-// variantes ("au-dessus..." commence aussi par "au" suivi d'une frontière de
-// mot sur le tiret). On coupe tout ce qui suit ce mot-clé.
-const LOCATION_SUFFIX_RE = /\s+(?:sur|au)\b.*$/i;
+// partie : "sur <corps>" (ou "on <corps>" en anglais) pour un lieu en
+// surface, "au-dessus de/d'<corps>" ou "au L4 Lagrange de <corps>" pour un
+// point stellaire. "au" couvre les deux variantes ("au-dessus..." commence
+// aussi par "au" suivi d'une frontière de mot sur le tiret). On coupe tout ce
+// qui suit ce mot-clé.
+const LOCATION_SUFFIX_RE = /\s+(?:sur|au|on)\b.*$/i;
 
 function stripSystemSuffix(text) {
   return text.replace(LOCATION_SUFFIX_RE, "").trim();
@@ -155,12 +164,37 @@ function stripBracketNoise(text) {
   return text.replace(/[[\]|]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// Découpe un texte normalisé à chaque mot-clé de dépôt/retrait et regroupe les
+// morceaux en objectifs, en associant chaque retrait au dépôt qui le précède
+// (un ou plusieurs retraits consécutifs après un dépôt lui appartiennent,
+// jusqu'au dépôt suivant) — même logique que le gabarit principal, réutilisée
+// pour les autres gabarits de contrat rencontrés selon le donneur/la langue.
+function extractObjectivesSequential(normalized, keywordRe, isDropoffKeyword, parseDropoff, parsePickup) {
+  const tokens = normalized.split(keywordRe);
+  const objectives = [];
+  let current = null;
+  for (let i = 1; i < tokens.length; i += 2) {
+    const keyword = tokens[i].trim().toLowerCase();
+    const content = tokens[i + 1] || "";
+    if (isDropoffKeyword(keyword)) {
+      const parsed = parseDropoff(content);
+      current = parsed
+        ? { dropoff: parsed.location, quantity: parsed.quantity, commodity: parsed.commodity, pickupOptions: [] }
+        : null;
+      if (current) objectives.push(current);
+    } else if (current) {
+      const loc = parsePickup(content);
+      if (loc) current.pickupOptions.push(loc);
+    }
+  }
+  return objectives;
+}
+
 // Second gabarit de contrat, utilisé par certains donneurs (ex : "Ling Family
 // Hauling") : "Livrer X/Y SCU de <marchandise> à <lieu>." pour le dépôt et
 // "Collecter <marchandise> à <lieu>." pour chaque lieu de retrait — au lieu de
 // "Livrez à <lieu> : X/Y SCU de <marchandise>" / "Allez à <lieu> pour
-// récupérer". Les lieux de retrait sont associés au dépôt par nom de
-// marchandise (l'ordre de lecture entre les deux n'est pas garanti ici).
+// récupérer".
 function parseDropoffChunkAlt(content) {
   const re = new RegExp(
     "^(\\d+)\\s*/\\s*(\\d+)\\s*SCU\\s+de\\s+(.+?)\\s+[" + A_GRAVE + "a]\\s+(.+)$",
@@ -174,44 +208,47 @@ function parseDropoffChunkAlt(content) {
 }
 
 function parsePickupChunkAlt(content) {
-  const re = new RegExp("^(.+?)\\s+[" + A_GRAVE + "a]\\s+(.+)$", "i");
+  const re = new RegExp("^(?:.+?\\s+[" + A_GRAVE + "a]\\s+)?(.+)$", "i");
   const m = re.exec(content);
   if (!m) return null;
-  const commodity = m[1].trim();
-  const location = stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[2])));
-  return { commodity, location };
+  return stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[1])));
 }
 
 function extractObjectivesAlt(normalized) {
-  const KEYWORD_RE = /(Livrer\s+|Collecter\s+)/gi;
-  const tokens = normalized.split(KEYWORD_RE);
+  return extractObjectivesSequential(
+    normalized,
+    /(Livrer\s+|Collecter\s+)/gi,
+    (keyword) => keyword.startsWith("livrer"),
+    parseDropoffChunkAlt,
+    parsePickupChunkAlt
+  );
+}
 
-  const objectives = [];
-  for (let i = 1; i < tokens.length; i += 2) {
-    const keyword = tokens[i].trim().toLowerCase();
-    const content = tokens[i + 1] || "";
-    if (keyword.startsWith("livrer")) {
-      const parsed = parseDropoffChunkAlt(content);
-      if (parsed) {
-        objectives.push({
-          dropoff: parsed.location,
-          quantity: parsed.quantity,
-          commodity: parsed.commodity,
-          pickupOptions: [],
-        });
-      }
-    } else {
-      const parsed = parsePickupChunkAlt(content);
-      if (!parsed) continue;
-      const needle = parsed.commodity.toLowerCase();
-      const target = objectives.find((o) => {
-        const hay = o.commodity.toLowerCase();
-        return hay === needle || hay.includes(needle) || needle.includes(hay);
-      });
-      if (target) target.pickupOptions.push(parsed.location);
-    }
-  }
-  return objectives;
+// Troisième gabarit, en anglais (client du jeu en anglais, ou capture non
+// traduite) : "Deliver X/Y SCU of <commodity> to <location>." pour le dépôt,
+// "Collect <commodity> from <location>." pour le retrait.
+function parseDropoffChunkEn(content) {
+  const m = /^(\d+)\s*\/\s*(\d+)\s*SCU\s+of\s+(.+?)\s+to\s+(.+)$/i.exec(content);
+  if (!m) return null;
+  const commodity = m[3].trim();
+  const location = stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[4])));
+  return { location, quantity: Number(m[2]), commodity };
+}
+
+function parsePickupChunkEn(content) {
+  const m = /\bfrom\s+(.+)$/i.exec(content);
+  if (!m) return null;
+  return stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[1])));
+}
+
+function extractObjectivesEn(normalized) {
+  return extractObjectivesSequential(
+    normalized,
+    /(Deliver\s+|Collect\s+)/gi,
+    (keyword) => keyword.startsWith("deliver"),
+    parseDropoffChunkEn,
+    parsePickupChunkEn
+  );
 }
 
 // Répartit une quantité (en SCU, toujours entier) le plus également possible
@@ -225,11 +262,12 @@ function splitQuantityEvenly(quantity, count) {
 
 function parseOcrText(text) {
   const normalized = normalizeOcrText(text);
-  // Certains donneurs de contrat utilisent un gabarit de phrase différent
-  // ("Livrer X/Y SCU de <marchandise> à <lieu>" / "Collecter <marchandise> à
-  // <lieu>") : on retombe dessus seulement si le gabarit principal ne trouve rien.
+  // Certains donneurs de contrat (ou le client en anglais) utilisent un
+  // gabarit de phrase différent : on retombe dessus seulement si le gabarit
+  // principal ne trouve rien.
   let objectives = extractObjectives(normalized);
   if (!objectives.length) objectives = extractObjectivesAlt(normalized);
+  if (!objectives.length) objectives = extractObjectivesEn(normalized);
 
   // Quand une marchandise a plusieurs lieux de retrait possibles, on ne peut
   // pas savoir comment la quantité totale se répartit entre eux (ça dépend
