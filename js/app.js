@@ -213,10 +213,14 @@ function getDistance(aId, bId) {
   const locA = getLocationById(aId);
   const locB = getLocationById(bId);
   if (locA && locB && locA.planetHint && locA.planetHint === locB.planetHint) return 0;
+  // Si l'ancre de la planète d'un lieu est justement l'AUTRE lieu de la paire,
+  // ils sont au même endroit (ou tout comme) : distance ~0, pas la valeur par
+  // défaut (récursion inutile puisque getDistance(anchorA, bId) reviendrait à
+  // comparer anchorA à lui-même).
   const anchorA = locA && locA.planetHint ? planetAnchorLocationId(locA.planetHint) : null;
-  if (anchorA && anchorA !== bId) return getDistance(anchorA, bId);
+  if (anchorA) return anchorA === bId ? 0 : getDistance(anchorA, bId);
   const anchorB = locB && locB.planetHint ? planetAnchorLocationId(locB.planetHint) : null;
-  if (anchorB && anchorB !== aId) return getDistance(aId, anchorB);
+  if (anchorB) return anchorB === aId ? 0 : getDistance(aId, anchorB);
 
   return DEFAULT_DISTANCE;
 }
@@ -227,7 +231,12 @@ function getDistanceSource(aId, bId) {
   if (hasBakedDistance(aId, bId)) return "UEX";
   const locA = getLocationById(aId);
   const locB = getLocationById(bId);
-  if ((locA && locA.planetHint) || (locB && locB.planetHint)) return t("sourcePlanetEstimate");
+  // N'affiche "estimée (planète)" que si l'estimation a réellement produit
+  // autre chose que le repli générique (ex. la planète parente elle-même n'a
+  // aucun lieu connu d'UEX pour servir d'ancre).
+  if ((locA && locA.planetHint) || (locB && locB.planetHint)) {
+    return getDistance(aId, bId) === DEFAULT_DISTANCE ? t("sourceDefault") : t("sourcePlanetEstimate");
+  }
   return t("sourceDefault");
 }
 
