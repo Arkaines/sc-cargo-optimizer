@@ -1375,10 +1375,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const langToggle = document.getElementById("lang-toggle");
-  langToggle.textContent = getLang() === "en" ? "FR" : "EN";
+  langToggle.innerHTML = getLang() === "en" ? "🇫🇷 FR" : "🇺🇸 EN";
   langToggle.addEventListener("click", () => {
     setLang(getLang() === "en" ? "fr" : "en");
-    langToggle.textContent = getLang() === "en" ? "FR" : "EN";
+    langToggle.innerHTML = getLang() === "en" ? "🇫🇷 FR" : "🇺🇸 EN";
     applyStaticTranslations();
     // Rafraîchit aussi les textes des champs marchandise déjà présents dans
     // le formulaire (leurs placeholders ne sont pas couverts par data-i18n).
