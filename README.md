@@ -77,6 +77,7 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 | `js/ocr.js` | Extraction de champs depuis le texte reconnu par Tesseract |
 | `js/uex.js` | Appels à l'API UEX Corp |
 | `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
+| `data/location-aliases.js` | Alias de lieux dont le nom affiché en jeu (client français) diffère du nom UEX (anglais), constitué au fil des écarts rencontrés |
 
 ## Source des données
 

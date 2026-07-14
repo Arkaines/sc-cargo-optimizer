@@ -1241,6 +1241,15 @@ function looseLocationMatch(rawText) {
   if (!cleaned) return null;
   const exact = findLocationByLabel(cleaned);
   if (exact) return exact;
+  // Certains lieux sont affichés en jeu (client français) sous un nom traduit
+  // qui n'a aucun rapport structurel avec le nom UEX (anglais) : ni la
+  // correspondance exacte/substring ni la distance d'édition ne peuvent
+  // rattraper ça. On vérifie donc d'abord la table d'alias FR -> id connue.
+  const aliasId = LOCATION_ALIASES[slugify(cleaned)];
+  if (aliasId) {
+    const aliased = getLocationById(aliasId);
+    if (aliased) return aliased;
+  }
   const lower = cleaned.toLowerCase();
   const byName = allLocations().find((loc) => loc.name.toLowerCase() === lower);
   if (byName) return byName;
