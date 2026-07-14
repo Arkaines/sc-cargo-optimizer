@@ -60,6 +60,7 @@ const TRANSLATIONS = {
     ocrBatchItemCreated: "✓ {file} — mission « {name} » créée",
     ocrBatchItemFailed: "✗ {file} — {reason}",
     ocrBatchNoCargo: "aucune marchandise reconnue",
+    ocrBatchDuplicate: "mission déjà enregistrée, ignorée",
     ocrBatchLocationCreated: "lieu « {name} » créé automatiquement, vérifie-le",
 
     routeOverloadCulprits: "Mission(s) en cause au moment du dépassement :",
@@ -211,6 +212,7 @@ const TRANSLATIONS = {
     ocrBatchItemCreated: "✓ {file} — mission \"{name}\" created",
     ocrBatchItemFailed: "✗ {file} — {reason}",
     ocrBatchNoCargo: "no commodity recognized",
+    ocrBatchDuplicate: "mission already saved, skipped",
     ocrBatchLocationCreated: "location \"{name}\" created automatically, please check it",
 
     routeOverloadCulprits: "Mission(s) causing the overload at that point:",

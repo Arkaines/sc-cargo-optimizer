@@ -1443,6 +1443,17 @@ function createMissionFromOcrResult(parsed) {
   if (!cargoItems.length) {
     return { mission: null, notes: [t("ocrBatchNoCargo"), ...notes] };
   }
+
+  // Évite de recréer une mission déjà enregistrée (ex : la même capture
+  // importée deux fois) : on compare par signature (donneur/marchandises/
+  // lieux/récompense), pas par nom, pour repérer aussi les cas où l'OCR
+  // reconnaît le nom différemment d'un import à l'autre.
+  const candidateSignature = missionSignature({ giver: parsed.giver, cargoItems, reward: parsed.reward });
+  const alreadyExists = activeMissions().some((m) => missionSignature(m) === candidateSignature);
+  if (alreadyExists) {
+    return { mission: null, notes: [t("ocrBatchDuplicate")] };
+  }
+
   const mission = addMission({ name: parsed.name, giver: parsed.giver, cargoItems, reward: parsed.reward });
   return { mission, notes };
 }
