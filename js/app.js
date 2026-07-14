@@ -177,50 +177,74 @@ function hasBakedDistance(aId, bId) {
   return distanceKey(aId, bId) in DEFAULT_DISTANCE_MAP;
 }
 
-// Associe une planète/lune (nom donné par le champ "parent" de l'API Star
-// Citizen Wiki) à un lieu de notre propre base qui s'y trouve et dispose donc
-// de vraies distances calculées — en recoupant automatiquement les deux jeux
-// de données par nom. Sert d'ancre pour estimer une distance à un lieu dont on
-// ne connaît que la planète parente (lieux créés via le secours Star Citizen
-// Wiki, sans distance UEX). Recalculé à la demande, invalidé après synchro.
+// Planète/lune d'un lieu : soit stockée directement dessus (lieu personnalisé
+// créé via le secours Star Citizen Wiki), soit issue du recoupement local
+// UEX <-> Star Citizen Wiki précalculé (voir data/location-planets.js) — utile
+// notamment pour les lieux UEX à l'orbite non résolue (orbitId: 0), pour
+// lesquels UEX lui-même ne sait pas situer une distance.
+function getPlanetHint(loc) {
+  if (!loc) return null;
+  return loc.planetHint || DEFAULT_LOCATION_PLANETS[loc.id] || null;
+}
+
+// Un lieu de notre propre base UEX qui se trouve sur la planète/lune donnée,
+// utilisé comme ancre pour estimer une distance à un lieu dont on ne connaît
+// que la planète parente. Recalculé à la demande, invalidé après synchro.
 let planetAnchorCache = null;
 function planetAnchorLocationId(planetName) {
   if (!planetName) return null;
   if (!planetAnchorCache) {
     planetAnchorCache = new Map();
-    const knownLocations = state.uexLocations.length ? state.uexLocations : DEFAULT_LOCATIONS;
-    allScwikiLocations().forEach((entry) => {
-      if (!entry.parent || planetAnchorCache.has(entry.parent)) return;
-      const match = knownLocations.find((loc) => loc.name.toLowerCase() === entry.name.toLowerCase());
-      if (match) planetAnchorCache.set(entry.parent, match.id);
+    Object.entries(DEFAULT_LOCATION_PLANETS).forEach(([id, planet]) => {
+      if (!planetAnchorCache.has(planet)) planetAnchorCache.set(planet, id);
     });
   }
   return planetAnchorCache.get(planetName) || null;
 }
 
-function getDistance(aId, bId) {
+// Distance connue (manuelle ou UEX) entre deux lieux, sans repli — null si
+// aucune des deux n'est renseignée.
+function knownDistance(aId, bId) {
   if (aId === bId) return 0;
   const key = distanceKey(aId, bId);
   const manual = state.distances[key];
   if (typeof manual === "number" && !isNaN(manual)) return manual;
   const baked = DEFAULT_DISTANCE_MAP[key];
   if (typeof baked === "number" && !isNaN(baked)) return baked;
+  return null;
+}
 
-  // Ni distance manuelle ni distance UEX connue : si l'un des deux lieux (ou
-  // les deux) vient du secours Star Citizen Wiki, on se rabat sur sa planète
-  // parente plutôt que sur la valeur par défaut générique, sans rapport avec
-  // la position réelle du lieu.
-  const locA = getLocationById(aId);
-  const locB = getLocationById(bId);
-  if (locA && locB && locA.planetHint && locA.planetHint === locB.planetHint) return 0;
-  // Si l'ancre de la planète d'un lieu est justement l'AUTRE lieu de la paire,
-  // ils sont au même endroit (ou tout comme) : distance ~0, pas la valeur par
-  // défaut (récursion inutile puisque getDistance(anchorA, bId) reviendrait à
-  // comparer anchorA à lui-même).
-  const anchorA = locA && locA.planetHint ? planetAnchorLocationId(locA.planetHint) : null;
-  if (anchorA) return anchorA === bId ? 0 : getDistance(anchorA, bId);
-  const anchorB = locB && locB.planetHint ? planetAnchorLocationId(locB.planetHint) : null;
-  if (anchorB) return anchorB === aId ? 0 : getDistance(aId, anchorB);
+// Volontairement non récursif (une ancre peut se résoudre à un lieu qui n'a,
+// lui non plus, pas de distance connue vers l'autre bout, ce qui bouclerait
+// indéfiniment avec un appel récursif à getDistance) : on tente une poignée
+// de candidats concrets dans l'ordre, et seul le dernier retombe sur la
+// valeur par défaut générique.
+function getDistance(aId, bId) {
+  const direct = knownDistance(aId, bId);
+  if (direct !== null) return direct;
+
+  const planetA = getPlanetHint(getLocationById(aId));
+  const planetB = getPlanetHint(getLocationById(bId));
+  if (planetA && planetA === planetB) return 0;
+
+  const anchorA = planetA ? planetAnchorLocationId(planetA) : null;
+  if (anchorA && anchorA !== aId) {
+    if (anchorA === bId) return 0;
+    const viaA = knownDistance(anchorA, bId);
+    if (viaA !== null) return viaA;
+  }
+
+  const anchorB = planetB ? planetAnchorLocationId(planetB) : null;
+  if (anchorB && anchorB !== bId) {
+    if (anchorB === aId) return 0;
+    const viaB = knownDistance(aId, anchorB);
+    if (viaB !== null) return viaB;
+  }
+
+  if (anchorA && anchorB && anchorA !== anchorB) {
+    const viaBoth = knownDistance(anchorA, anchorB);
+    if (viaBoth !== null) return viaBoth;
+  }
 
   return DEFAULT_DISTANCE;
 }
@@ -229,12 +253,12 @@ function getDistanceSource(aId, bId) {
   if (aId === bId) return t("sourceIdentical");
   if (hasCustomDistance(aId, bId)) return t("sourceManual");
   if (hasBakedDistance(aId, bId)) return "UEX";
-  const locA = getLocationById(aId);
-  const locB = getLocationById(bId);
+  const planetA = getPlanetHint(getLocationById(aId));
+  const planetB = getPlanetHint(getLocationById(bId));
   // N'affiche "estimée (planète)" que si l'estimation a réellement produit
-  // autre chose que le repli générique (ex. la planète parente elle-même n'a
-  // aucun lieu connu d'UEX pour servir d'ancre).
-  if ((locA && locA.planetHint) || (locB && locB.planetHint)) {
+  // autre chose que le repli générique (ex. les deux planètes n'ont aucun
+  // lieu connu d'UEX en commun pour servir d'ancre).
+  if (planetA || planetB) {
     return getDistance(aId, bId) === DEFAULT_DISTANCE ? t("sourceDefault") : t("sourcePlanetEstimate");
   }
   return t("sourceDefault");

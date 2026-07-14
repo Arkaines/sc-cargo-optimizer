@@ -79,6 +79,7 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 | `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
 | `data/location-aliases.js` | Alias de lieux dont le nom affiché en jeu (client français) diffère du nom UEX (anglais), constitué au fil des écarts rencontrés |
 | `js/scwiki.js`, `data/scwiki-locations.js` | Lieux de secours issus de l'API communautaire [Star Citizen Wiki](https://api.star-citizen.wiki), utilisés quand un lieu n'existe pas dans UEX (avant-postes/points de livraison mineurs) |
+| `data/location-planets.js` | Recoupement local UEX ↔ Star Citizen Wiki (planète/lune de chaque lieu UEX), utilisé pour estimer une distance quand UEX ne la connaît pas (ex. orbite non résolue) |
 
 ## Source des données
 
