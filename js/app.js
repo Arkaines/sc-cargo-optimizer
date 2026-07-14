@@ -18,6 +18,8 @@ function defaultState() {
     uexCommodities: [],
     uexCompanies: [],
     uexShips: [],
+    scwikiLocations: [],
+    scwikiSyncedAt: null,
   };
 }
 
@@ -67,6 +69,8 @@ function loadState() {
       uexCommodities: parsed.uexCommodities || [],
       uexCompanies: parsed.uexCompanies || [],
       uexShips: parsed.uexShips || [],
+      scwikiLocations: parsed.scwikiLocations || [],
+      scwikiSyncedAt: parsed.scwikiSyncedAt || null,
     };
   } catch (e) {
     return defaultState();
@@ -1418,13 +1422,66 @@ async function processOcrImage(blob) {
   }
 }
 
+function allScwikiLocations() {
+  return state.scwikiLocations.length ? state.scwikiLocations : DEFAULT_SCWIKI_LOCATIONS;
+}
+
+// Reconstitue une catégorie dans la même convention que celle utilisée pour
+// les lieux UEX (voir locationCategoryFromTerminal dans uex.js), à partir des
+// champs type/système du lieu Star Citizen Wiki.
+function scwikiCategory(entry) {
+  let base = "Avant-poste";
+  if (entry.type === "Planet") base = "Planète";
+  else if (entry.type === "Moon") base = "Lune";
+  else if (entry.type === "Settlement") base = "Ville";
+  else if (entry.type === "Manmade") base = "Station";
+  if (entry.system && entry.system !== "Stanton") base += ` - ${entry.system}`;
+  return base;
+}
+
+// Recherche de secours dans le jeu de données Star Citizen Wiki (beaucoup
+// plus granulaire qu'UEX, cf. data/scwiki-locations.js), utilisée seulement
+// quand aucun lieu UEX ne correspond : donne un lieu personnalisé avec la
+// bonne catégorie/planète/système plutôt qu'un lieu générique "Personnalisé".
+function scwikiLocationMatch(rawText) {
+  const cleaned = rawText.trim();
+  if (!cleaned) return null;
+  const lower = cleaned.toLowerCase();
+  const entries = allScwikiLocations();
+  const exact = entries.find((e) => e.name.toLowerCase() === lower);
+  if (exact) return exact;
+  const bySubstring = entries.find(
+    (e) => e.name.toLowerCase().includes(lower) || lower.includes(e.name.toLowerCase())
+  );
+  if (bySubstring) return bySubstring;
+  let best = null;
+  let bestDist = Infinity;
+  entries.forEach((e) => {
+    const dist = levenshteinDistance(lower, e.name.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = e;
+    }
+  });
+  if (!best) return null;
+  const threshold = Math.max(3, Math.round(best.name.length * 0.15));
+  return bestDist <= threshold ? best : null;
+}
+
 // Résout un lieu OCR vers un lieu existant (correspondance approximative),
-// ou en crée un nouveau à la volée si aucun ne correspond, pour ne jamais
-// bloquer la création automatique d'une mission en import multiple.
+// puis en secours vers le jeu de données Star Citizen Wiki, ou en crée un
+// nouveau à la volée si rien ne correspond — pour ne jamais bloquer la
+// création automatique d'une mission en import multiple.
 function resolveOrCreateLocation(rawText, notes) {
   if (!rawText) return null;
   const existing = looseLocationMatch(rawText);
   if (existing) return existing;
+  const scwiki = scwikiLocationMatch(rawText);
+  if (scwiki) {
+    const created = addCustomLocation(scwiki.name, scwikiCategory(scwiki));
+    if (created) notes.push(t("ocrBatchLocationCreated", { name: created.name }));
+    return created;
+  }
   const created = addCustomLocation(rawText, "Personnalisé");
   if (created) notes.push(t("ocrBatchLocationCreated", { name: created.name }));
   return created;
@@ -1693,12 +1750,17 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.textContent = t("syncingDistancesProgress", { done, total });
       });
       renderDistanceEditor();
+
+      btn.textContent = t("syncingScwiki");
+      await syncScwikiLocations();
+
       status.textContent = t("syncSummary", {
         locs: state.uexLocations.length,
         commodities: state.uexCommodities.length,
         companies: state.uexCompanies.length,
         ships: state.uexShips.length,
         fetched,
+        scwiki: state.scwikiLocations.length,
       });
     } catch (err) {
       alert(t("syncFailed", { msg: err.message }));

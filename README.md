@@ -13,7 +13,7 @@ Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir di
 - **Missions multi-marchandises** : chaque mission peut contenir plusieurs marchandises, chacune avec son propre lieu de récupération et de dépôt.
 - **Optimisation de trajet** : calcul exact (programmation dynamique) pour un nombre raisonnable de lieux, bascule automatique sur une heuristique (plus proche voisin + 2-opt) au-delà.
 - **Suivi de charge** : simule la charge réelle du vaisseau tout au long du trajet (récupérations/dépôts), pas juste la somme totale — et compare à la capacité SCU du vaisseau sélectionné.
-- **Données réelles [UEX Corp](https://uexcorp.space/api/documentation/)** : lieux, distances, marchandises, entreprises et vaisseaux, avec un bouton "Tout synchroniser" pour les rafraîchir. Les distances entre lieux sont dérivées du graphe d'orbites du jeu.
+- **Données réelles [UEX Corp](https://uexcorp.space/api/documentation/)** : lieux, distances, marchandises, entreprises et vaisseaux, avec un bouton "Tout synchroniser" pour les rafraîchir. Les distances entre lieux sont dérivées du graphe d'orbites du jeu. Pour les lieux absents d'UEX (petits points de livraison), l'app se rabat sur le jeu de données plus granulaire de [Star Citizen Wiki](https://api.star-citizen.wiki).
 - **Import par capture d'écran (OCR)** : colle ou dépose une capture de l'écran de détails d'un contrat en jeu, et l'app extrait automatiquement le donneur, les marchandises, les quantités, la récompense et les lieux (reconnaissance de texte via [Tesseract.js](https://github.com/naptha/tesseract.js), entièrement dans le navigateur).
 - **Bilingue FR/EN** et **thème clair/sombre**, avec préférence mémorisée.
 
@@ -78,6 +78,7 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 | `js/uex.js` | Appels à l'API UEX Corp |
 | `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
 | `data/location-aliases.js` | Alias de lieux dont le nom affiché en jeu (client français) diffère du nom UEX (anglais), constitué au fil des écarts rencontrés |
+| `js/scwiki.js`, `data/scwiki-locations.js` | Lieux de secours issus de l'API communautaire [Star Citizen Wiki](https://api.star-citizen.wiki), utilisés quand un lieu n'existe pas dans UEX (avant-postes/points de livraison mineurs) |
 
 ## Source des données
 

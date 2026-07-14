@@ -29,8 +29,9 @@ const TRANSLATIONS = {
     syncingShips: "Synchronisation des vaisseaux...",
     syncingDistances: "Synchronisation des distances...",
     syncingDistancesProgress: "Synchronisation des distances... {done}/{total}",
+    syncingScwiki: "Synchronisation des lieux (Star Citizen Wiki)...",
     syncSummary:
-      "{locs} lieux, {commodities} marchandises, {companies} entreprises, {ships} vaisseaux à jour — {fetched} distance(s) manquante(s) récupérée(s) via UEX.",
+      "{locs} lieux, {commodities} marchandises, {companies} entreprises, {ships} vaisseaux à jour — {fetched} distance(s) manquante(s) récupérée(s) via UEX — {scwiki} lieux de secours (Star Citizen Wiki) à jour.",
     syncFailed: "Échec de la synchronisation UEX : {msg}",
 
     importMissionTitle: "Importer une mission (capture d'écran)",
@@ -181,8 +182,9 @@ const TRANSLATIONS = {
     syncingShips: "Syncing ships...",
     syncingDistances: "Syncing distances...",
     syncingDistancesProgress: "Syncing distances... {done}/{total}",
+    syncingScwiki: "Syncing fallback locations (Star Citizen Wiki)...",
     syncSummary:
-      "{locs} locations, {commodities} commodities, {companies} companies, {ships} ships up to date — {fetched} missing distance(s) fetched via UEX.",
+      "{locs} locations, {commodities} commodities, {companies} companies, {ships} ships up to date — {fetched} missing distance(s) fetched via UEX — {scwiki} fallback locations (Star Citizen Wiki) up to date.",
     syncFailed: "UEX sync failed: {msg}",
 
     importMissionTitle: "Import a mission (screenshot)",
