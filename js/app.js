@@ -109,6 +109,11 @@ function loadState() {
 
 let state = loadState();
 
+// Id de la mission en cours de modification via le formulaire "Nouvelle
+// mission" (null quand le formulaire sert à en créer une nouvelle) — voir
+// startEditMission/cancelEditMission.
+let editingMissionId = null;
+
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -805,6 +810,16 @@ function renderMissionsTable() {
     tr.appendChild(tdReward);
 
     const tdActions = document.createElement("td");
+    const actionsWrap = document.createElement("div");
+    actionsWrap.className = "actions-cell";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "btn-secondary";
+    editBtn.textContent = t("editBtn");
+    editBtn.addEventListener("click", () => startEditMission(m));
+    actionsWrap.appendChild(editBtn);
+
     const doneBtn = document.createElement("button");
     doneBtn.type = "button";
     doneBtn.className = "btn-secondary";
@@ -814,7 +829,7 @@ function renderMissionsTable() {
       saveState();
       renderAll();
     });
-    tdActions.appendChild(doneBtn);
+    actionsWrap.appendChild(doneBtn);
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
@@ -824,7 +839,8 @@ function renderMissionsTable() {
       removeMission(m.id);
       renderAll();
     });
-    tdActions.appendChild(delBtn);
+    actionsWrap.appendChild(delBtn);
+    tdActions.appendChild(actionsWrap);
     tr.appendChild(tdActions);
 
     tbody.appendChild(tr);
@@ -1609,7 +1625,48 @@ function resolveLocationForOcrForm(rawText) {
   return null;
 }
 
+// Pré-remplit le formulaire "Nouvelle mission" avec les données d'une mission
+// déjà enregistrée pour la corriger en direct (bouton "Modifier" dans
+// Missions enregistrées) : la soumission met alors à jour cette mission au
+// lieu d'en créer une nouvelle.
+function startEditMission(mission) {
+  editingMissionId = mission.id;
+  document.getElementById("mission-name").value = mission.name || "";
+  document.getElementById("mission-giver").value = mission.giver || "";
+  document.getElementById("mission-reward").value = mission.reward ?? "";
+
+  const container = document.getElementById("cargo-fields");
+  container.innerHTML = "";
+  (mission.cargoItems || []).forEach((item) => {
+    const pickupLoc = getLocationById(item.pickupId);
+    const dropoffLoc = getLocationById(item.dropoffId);
+    createCargoFieldRow(
+      item.commodity,
+      item.quantity,
+      pickupLoc ? locationSearchLabel(pickupLoc) : "",
+      dropoffLoc ? locationSearchLabel(dropoffLoc) : ""
+    );
+  });
+
+  document.getElementById("mission-submit-btn").textContent = t("saveMissionBtn");
+  document.getElementById("cancel-edit-btn").style.display = "";
+  activateTab("new-mission-tab");
+  document.getElementById("mission-form").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelEditMission() {
+  editingMissionId = null;
+  document.getElementById("mission-form").reset();
+  resetCargoFields();
+  document.getElementById("mission-submit-btn").textContent = t("addMissionBtn");
+  document.getElementById("cancel-edit-btn").style.display = "none";
+}
+
 function applyOcrResultToForm(parsed) {
+  // Un import OCR construit toujours une nouvelle mission : si le formulaire
+  // était en train de modifier une mission existante, on annule ce mode pour
+  // éviter d'écraser la mauvaise mission à la soumission.
+  if (editingMissionId !== null) cancelEditMission();
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
   if (parsed.reward) document.getElementById("mission-reward").value = parsed.reward;
@@ -1982,11 +2039,35 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    addMission({ name, giver, cargoItems, reward });
-    e.target.reset();
-    resetCargoFields();
+    if (editingMissionId !== null) {
+      const mission = state.missions.find((m) => m.id === editingMissionId);
+      if (mission) {
+        const oldItems = mission.cargoItems || [];
+        mission.name = name;
+        mission.giver = giver;
+        mission.reward = reward;
+        // Garde le plannedQuantity des lignes inchangées (même marchandise et
+        // mêmes lieux), pour ne pas perdre la référence déjà suivie dans
+        // l'onglet Suivi cargo ; une ligne modifiée ou nouvelle repart d'une
+        // référence égale à la quantité tout juste saisie.
+        mission.cargoItems = cargoItems.map((item) => {
+          const prev = oldItems.find(
+            (old) => old.commodity === item.commodity && old.pickupId === item.pickupId && old.dropoffId === item.dropoffId
+          );
+          return { ...item, plannedQuantity: prev ? prev.plannedQuantity : item.quantity };
+        });
+        saveState();
+      }
+      cancelEditMission();
+    } else {
+      addMission({ name, giver, cargoItems, reward });
+      e.target.reset();
+      resetCargoFields();
+    }
     renderAll();
   });
+
+  document.getElementById("cancel-edit-btn").addEventListener("click", cancelEditMission);
 
   document.getElementById("add-location-form").addEventListener("submit", (e) => {
     e.preventDefault();
