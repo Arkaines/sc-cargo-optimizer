@@ -43,24 +43,25 @@ function extractContractTitle(rawText) {
   return line.replace(/\[\s*\d+\s*xp\s*\]/i, "").trim();
 }
 
-// "Proposé Par" suivi du nom du donneur, jusqu'au prochain titre de section.
+// "Proposé Par" (ou "Émis Par" selon le donneur de contrat) suivi du nom du
+// donneur, jusqu'au prochain titre de section.
 function extractGiver(normalized) {
   const re = new RegExp(
-    "Propos" + E_ACUTE + "\\s*Par\\s+(.+?)(?=\\s+(?:D" + E_ACUTE_UP + "TAILS|OBJECTIFS|$))",
+    "(?:Propos" + E_ACUTE + "|[E" + E_ACUTE_UP + "]mis)\\s*Par\\s+(.+?)(?=\\s+(?:D" + E_ACUTE_UP + "TAILS|OBJECTIFS|$))",
     "i"
   );
   const m = re.exec(normalized);
   return m ? m[1].trim() : "";
 }
 
-// "RÉCOMPENSE" ... montant en aUEC (ex : ¤ 322,500). Le symbole aUEC est
-// stylisé et souvent mal reconnu par l'OCR : on se base uniquement sur le
-// nombre à séparateurs de milliers qui suit, avec une fenêtre large car
-// d'autres libellés (Échéance, Proposé Par...) peuvent s'intercaler selon
-// l'ordre de lecture choisi par l'OCR.
+// "RÉCOMPENSE" (ou "Paiement" selon le donneur de contrat) ... montant en aUEC
+// (ex : ¤ 322,500). Le symbole aUEC est stylisé et souvent mal reconnu par
+// l'OCR : on se base uniquement sur le nombre à séparateurs de milliers qui
+// suit, avec une fenêtre large car d'autres libellés (Échéance, Proposé
+// Par...) peuvent s'intercaler selon l'ordre de lecture choisi par l'OCR.
 function extractReward(normalized) {
   const re = new RegExp(
-    "R" + E_ACUTE_UP + "COMPENSE[\\s\\S]{0,60}?([0-9]{1,3}(?:[,.\\s][0-9]{3})+)",
+    "(?:R" + E_ACUTE_UP + "COMPENSE|Paiement)[\\s\\S]{0,60}?([0-9]{1,3}(?:[,.\\s][0-9]{3})+)",
     "i"
   );
   const m = re.exec(normalized);
@@ -147,6 +148,72 @@ function extractObjectives(normalized) {
   return objectives;
 }
 
+// Retire les crochets/barres verticales isolés que l'OCR insère parfois au
+// milieu d'un nom de lieu sur un retour à la ligne (ex : "Avant-poste [ de
+// Recherche...").
+function stripBracketNoise(text) {
+  return text.replace(/[[\]|]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Second gabarit de contrat, utilisé par certains donneurs (ex : "Ling Family
+// Hauling") : "Livrer X/Y SCU de <marchandise> à <lieu>." pour le dépôt et
+// "Collecter <marchandise> à <lieu>." pour chaque lieu de retrait — au lieu de
+// "Livrez à <lieu> : X/Y SCU de <marchandise>" / "Allez à <lieu> pour
+// récupérer". Les lieux de retrait sont associés au dépôt par nom de
+// marchandise (l'ordre de lecture entre les deux n'est pas garanti ici).
+function parseDropoffChunkAlt(content) {
+  const re = new RegExp(
+    "^(\\d+)\\s*/\\s*(\\d+)\\s*SCU\\s+de\\s+(.+?)\\s+[" + A_GRAVE + "a]\\s+(.+)$",
+    "i"
+  );
+  const m = re.exec(content);
+  if (!m) return null;
+  const commodity = m[3].trim();
+  const location = stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[4])));
+  return { location, quantity: Number(m[2]), commodity };
+}
+
+function parsePickupChunkAlt(content) {
+  const re = new RegExp("^(.+?)\\s+[" + A_GRAVE + "a]\\s+(.+)$", "i");
+  const m = re.exec(content);
+  if (!m) return null;
+  const commodity = m[1].trim();
+  const location = stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[2])));
+  return { commodity, location };
+}
+
+function extractObjectivesAlt(normalized) {
+  const KEYWORD_RE = /(Livrer\s+|Collecter\s+)/gi;
+  const tokens = normalized.split(KEYWORD_RE);
+
+  const objectives = [];
+  for (let i = 1; i < tokens.length; i += 2) {
+    const keyword = tokens[i].trim().toLowerCase();
+    const content = tokens[i + 1] || "";
+    if (keyword.startsWith("livrer")) {
+      const parsed = parseDropoffChunkAlt(content);
+      if (parsed) {
+        objectives.push({
+          dropoff: parsed.location,
+          quantity: parsed.quantity,
+          commodity: parsed.commodity,
+          pickupOptions: [],
+        });
+      }
+    } else {
+      const parsed = parsePickupChunkAlt(content);
+      if (!parsed) continue;
+      const needle = parsed.commodity.toLowerCase();
+      const target = objectives.find((o) => {
+        const hay = o.commodity.toLowerCase();
+        return hay === needle || hay.includes(needle) || needle.includes(hay);
+      });
+      if (target) target.pickupOptions.push(parsed.location);
+    }
+  }
+  return objectives;
+}
+
 // Répartit une quantité (en SCU, toujours entier) le plus également possible
 // entre plusieurs lieux : ex. 9 réparti sur 2 lieux -> [5, 4], jamais de
 // décimales puisque le SCU est une unité entière.
@@ -158,7 +225,11 @@ function splitQuantityEvenly(quantity, count) {
 
 function parseOcrText(text) {
   const normalized = normalizeOcrText(text);
-  const objectives = extractObjectives(normalized);
+  // Certains donneurs de contrat utilisent un gabarit de phrase différent
+  // ("Livrer X/Y SCU de <marchandise> à <lieu>" / "Collecter <marchandise> à
+  // <lieu>") : on retombe dessus seulement si le gabarit principal ne trouve rien.
+  let objectives = extractObjectives(normalized);
+  if (!objectives.length) objectives = extractObjectivesAlt(normalized);
 
   // Quand une marchandise a plusieurs lieux de retrait possibles, on ne peut
   // pas savoir comment la quantité totale se répartit entre eux (ça dépend
