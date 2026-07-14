@@ -16,7 +16,10 @@ Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir di
 - **Optimisation de trajet** : calcul exact (programmation dynamique) pour un nombre raisonnable de lieux, bascule automatique sur une heuristique (plus proche voisin + 2-opt) au-delà.
 - **Suivi de charge** : simule la charge réelle du vaisseau tout au long du trajet (récupérations/dépôts), pas juste la somme totale — et compare à la capacité SCU du vaisseau sélectionné.
 - **Données réelles [UEX Corp](https://uexcorp.space/api/documentation/)** : lieux, distances, marchandises, entreprises et vaisseaux, avec un bouton "Tout synchroniser" pour les rafraîchir. Les distances entre lieux sont dérivées du graphe d'orbites du jeu. Pour les lieux absents d'UEX (petits points de livraison), l'app se rabat sur le jeu de données plus granulaire de [Star Citizen Wiki](https://api.star-citizen.wiki).
-- **Import par capture d'écran (OCR)** : colle ou dépose une capture de l'écran de détails d'un contrat en jeu, et l'app extrait automatiquement le donneur, les marchandises, les quantités, la récompense et les lieux (reconnaissance de texte via [Tesseract.js](https://github.com/naptha/tesseract.js), entièrement dans le navigateur).
+- **Import par capture d'écran (OCR)** : colle ou dépose une capture de l'écran de détails d'un contrat en jeu, et l'app extrait automatiquement le titre, le donneur, les marchandises, les quantités, la récompense et les lieux (reconnaissance de texte via [Tesseract.js](https://github.com/naptha/tesseract.js), entièrement dans le navigateur). Fonctionne aussi bien avec un client français qu'anglais.
+- **Réputation estimée par mission** : chaque mission (nouvelle, enregistrée ou dans l'historique) affiche la réputation qu'elle rapporte probablement, d'après un catalogue de missions/récompenses issu du [Star Citizen Wiki](https://api.star-citizen.wiki).
+- **Onglet Réputation** : progression estimée vers le prochain palier pour chaque entreprise de transport (légale ou non), avec les vrais seuils du jeu. Le jeu n'affichant jamais le nombre exact de réputation, un calibrage manuel (palier constaté en jeu + curseur fin, verrouillable) permet de recaler l'estimation sur la réalité ; les missions terminées ensuite continuent de s'additionner par-dessus automatiquement.
+- **Connexion Discord optionnelle** avec sauvegarde cloud (Supabase) : retrouve tes missions, ton historique et tes calibrages de réputation sur un autre appareil. L'appli reste 100% utilisable sans se connecter (données en local uniquement dans ce cas).
 - **Bilingue FR/EN** et **thème clair/sombre**, avec préférence mémorisée.
 
 ## Utilisation
@@ -48,7 +51,15 @@ Dans l'onglet **Optimisation de la route**, choisis éventuellement un lieu de d
 
 L'onglet **Historique** liste les missions terminées (regroupées si identiques, avec un compteur "× N"), avec possibilité de les restaurer. Si un lieu n'existe pas dans la liste, tu peux en ajouter un manuellement depuis l'onglet Nouvelle mission. Le menu "Distances entre lieux utilisés" (en bas de page) permet de corriger une distance à la main si besoin.
 
-### 6. Synchronisation, langue et thème
+### 6. Réputation
+
+L'onglet **Réputation** liste les entreprises de transport (légales et illégales) pour lesquelles une progression est suivie. Pour chacune : le palier estimé (calculé depuis ton historique de missions terminées), et ce qu'il manque pour atteindre le suivant. Comme le jeu n'affiche jamais le nombre exact, tu peux calibrer manuellement : choisis ton palier réellement constaté en jeu dans le menu déroulant, ajuste finement avec le curseur (ou clique directement sur 0/25/50/75/100), puis clique sur le cadenas (🔓 → 🔒) pour verrouiller cette position — les missions terminées ensuite s'additionnent alors automatiquement par-dessus.
+
+### 7. Connexion Discord et sauvegarde cloud
+
+Le bouton "Se connecter avec Discord" (en haut à droite) est optionnel. Une fois connecté, tes données (missions, historique, lieux personnalisés, distances, calibrages de réputation) se synchronisent automatiquement avec ton compte, pour les retrouver sur un autre appareil. Sans connexion, tout reste en local dans le navigateur comme avant.
+
+### 8. Synchronisation, langue et thème
 
 Le bouton "Tout synchroniser" (panneau de gauche) met à jour lieux, distances, marchandises, entreprises et vaisseaux depuis UEX Corp. Les boutons en haut du header permettent de basculer entre français/anglais et thème clair/sombre ; les préférences sont mémorisées.
 
@@ -74,17 +85,26 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 | `index.html` | Page principale |
 | `css/style.css` | Interface |
 | `assets/` | Logo et favicon |
-| `js/app.js` | Logique principale (état, optimisation de trajet, rendu) |
+| `js/app.js` | Logique principale (état, optimisation de trajet, réputation, rendu) |
 | `js/i18n.js` | Traductions FR/EN |
-| `js/ocr.js` | Extraction de champs depuis le texte reconnu par Tesseract |
+| `js/ocr.js` | Extraction de champs depuis le texte reconnu par Tesseract (titre, donneur, marchandises, lieux, récompense) |
 | `js/uex.js` | Appels à l'API UEX Corp |
+| `js/scwiki.js` | Appels à l'API communautaire Star Citizen Wiki |
+| `js/cloud.js` | Connexion Discord et synchronisation cloud optionnelle (Supabase) |
 | `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
-| `data/location-aliases.js` | Alias de lieux dont le nom affiché en jeu (client français) diffère du nom UEX (anglais), constitué au fil des écarts rencontrés |
-| `js/scwiki.js`, `data/scwiki-locations.js` | Lieux de secours issus de l'API communautaire [Star Citizen Wiki](https://api.star-citizen.wiki), utilisés quand un lieu n'existe pas dans UEX (avant-postes/points de livraison mineurs) |
+| `data/location-aliases.js`, `data/commodity-aliases.js` | Alias de lieux/marchandises dont le nom affiché en jeu (client français) diffère du nom UEX (anglais), constitués au fil des écarts rencontrés |
+| `data/mission-title-aliases.js` | Modèles de traduction pour les titres de mission "génériques" du client français, reconstruits à partir du donneur pour retrouver le titre anglais du catalogue |
+| `data/scwiki-locations.js` | Lieux de secours issus de l'API Star Citizen Wiki, utilisés quand un lieu n'existe pas dans UEX (avant-postes/points de livraison mineurs) |
 | `data/location-planets.js` | Recoupement local UEX ↔ Star Citizen Wiki (planète/lune de chaque lieu UEX), utilisé pour estimer une distance quand UEX ne la connaît pas (ex. orbite non résolue) |
+| `data/mission-reputation.js`, `data/mission-reputation-by-title.js` | Catalogue réputation/récompense par mission (par titre exact, plus fiable, avec repli par donneur), issu de l'API Star Citizen Wiki |
+| `data/faction-reputation-ladders.js` | Paliers de réputation (rang + seuil) par entreprise, issus de l'API Star Citizen Wiki |
 
 ## Source des données
 
-Toutes les données de jeu (lieux, distances, marchandises, entreprises, vaisseaux) proviennent de l'API publique de [UEX Corp](https://uexcorp.space/).
+Les données de jeu (lieux, distances, marchandises, entreprises, vaisseaux) proviennent de l'API publique de [UEX Corp](https://uexcorp.space/). Les données de missions et de réputation (catalogue par titre/donneur, paliers par entreprise) proviennent de l'API communautaire [Star Citizen Wiki](https://api.star-citizen.wiki), qui sert aussi de secours pour les lieux absents d'UEX.
+
+La réputation affichée reste une **estimation** : le jeu n'expose jamais le nombre exact, seulement un palier et une barre de progression sans valeur — d'où la possibilité de calibrer manuellement l'onglet Réputation.
+
+La sauvegarde cloud optionnelle (connexion Discord) est hébergée sur [Supabase](https://supabase.com/) (base de données + authentification), avec un accès strictement limité aux données du compte connecté (sécurité au niveau des lignes/RLS).
 
 Le logo "Made By The Community" provient du [Fan Kit officiel de Roberts Space Industries](https://robertsspaceindustries.com/fankit), utilisé conformément au [Star Citizen Fankit and Fandom FAQ](https://support.robertsspaceindustries.com/hc/en-us/articles/360006895793-Star-Citizen-Fankit-and-Fandom-FAQ).
