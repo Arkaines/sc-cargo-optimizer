@@ -196,7 +196,14 @@ function planetAnchorLocationId(planetName) {
   if (!planetAnchorCache) {
     planetAnchorCache = new Map();
     Object.entries(DEFAULT_LOCATION_PLANETS).forEach(([id, planet]) => {
-      if (!planetAnchorCache.has(planet)) planetAnchorCache.set(planet, id);
+      if (planetAnchorCache.has(planet)) return;
+      // Une orbite non résolue (orbitId 0, ex. Covalex Distribution Centre
+      // S4DC05) ne sert à rien comme ancre : UEX lui-même n'a aucune distance
+      // fiable depuis ce lieu-là, donc l'utiliser comme référence ne ferait
+      // que retomber sur la valeur par défaut pour tout le monde.
+      const loc = getLocationById(id);
+      if (loc && loc.orbitId === 0) return;
+      planetAnchorCache.set(planet, id);
     });
   }
   return planetAnchorCache.get(planetName) || null;
