@@ -13,6 +13,52 @@ async function runOcrOnImage(imageSource) {
   return text;
 }
 
+// Découpe une région de l'image sur un canvas séparé (recadrage réel, plutôt
+// que de compter sur l'option "rectangle" de Tesseract dont le comportement
+// s'est avéré peu fiable ici) : createImageBitmap accepte directement un
+// rectangle source, on le redessine sur un canvas de cette seule taille.
+async function cropImageToCanvas(imageSource, left, top, width, height) {
+  const bitmap = await createImageBitmap(imageSource, left, top, width, height);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return canvas;
+}
+
+// L'écran de détails de contrat a une bande du haut pleine largeur (titre à
+// gauche, récompense/échéance/donneur à droite) puis deux colonnes en
+// dessous : description de la mission à gauche (aucune information utile,
+// ignorée), objectifs à droite. Faire lire toute la bande du haut d'un bloc
+// mélange parfois l'ordre de lecture entre le titre et le bloc récompense
+// (constaté empiriquement : les deux se retrouvent alors imbriqués ligne par
+// ligne, titre et récompense corrompus) — on découpe donc aussi la bande du
+// haut en gauche/droite, avec la même frontière verticale que pour le bas de
+// l'écran, pour ne jamais laisser Tesseract démêler deux blocs côte à côte.
+async function runOcrOnMissionScreenshot(imageSource) {
+  const fullBitmap = await createImageBitmap(imageSource);
+  const w = fullBitmap.width;
+  const h = fullBitmap.height;
+  fullBitmap.close();
+
+  const topBandHeight = Math.round(h * 0.22);
+  const rightColumnLeft = Math.round(w * 0.45);
+
+  const [topLeftCanvas, topRightCanvas, rightCanvas] = await Promise.all([
+    cropImageToCanvas(imageSource, 0, 0, rightColumnLeft, topBandHeight),
+    cropImageToCanvas(imageSource, rightColumnLeft, 0, w - rightColumnLeft, topBandHeight),
+    cropImageToCanvas(imageSource, rightColumnLeft, topBandHeight, w - rightColumnLeft, h - topBandHeight),
+  ]);
+
+  const [topLeftResult, topRightResult, rightResult] = await Promise.all([
+    Tesseract.recognize(topLeftCanvas, "fra+eng"),
+    Tesseract.recognize(topRightCanvas, "fra+eng"),
+    Tesseract.recognize(rightCanvas, "fra+eng"),
+  ]);
+  return `${topLeftResult.data.text}\n${topRightResult.data.text}\n${rightResult.data.text}`;
+}
+
 const E_ACUTE = String.fromCharCode(0x00e9); // e minuscule accent aigu
 const E_ACUTE_UP = String.fromCharCode(0x00c9); // E majuscule accent aigu
 const A_GRAVE = String.fromCharCode(0x00e0); // a accent grave
@@ -33,32 +79,152 @@ function normalizeOcrText(text) {
     .trim();
 }
 
-// "DÉBUTANT - MOYEN - INTERSTELLAIRE [50 xp]" -> le tier/nom du contrat.
-// On cherche la ligne brute contenant "[N xp]" plutôt que de travailler sur
-// le texte normalisé, car l'ordre de lecture global entre les deux colonnes
-// de l'écran n'est pas garanti.
+// Un badge de palier de rang ("Member Rank", "Junior Rank"...) traîne parfois
+// collé juste devant le titre à cause de l'ordre de lecture OCR : on le
+// retire s'il est présent en tête, sans quoi il resterait mélangé au titre.
+const RANK_TIER_PREFIX_RE = new RegExp(
+  "^(?:Trainee|Rookie|Junior|Member|Experienced|Senior|Master)\\s+Rank\\s+",
+  "i"
+);
+
+// Le titre du contrat est affiché en haut à gauche de l'écran. Plusieurs
+// gabarits rencontrés :
+// 1. "DÉBUTANT - MOYEN - INTERSTELLAIRE [50 xp]" : on cherche la ligne brute
+//    contenant "[N xp]" (texte brut, pas normalisé, car l'ordre de lecture
+//    global entre les deux colonnes de l'écran n'est pas garanti).
+// 2. Pas de crochet "[N xp]" du tout (ex : "Opportunité de Transport de Fret
+//    chez Ling Hauling") : le titre est alors tout ce qui précède le premier
+//    repère de récompense connu ("RÉCOMPENSE"/"Paiement"/"Reward"), qui suit
+//    toujours le titre en haut de l'écran.
+// 3. Le titre se retrouve lu APRÈS la récompense/l'échéance à cause de l'ordre
+//    de lecture (le repli 2 ne trouve alors rien puisque "Reward" est déjà le
+//    tout premier mot) : on cherche alors le texte juste avant le repère du
+//    donneur ("Contracted By"/"Proposé Par"/"Émis Par"), où le titre se
+//    retrouve coincé (parfois précédé d'un badge de palier de rang).
 function extractContractTitle(rawText) {
-  const line = rawText.split("\n").find((l) => /\[\s*\d+\s*xp\s*\]/i.test(l));
-  if (!line) return "";
-  return line.replace(/\[\s*\d+\s*xp\s*\]/i, "").trim();
+  const xpLine = rawText.split("\n").find((l) => /\[\s*\d+\s*xp\s*\]/i.test(l));
+  if (xpLine) return xpLine.replace(/\[\s*\d+\s*xp\s*\]/i, "").trim();
+
+  const beforeReward = new RegExp("^([\\s\\S]*?)(?:R" + E_ACUTE_UP + "COMPENSE|Paiement|Reward)", "i").exec(rawText);
+  if (beforeReward && beforeReward[1].trim()) {
+    return beforeReward[1].replace(/\s+/g, " ").trim();
+  }
+
+  const giverLabelSrc = "Contracted\\s*By|Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par";
+
+  // Cas précis : le badge de palier de rang précède directement le titre,
+  // lui-même juste avant le repère du donneur (ex : "Member Rank Small Cargo
+  // Haul Contracted By Covalex..."). On capture uniquement ce qui se trouve
+  // entre les deux repères, sans le bruit (récompense/échéance) qui précède.
+  const rankTitle = new RegExp(
+    "(?:Trainee|Rookie|Junior|Member|Experienced|Senior|Master)\\s+Rank\\s+(.+?)\\s+(?:" + giverLabelSrc + ")",
+    "i"
+  ).exec(rawText);
+  if (rankTitle) return rankTitle[1].replace(/\s+/g, " ").trim();
+
+  const beforeGiver = new RegExp("([\\s\\S]*?)(?:" + giverLabelSrc + ")", "i").exec(rawText);
+  if (!beforeGiver) return "";
+  const cleaned = beforeGiver[1].replace(/\s+/g, " ").trim();
+  // Ne garde que la dernière portion courte (le titre), pas tout ce qui
+  // précède (récompense, échéance...), en se limitant aux derniers mots.
+  const words = cleaned.split(" ");
+  const tail = words.slice(-8).join(" ");
+  return tail.replace(RANK_TIER_PREFIX_RE, "").trim();
+}
+
+// Recoupe le texte brut de l'OCR avec la base des titres de mission connus
+// (data/mission-reputation-by-title.js, extraite du Star Citizen Wiki) : les
+// titres de contrat restent en anglais même sur un client en français, donc
+// une correspondance de sous-chaîne fonctionne indépendamment des soucis de
+// découpage OCR. Quand plusieurs titres correspondent (un titre court peut
+// être inclus dans un titre plus long), on utilise la récompense exacte lue
+// pour départager, puis on préfère le titre le plus long (le plus précis) —
+// cela permet d'identifier la mission avec certitude et donc sa réputation
+// exacte, plutôt que de dépendre uniquement de l'extraction positionnelle.
+function matchKnownMissionTitle(rawText, reward) {
+  if (typeof DEFAULT_MISSION_REPUTATION_BY_TITLE === "undefined") return null;
+  // "-" est parfois absent du texte OCR (ex : "Member Rank Small Cargo Haul"
+  // sans tiret) alors que les titres de la base l'incluent ("Member Rank -
+  // Small Cargo Haul") : on l'ignore des deux côtés pour comparer.
+  const normalizeForMatch = (s) => s.replace(/[-\s]+/g, " ").toLowerCase().trim();
+  const haystack = normalizeForMatch(rawText);
+
+  let bestTitle = null;
+  let bestInRange = false;
+  let bestLen = 0;
+  Object.keys(DEFAULT_MISSION_REPUTATION_BY_TITLE).forEach((title) => {
+    const needle = normalizeForMatch(title);
+    if (needle.length < 6 || !haystack.includes(needle)) return;
+
+    const variants = DEFAULT_MISSION_REPUTATION_BY_TITLE[title];
+    const inRange = reward > 0 && variants.some(
+      (v) => v.rewardMin > 0 && reward >= v.rewardMin && reward <= (v.rewardMax > 0 ? v.rewardMax : v.rewardMin)
+    );
+
+    const better = bestTitle === null || (inRange && !bestInRange) || (inRange === bestInRange && needle.length > bestLen);
+    if (better) {
+      bestTitle = title;
+      bestInRange = inRange;
+      bestLen = needle.length;
+    }
+  });
+  return bestTitle;
+}
+
+// Repli pour les titres "généricos" traduits en français (voir data/mission-
+// title-aliases.js) : reconstruit le titre anglais probable à partir d'un
+// modèle de phrase fixe + du donneur déjà extrait de façon fiable, puis
+// vérifie qu'il existe bien tel quel dans le catalogue avant de l'utiliser.
+function matchFrenchTitleTemplate(rawText, giver) {
+  if (typeof FRENCH_MISSION_TITLE_TEMPLATES === "undefined") return null;
+  if (typeof DEFAULT_MISSION_REPUTATION_BY_TITLE === "undefined") return null;
+  if (!giver) return null;
+  const haystack = rawText.replace(/\s+/g, " ").toLowerCase();
+
+  const giverWords = new Set(giver.toLowerCase().split(/\s+/).filter(Boolean));
+  for (const template of FRENCH_MISSION_TITLE_TEMPLATES) {
+    if (!haystack.includes(template.frenchFragment)) continue;
+    const prefixLower = template.englishPrefix.toLowerCase();
+    // Le nom d'entreprise du catalogue ne correspond pas toujours mot pour
+    // mot au donneur affiché (ex : donneur "Ling Family Hauling" vs titre
+    // catalogue "... with Ling Hauling", le mot "Family" s'intercale) : on
+    // vérifie que chaque mot du nom du catalogue apparaît bien dans le
+    // donneur, plutôt qu'une sous-chaîne stricte.
+    const key = Object.keys(DEFAULT_MISSION_REPUTATION_BY_TITLE).find((k) => {
+      const kLower = k.toLowerCase();
+      if (!kLower.startsWith(prefixLower)) return false;
+      const companyWords = kLower.slice(prefixLower.length).trim().split(/\s+/).filter(Boolean);
+      return companyWords.length > 0 && companyWords.every((w) => giverWords.has(w));
+    });
+    if (key) return key;
+  }
+  return null;
 }
 
 // "Proposé Par" (ou "Émis Par"/"Contracted By" selon le donneur de contrat,
-// ou la langue du client) suivi du nom du donneur, jusqu'au prochain titre
-// de section.
+// ou la langue du client) suivi du nom du donneur, jusqu'au prochain titre de
+// section. Les titres de section sont toujours tout en majuscules ("UTILI.",
+// "OBJECTIFS PRINCIPAUX", "DÉTAILS", "PRIMARY OBJECTIVES"...) contrairement à
+// un nom de donneur (casse normale) : on s'arrête donc générale­ment au
+// premier mot tout en majuscules plutôt que d'énumérer chaque titre possible
+// (ex : une nouvelle section de description entre le donneur et les objectifs
+// ferait sinon déborder la capture sur tout le paragraphe qui suit).
 function extractGiver(normalized) {
-  const re = new RegExp(
-    "(?:Propos" +
-      E_ACUTE +
-      "\\s*Par|[E" +
-      E_ACUTE_UP +
-      "]mis\\s*Par|Contracted\\s*By)\\s+(.+?)(?=\\s+(?:D" +
-      E_ACUTE_UP +
-      "TAILS|OBJECTIFS|DETAILS|OBJECTIVES|PRIMARY|$))",
+  // Deux passes distinctes : le repère du donneur se cherche insensible à la
+  // casse (/i), mais la frontière de fin (mot tout en majuscules) doit rester
+  // sensible à la casse — combiner /i et /u sur \p{Lu} dans une même regex le
+  // fait matcher n'importe quelle lettre (bug de canonicalisation JS), ce qui
+  // coupait la capture au premier mot venu au lieu du vrai titre de section.
+  const labelRe = new RegExp(
+    "(?:Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par|Contracted\\s*By)\\s+",
     "i"
   );
-  const m = re.exec(normalized);
-  return m ? m[1].trim() : "";
+  const labelMatch = labelRe.exec(normalized);
+  if (!labelMatch) return "";
+  const tail = normalized.slice(labelMatch.index + labelMatch[0].length);
+  const stopMatch = /\s+\p{Lu}{3,}/u.exec(tail);
+  const giverText = stopMatch ? tail.slice(0, stopMatch.index) : tail;
+  return giverText.trim();
 }
 
 // "RÉCOMPENSE"/"Paiement"/"Reward" selon le donneur de contrat ou la langue du
@@ -116,7 +282,7 @@ function parseDropoffChunk(content) {
   const commodity = stripTrailingBulletNoise(scuMatch[2].trim());
   const qtyMatch = /(\d+)\s*\/\s*(\d+)\s*$/.exec(beforeScu);
   if (!qtyMatch) return null;
-  const location = cleanLocationEdges(beforeScu.slice(0, qtyMatch.index));
+  const location = cleanLocationEdges(stripBracketNoise(beforeScu.slice(0, qtyMatch.index)));
   return { location: stripSystemSuffix(location), quantity: Number(qtyMatch[2]), commodity };
 }
 
@@ -126,7 +292,7 @@ function parsePickupChunk(content) {
   const re = new RegExp("^(.+?)\\s+pour\\s+r" + E_ACUTE + "cup" + E_ACUTE + "rer\\b", "i");
   const m = re.exec(content);
   if (!m) return null;
-  return stripSystemSuffix(cleanLocationEdges(m[1]));
+  return stripSystemSuffix(cleanLocationEdges(stripBracketNoise(m[1])));
 }
 
 // Extrait les objectifs (dépôt + marchandise + quantité, avec leurs lieux de
@@ -159,9 +325,19 @@ function extractObjectives(normalized) {
 
 // Retire les crochets/barres verticales isolés que l'OCR insère parfois au
 // milieu d'un nom de lieu sur un retour à la ligne (ex : "Avant-poste [ de
-// Recherche...").
+// Recherche..."), ainsi qu'une petite icône (ex : un "ⓘ" d'info) présente à
+// cet endroit dans le jeu et que l'OCR lit comme une lettre isolée (ex :
+// "Avant-poste i de Recherche..."). Un nom de lieu Star Citizen ne contient
+// jamais de mot d'une seule lettre, donc on retire ces jetons isolés sans
+// risque de couper un vrai mot du nom.
 function stripBracketNoise(text) {
-  return text.replace(/[[\]|]/g, " ").replace(/\s+/g, " ").trim();
+  return text
+    .replace(/[[\]|]/g, " ")
+    .split(" ")
+    .filter((word) => word.length !== 1 || !/[\p{L}\p{N}]/u.test(word))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // Découpe un texte normalisé à chaque mot-clé de dépôt/retrait et regroupe les
@@ -291,11 +467,15 @@ function parseOcrText(text) {
     });
   });
 
+  const reward = extractReward(normalized);
+  const giver = extractGiver(normalized);
+  const knownTitle = matchKnownMissionTitle(text, reward) || matchFrenchTitleTemplate(text, giver);
+
   return {
     raw: text,
-    name: extractContractTitle(text),
-    giver: extractGiver(normalized),
+    name: knownTitle || extractContractTitle(text),
+    giver,
     cargoItems,
-    reward: extractReward(normalized),
+    reward,
   };
 }

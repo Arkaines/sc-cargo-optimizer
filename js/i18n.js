@@ -73,6 +73,20 @@ const TRANSLATIONS = {
     newMissionTab: "Nouvelle mission",
     missionsTab: "Missions enregistrées",
     historyTab: "Historique",
+    companiesTab: "Réputation",
+    companiesHint: "Paliers de réputation par entreprise, d'après le catalogue Star Citizen Wiki. La progression indiquée est calculée depuis ton historique de missions terminées.",
+    companyRankProgress: "Palier actuel : {current} — encore {remaining} avant {next}.",
+    companyRankMax: "Palier maximum atteint : {current}.",
+    companyNoProgress: "Aucune mission de ce type enregistrée pour l'instant.",
+
+    loginBtn: "Se connecter avec Discord",
+    logoutBtn: "Se déconnecter",
+    loggedInAs: "Connecté",
+    cloudSyncing: "Synchronisation...",
+    cloudSynced: "Synchronisé",
+    cloudSyncFailed: "Échec de la synchronisation cloud : {msg}",
+    cloudConflictPrompt:
+      "Des données existent déjà en ligne pour ce compte. OK pour charger les données en ligne (tes modifications locales non synchronisées seront perdues), Annuler pour garder tes données locales et écraser celles en ligne.",
     routeCargoRowLabel: "{commodity} (prévu : {planned} SCU)",
     routeCargoFullBtn: "Tout",
     routeCargoPartialBtn: "Partiel",
@@ -115,6 +129,8 @@ const TRANSLATIONS = {
     colDropoff: "Dépôt",
     colCargo: "Cargaison",
     colReward: "Récompense",
+    colReputation: "Réputation (estimée)",
+    reputationSummaryTitle: "Réputation cumulée (estimée)",
     deleteBtn: "Supprimer",
     missionsSummary: "{included}/{total} mission(s) sélectionnée(s) — {cargo} SCU — {reward} aUEC",
     tooManyMissionsWarning: "⚠ {count} missions actives enregistrées — le jeu limite à 10 le nombre de missions acceptées simultanément, pense à en terminer certaines.",
@@ -170,7 +186,7 @@ const TRANSLATIONS = {
       '{count} lieux intégrés par défaut (données UEX Corp). Utilise "Tout synchroniser" pour les rafraîchir.',
 
     resetAllBtn: "Réinitialiser toutes les données",
-    confirmResetAll: "Supprimer toutes les missions, lieux personnalisés et distances enregistrées ?",
+    confirmResetAll: "Supprimer toutes les missions, lieux personnalisés et distances enregistrées ? Si tu es connecté, ça effacera aussi la sauvegarde cloud.",
   },
 
   en: {
@@ -238,6 +254,20 @@ const TRANSLATIONS = {
     newMissionTab: "New mission",
     missionsTab: "Saved missions",
     historyTab: "History",
+    companiesTab: "Reputation",
+    companiesHint: "Reputation tiers per company, from the Star Citizen Wiki catalog. Progress shown is computed from your completed mission history.",
+    companyRankProgress: "Current tier: {current} — {remaining} more to reach {next}.",
+    companyRankMax: "Maximum tier reached: {current}.",
+    companyNoProgress: "No mission of this type recorded yet.",
+
+    loginBtn: "Log in with Discord",
+    logoutBtn: "Log out",
+    loggedInAs: "Logged in",
+    cloudSyncing: "Syncing...",
+    cloudSynced: "Synced",
+    cloudSyncFailed: "Cloud sync failed: {msg}",
+    cloudConflictPrompt:
+      "Data already exists online for this account. OK to load the online data (unsynced local changes will be lost), Cancel to keep your local data and overwrite the online copy.",
     routeCargoRowLabel: "{commodity} (planned: {planned} SCU)",
     routeCargoFullBtn: "All",
     routeCargoPartialBtn: "Partial",
@@ -280,6 +310,8 @@ const TRANSLATIONS = {
     colDropoff: "Dropoff",
     colCargo: "Cargo",
     colReward: "Reward",
+    colReputation: "Reputation (estimated)",
+    reputationSummaryTitle: "Cumulative reputation (estimated)",
     deleteBtn: "Delete",
     missionsSummary: "{included}/{total} mission(s) selected — {cargo} SCU — {reward} aUEC",
     tooManyMissionsWarning: "⚠ {count} active missions saved — the game caps accepted missions at 10, consider completing some.",
@@ -331,7 +363,7 @@ const TRANSLATIONS = {
     uexLocationsDefault: '{count} locations built in by default (UEX Corp data). Use "Sync everything" to refresh them.',
 
     resetAllBtn: "Reset all data",
-    confirmResetAll: "Delete all missions, custom locations and saved distances?",
+    confirmResetAll: "Delete all missions, custom locations and saved distances? If you're logged in, this will also erase the cloud backup.",
   },
 };
 

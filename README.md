@@ -21,7 +21,7 @@ Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir di
 
 ## Utilisation
 
-Ouvre simplement `index.html` dans un navigateur (Chrome/Edge recommandés pour la reconnaissance de texte), ou utilise directement le site en ligne. Toutes les données (missions, lieux personnalisés, distances, préférences) sont sauvegardées dans le stockage local du navigateur — rien n'est envoyé à un serveur.
+Ouvre simplement `index.html` dans un navigateur (Chrome/Edge recommandés pour la reconnaissance de texte), ou utilise directement le site en ligne. Toutes les données (missions, lieux personnalisés, distances, préférences) sont sauvegardées dans le stockage local du navigateur. La connexion avec Discord est optionnelle : elle ajoute une sauvegarde cloud (Supabase) pour retrouver ses données sur un autre appareil, sans quoi rien n'est envoyé à un serveur.
 
 ## Tutoriel
 

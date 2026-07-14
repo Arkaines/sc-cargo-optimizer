@@ -38,6 +38,15 @@
     <img src="assets/made-by-the-community.png" alt="Made by the community" class="brand-logo made-by-community-logo" />
   </div>
   <div class="header-actions">
+    <button type="button" id="login-btn" data-i18n="loginBtn"></button>
+    <div id="user-chip" style="display:none;">
+      <img id="user-avatar" alt="" class="brand-logo" />
+      <div id="user-chip-info">
+        <span id="user-name"></span>
+        <button type="button" id="logout-btn" class="btn-primary-sm" data-i18n="logoutBtn"></button>
+        <span id="cloud-sync-status" class="hint"></span>
+      </div>
+    </div>
     <button type="button" id="lang-toggle" data-i18n-aria-label="langToggleLabel"></button>
     <button type="button" id="theme-toggle" data-i18n-aria-label="themeToggleLabel"></button>
   </div>
@@ -78,6 +87,10 @@
     <img id="ocr-preview" style="display:none;" data-i18n-alt="ocrPreviewAlt" alt="" />
     <div id="ocr-result"></div>
   </div>
+
+  <div class="side-block">
+    <button type="button" id="reset-all" class="btn-danger" style="width:100%;" data-i18n="resetAllBtn"></button>
+  </div>
 </aside>
 
 <main>
@@ -87,6 +100,7 @@
       <button type="button" class="tab-btn" data-tab="missions-tab" data-i18n="missionsTab"></button>
       <button type="button" class="tab-btn" data-tab="optimize-tab" data-i18n="optimizeTab"></button>
       <button type="button" class="tab-btn" data-tab="history-tab" data-i18n="historyTab"></button>
+      <button type="button" class="tab-btn" data-tab="companies-tab" data-i18n="companiesTab"></button>
     </div>
 
     <div class="tab-panel" id="new-mission-tab">
@@ -157,6 +171,7 @@
             <th data-i18n="colDropoff"></th>
             <th data-i18n="colCargo"></th>
             <th data-i18n="colReward"></th>
+            <th data-i18n="colReputation"></th>
             <th></th>
           </tr>
         </thead>
@@ -193,6 +208,7 @@
             <th data-i18n="colDropoff"></th>
             <th data-i18n="colCargo"></th>
             <th data-i18n="colReward"></th>
+            <th data-i18n="colReputation"></th>
             <th></th>
           </tr>
         </thead>
@@ -200,6 +216,12 @@
       </table>
     </div>
     <p id="history-summary"></p>
+    <div id="reputation-summary"></div>
+    </div>
+
+    <div class="tab-panel" id="companies-tab" style="display:none;">
+      <p class="hint" data-i18n="companiesHint"></p>
+      <div id="companies-list"></div>
     </div>
   </div>
 
@@ -211,23 +233,26 @@
 </main>
 </div>
 
-<footer>
-  <button type="button" id="reset-all" data-i18n="resetAllBtn"></button>
-</footer>
-
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/i18n.js"></script>
 <script src="data/locations.js"></script>
 <script src="data/location-aliases.js"></script>
+<script src="data/commodity-aliases.js"></script>
 <script src="data/commodities.js"></script>
 <script src="data/companies.js"></script>
 <script src="data/ships.js"></script>
 <script src="data/distances.js"></script>
 <script src="data/scwiki-locations.js"></script>
 <script src="data/location-planets.js"></script>
+<script src="data/mission-reputation.js"></script>
+<script src="data/mission-reputation-by-title.js"></script>
+<script src="data/mission-title-aliases.js"></script>
+<script src="data/faction-reputation-ladders.js"></script>
 <script src="js/uex.js"></script>
 <script src="js/scwiki.js"></script>
 <script src="js/ocr.js"></script>
+<script src="js/cloud.js"></script>
 <script src="js/app.js"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "1fd80ce7d66149998899d10d20c4603b"}'></script><!-- End Cloudflare Web Analytics -->
 </body>

@@ -116,6 +116,7 @@ let editingMissionId = null;
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (typeof scheduleCloudSync === "function") scheduleCloudSync(state);
 }
 
 // =========================================================================
@@ -753,6 +754,79 @@ function renderStartLocationOptions() {
     });
 }
 
+// =========================================================================
+// Réputation (estimation), issue de l'API Star Citizen Wiki. Deux catalogues
+// baked, essayés dans l'ordre :
+// 1. data/mission-reputation-by-title.js — indexé par titre EXACT de contrat
+//    (ex. "Junior Hauler Needed for Small Shipment"). Vérifié empiriquement :
+//    un même titre donne quasi toujours la même réputation, quels que soient
+//    les lieux/marchandises de l'instance — bien plus fiable, mais seulement
+//    utilisable si le vrai titre du contrat a été capturé (OCR ou saisie
+//    manuelle), pas le nom générique "Mission N".
+// 2. data/mission-reputation.js — repli par simple donneur quand le titre est
+//    inconnu ou introuvable, beaucoup plus approximatif (plusieurs contrats
+//    très différents partagent le même donneur).
+// Dans les deux cas, quand plusieurs variantes existent, on choisit celle
+// dont la plage de récompense contient (ou se rapproche le plus de) la
+// récompense réelle de la mission.
+// Certaines variantes n'ont qu'une seule récompense connue (pas de plage) :
+// la génération des données pose alors rewardMax à 0 au lieu de le dupliquer
+// depuis rewardMin. On traite ce cas comme une plage exacte [min, min].
+function effectiveRewardMax(v) {
+  return v.rewardMax > 0 ? v.rewardMax : v.rewardMin;
+}
+
+function pickReputationVariant(variants, reward) {
+  if (!variants || !variants.length) return null;
+  const inRange = variants.find((v) => v.rewardMin > 0 && reward >= v.rewardMin && reward <= effectiveRewardMax(v));
+  if (inRange) return inRange.rep;
+
+  let best = null;
+  let bestDist = Infinity;
+  variants.forEach((v) => {
+    if (v.rewardMin <= 0) return;
+    const dist = Math.abs((v.rewardMin + effectiveRewardMax(v)) / 2 - reward);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = v;
+    }
+  });
+  return (best || variants[0]).rep;
+}
+
+function findTitleReputationVariants(title) {
+  if (!title) return null;
+  if (DEFAULT_MISSION_REPUTATION_BY_TITLE[title]) return DEFAULT_MISSION_REPUTATION_BY_TITLE[title];
+  const lower = title.trim().toLowerCase();
+  const key = Object.keys(DEFAULT_MISSION_REPUTATION_BY_TITLE).find((k) => k.toLowerCase() === lower);
+  return key ? DEFAULT_MISSION_REPUTATION_BY_TITLE[key] : null;
+}
+
+function findGiverReputationVariants(giverName) {
+  if (!giverName) return null;
+  if (DEFAULT_MISSION_REPUTATION[giverName]) return DEFAULT_MISSION_REPUTATION[giverName];
+  const lower = giverName.trim().toLowerCase();
+  const key = Object.keys(DEFAULT_MISSION_REPUTATION).find((k) => {
+    const kl = k.toLowerCase();
+    return kl === lower || kl.includes(lower) || lower.includes(kl);
+  });
+  return key ? DEFAULT_MISSION_REPUTATION[key] : null;
+}
+
+function estimateMissionReputation(mission) {
+  const reward = Number(mission.reward) || 0;
+
+  const byTitle = pickReputationVariant(findTitleReputationVariants(mission.name), reward);
+  if (byTitle) return byTitle;
+
+  return pickReputationVariant(findGiverReputationVariants(mission.giver), reward);
+}
+
+function formatReputationGain(rep) {
+  if (!rep || !rep.length) return "";
+  return rep.map((r) => `+${r.amount} ${r.scope}`).join(", ");
+}
+
 function renderMissionsTable() {
   const tbody = document.getElementById("missions-tbody");
   tbody.innerHTML = "";
@@ -811,6 +885,11 @@ function renderMissionsTable() {
     const tdReward = document.createElement("td");
     tdReward.textContent = m.reward != null && m.reward !== "" ? `${m.reward} aUEC` : "-";
     tr.appendChild(tdReward);
+
+    const tdRep = document.createElement("td");
+    tdRep.className = "hint";
+    tdRep.textContent = formatReputationGain(estimateMissionReputation(m)) || "-";
+    tr.appendChild(tdRep);
 
     const tdActions = document.createElement("td");
     const actionsWrap = document.createElement("div");
@@ -945,6 +1024,12 @@ function renderHistoryTable() {
     tdReward.textContent = m.reward != null && m.reward !== "" ? `${m.reward} aUEC` : "-";
     tr.appendChild(tdReward);
 
+    const tdRep = document.createElement("td");
+    tdRep.className = "hint";
+    const rep = estimateMissionReputation(m);
+    tdRep.textContent = rep ? `${formatReputationGain(rep)}${g.count > 1 ? ` (× ${g.count})` : ""}` : "-";
+    tr.appendChild(tdRep);
+
     const tdActions = document.createElement("td");
     const actionsWrap = document.createElement("div");
     actionsWrap.className = "actions-cell";
@@ -984,6 +1069,135 @@ function renderHistoryTable() {
   summary.textContent = missions.length
     ? t("historySummary", { count: missions.length, reward: totalReward })
     : t("noHistoryYet");
+
+  renderReputationSummary(missions);
+}
+
+// Cumul de la réputation estimée gagnée (par faction/palier) sur l'ensemble
+// des missions terminées — chaque mission de l'historique compte pour une
+// occurrence réelle (pas de dédoublonnage, contrairement à l'affichage "× N").
+// Réutilisé par renderReputationSummary et renderCompaniesTab.
+function computeReputationTotals(missions) {
+  const totals = new Map();
+  missions.forEach((m) => {
+    const rep = estimateMissionReputation(m);
+    if (!rep) return;
+    rep.forEach((r) => {
+      const key = `${r.faction}|${r.scope}`;
+      totals.set(key, (totals.get(key) || 0) + r.amount);
+    });
+  });
+  return totals;
+}
+
+function renderReputationSummary(missions) {
+  const container = document.getElementById("reputation-summary");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const totals = computeReputationTotals(missions);
+  if (!totals.size) return;
+
+  const title = document.createElement("h3");
+  title.textContent = t("reputationSummaryTitle");
+  container.appendChild(title);
+
+  const list = document.createElement("ul");
+  list.className = "reputation-list";
+  Array.from(totals.entries())
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([key, amount]) => {
+      const [faction, scope] = key.split("|");
+      const li = document.createElement("li");
+      li.textContent = `${faction} — ${scope} : +${amount}`;
+      list.appendChild(li);
+    });
+  container.appendChild(list);
+}
+
+// Onglet "Entreprises" : pour chaque entreprise ayant un palier de
+// réputation connu (data/faction-reputation-ladders.js, issu de l'API Star
+// Citizen Wiki), affiche la table de référence des paliers ET la
+// progression réelle (calculée depuis l'historique) superposée dessus. Le
+// "scope" du palier d'une entreprise (ex : "Hauling" pour Covalex) indique
+// quelle catégorie de réputation cumulée (computeReputationTotals) lui
+// correspond.
+function renderCompaniesTab() {
+  const container = document.getElementById("companies-list");
+  if (!container || typeof FACTION_REPUTATION_LADDERS === "undefined") return;
+  container.innerHTML = "";
+
+  const totals = computeReputationTotals(historyMissions());
+
+  // Seules les entreprises de transport (palier de reputation "Hauling")
+  // interessent cet outil de cargo-hauling — on ecarte les autres (chasseurs
+  // de primes, techniciens, mercenaires, etc.).
+  Object.keys(FACTION_REPUTATION_LADDERS)
+    .filter((factionName) => FACTION_REPUTATION_LADDERS[factionName].scope === "Hauling")
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((factionName) => {
+      const ladder = FACTION_REPUTATION_LADDERS[factionName];
+      const standings = ladder.standings;
+      if (!standings || !standings.length) return;
+      const current = totals.get(`${factionName}|${ladder.scope}`) || 0;
+
+      let currentStanding = standings[0];
+      let nextStanding = null;
+      for (let i = 0; i < standings.length; i++) {
+        if (current >= standings[i].minReputation) currentStanding = standings[i];
+        else {
+          nextStanding = standings[i];
+          break;
+        }
+      }
+
+      const card = document.createElement("div");
+      card.className = "company-card";
+
+      const h3 = document.createElement("h3");
+      h3.textContent = factionName;
+      card.appendChild(h3);
+
+      const statusLine = document.createElement("p");
+      statusLine.textContent = nextStanding
+        ? t("companyRankProgress", {
+            current: currentStanding.name,
+            next: nextStanding.name,
+            remaining: nextStanding.minReputation - current,
+          })
+        : t("companyRankMax", { current: currentStanding.name });
+      card.appendChild(statusLine);
+
+      if (!totals.has(`${factionName}|${ladder.scope}`)) {
+        const hintLine = document.createElement("p");
+        hintLine.className = "hint";
+        hintLine.textContent = t("companyNoProgress");
+        card.appendChild(hintLine);
+      }
+
+      const rangeStart = currentStanding.minReputation;
+      const rangeEnd = nextStanding ? nextStanding.minReputation : rangeStart;
+      const pct = rangeEnd > rangeStart ? Math.max(0, Math.min(100, ((current - rangeStart) / (rangeEnd - rangeStart)) * 100)) : 100;
+      const barWrap = document.createElement("div");
+      barWrap.className = "company-progress-bar";
+      const bar = document.createElement("div");
+      bar.className = "company-progress-fill";
+      bar.style.width = `${pct}%`;
+      barWrap.appendChild(bar);
+      card.appendChild(barWrap);
+
+      const ul = document.createElement("ul");
+      ul.className = "company-standings-list";
+      standings.forEach((s) => {
+        const li = document.createElement("li");
+        li.textContent = `${s.name} — ${s.minReputation}`;
+        if (s === currentStanding) li.classList.add("current-standing");
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+
+      container.appendChild(card);
+    });
 }
 
 function renderDistanceEditor() {
@@ -1371,6 +1585,7 @@ function renderAll() {
   renderShipCapacity();
   renderMissionsTable();
   renderHistoryTable();
+  renderCompaniesTab();
   renderDistanceEditor();
   renderUexStatus();
   document.getElementById("route-result").innerHTML = "";
@@ -1638,7 +1853,7 @@ function applyOcrResultToForm(parsed) {
       const pickupLoc = resolveLocationForOcrForm(item.pickupText || "");
       const dropoffLoc = resolveLocationForOcrForm(item.dropoffText || "");
       createCargoFieldRow(
-        item.commodity,
+        resolveCommodityName(item.commodity),
         item.quantity,
         pickupLoc ? locationSearchLabel(pickupLoc) : item.pickupText,
         dropoffLoc ? locationSearchLabel(dropoffLoc) : item.dropoffText
@@ -1736,7 +1951,7 @@ async function processOcrImage(blob) {
   status.textContent = t("ocrRecognizing");
 
   try {
-    const rawText = await runOcrOnImage(blob);
+    const rawText = await runOcrOnMissionScreenshot(blob);
     const parsed = parseOcrText(rawText);
     status.textContent = t("ocrRecognized");
     renderOcrResult(rawText, parsed);
@@ -1791,6 +2006,17 @@ function scwikiLocationMatch(rawText) {
   return bestDist <= threshold ? best : null;
 }
 
+// Traduit un nom de marchandise capté en français vers le nom UEX (anglais),
+// via la table d'alias (voir data/commodity-aliases.js) — contrairement aux
+// lieux, une correspondance approximative ne peut pas aider ici (les noms
+// français et anglais n'ont généralement aucun mot en commun), donc pas de
+// repli flou : sans alias connu, on garde le texte brut tel quel.
+function resolveCommodityName(rawName) {
+  if (!rawName) return rawName;
+  const alias = COMMODITY_ALIASES[rawName.trim().toLowerCase()];
+  return alias || rawName;
+}
+
 // Résout un lieu OCR vers un lieu existant (correspondance approximative),
 // puis en secours vers le jeu de données Star Citizen Wiki, ou en crée un
 // nouveau à la volée si rien ne correspond — pour ne jamais bloquer la
@@ -1820,7 +2046,7 @@ function createMissionFromOcrResult(parsed) {
     const dropoffLoc = resolveOrCreateLocation(item.dropoffText, notes);
     if (!pickupLoc || !dropoffLoc) return;
     cargoItems.push({
-      commodity: item.commodity || "",
+      commodity: resolveCommodityName(item.commodity) || "",
       quantity: item.quantity || "",
       pickupId: pickupLoc.id,
       dropoffId: dropoffLoc.id,
@@ -1882,7 +2108,7 @@ async function processOcrImagesBatch(files) {
     preview.src = URL.createObjectURL(file);
     preview.style.display = "block";
     try {
-      const rawText = await runOcrOnImage(file);
+      const rawText = await runOcrOnMissionScreenshot(file);
       const parsed = parseOcrText(rawText);
       const { mission, notes } = createMissionFromOcrResult(parsed);
       results.push({ file, mission, notes });
@@ -2084,6 +2310,10 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.removeItem(STORAGE_KEY);
       state = loadState();
       renderAll();
+      // Répercute aussi le reset côté cloud, sinon une prochaine connexion
+      // ressusciterait les anciennes données depuis Supabase.
+      if (typeof scheduleCloudSync === "function") scheduleCloudSync(state);
+      if (typeof flushPendingCloudSync === "function") flushPendingCloudSync();
     }
   });
 
@@ -2132,4 +2362,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.disabled = false;
     btn.textContent = t("syncAllBtn");
   });
+
+  if (typeof initCloudSync === "function") initCloudSync();
 });
