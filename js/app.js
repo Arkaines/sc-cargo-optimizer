@@ -610,12 +610,18 @@ function computeOverloadCulprits(result, ship) {
 // =========================================================================
 // Rendu DOM
 // =========================================================================
+// Ajoute la planète/lune entre parenthèses quand elle est connue (voir
+// getPlanetHint) — utile pour les lieux dont le nom ne l'indique pas
+// explicitement (ex. "HDPC-Cassillo", "Covalex Distribution Centre S4DC05").
 function locationLabel(loc) {
-  return loc ? `${loc.name} (${loc.category})` : "?";
+  if (!loc) return "?";
+  const planet = getPlanetHint(loc);
+  return planet ? `${loc.name} (${loc.category} - ${planet})` : `${loc.name} (${loc.category})`;
 }
 
 function locationSearchLabel(loc) {
-  return `${loc.name} (${loc.category})`;
+  const planet = getPlanetHint(loc);
+  return planet ? `${loc.name} (${loc.category} - ${planet})` : `${loc.name} (${loc.category})`;
 }
 
 function findLocationByLabel(text) {
