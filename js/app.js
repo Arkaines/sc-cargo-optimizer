@@ -20,6 +20,7 @@ function defaultState() {
     uexShips: [],
     scwikiLocations: [],
     scwikiSyncedAt: null,
+    reputationOverrides: {},
   };
 }
 
@@ -101,6 +102,7 @@ function loadState() {
       uexShips: parsed.uexShips || [],
       scwikiLocations: parsed.scwikiLocations || [],
       scwikiSyncedAt: parsed.scwikiSyncedAt || null,
+      reputationOverrides: parsed.reputationOverrides || {},
     };
   } catch (e) {
     return defaultState();
@@ -1129,72 +1131,127 @@ function renderCompaniesTab() {
 
   const totals = computeReputationTotals(historyMissions());
 
-  // Seules les entreprises de transport (palier de reputation "Hauling")
-  // interessent cet outil de cargo-hauling — on ecarte les autres (chasseurs
-  // de primes, techniciens, mercenaires, etc.).
+  // Seules les entreprises de transport interessent cet outil de cargo-
+  // hauling — on ecarte les autres (chasseurs de primes, techniciens,
+  // mercenaires, etc.). La plupart ont un palier nomme "Hauling", mais
+  // certaines organisations illegales (ex : Dead Saints, contrebande) ont un
+  // palier nomme "FactionReputation" cote API tout en donnant bien de la
+  // reputation "Hauling" via leurs missions (voir data/mission-reputation*.js)
+  // — on les inclut explicitement malgre l'etiquette de palier differente.
+  const ILLEGAL_HAULING_FACTIONS = ["Dead Saints"];
   Object.keys(FACTION_REPUTATION_LADDERS)
-    .filter((factionName) => FACTION_REPUTATION_LADDERS[factionName].scope === "Hauling")
+    .filter(
+      (factionName) =>
+        FACTION_REPUTATION_LADDERS[factionName].scope === "Hauling" ||
+        ILLEGAL_HAULING_FACTIONS.includes(factionName)
+    )
     .sort((a, b) => a.localeCompare(b))
     .forEach((factionName) => {
       const ladder = FACTION_REPUTATION_LADDERS[factionName];
       const standings = ladder.standings;
       if (!standings || !standings.length) return;
-      const current = totals.get(`${factionName}|${ladder.scope}`) || 0;
+      // Les missions de contrebande (ex : Dead Saints) creditent le scope
+      // "Hauling" meme quand le palier de l'entreprise s'appelle autrement.
+      const totalsScope = ILLEGAL_HAULING_FACTIONS.includes(factionName) ? "Hauling" : ladder.scope;
 
-      let currentStanding = standings[0];
-      let nextStanding = null;
-      for (let i = 0; i < standings.length; i++) {
-        if (current >= standings[i].minReputation) currentStanding = standings[i];
-        else {
-          nextStanding = standings[i];
-          break;
+      // Le jeu n'affiche jamais le nombre exact de réputation, seulement le
+      // palier atteint + une barre de progression sans valeur — l'estimation
+      // par historique peut donc dériver (missions non enregistrées, calcul
+      // approximatif). Un calibrage manuel (palier + position sur la barre)
+      // remplace alors l'estimation automatique pour cette entreprise,
+      // jusqu'à ce que le joueur le change ou le retire.
+      const override = state.reputationOverrides[factionName];
+      const overrideStanding = override ? standings.find((s) => s.name === override.tier) : null;
+
+      let currentStanding;
+      let nextStanding;
+      let current;
+      if (overrideStanding) {
+        currentStanding = overrideStanding;
+        const idx = standings.indexOf(overrideStanding);
+        nextStanding = standings[idx + 1] || null;
+        const maxPoints = nextStanding ? nextStanding.minReputation : currentStanding.minReputation;
+        current = Math.max(currentStanding.minReputation, Math.min(maxPoints, override.points));
+      } else {
+        current = totals.get(`${factionName}|${totalsScope}`) || 0;
+        currentStanding = standings[0];
+        nextStanding = null;
+        for (let i = 0; i < standings.length; i++) {
+          if (current >= standings[i].minReputation) currentStanding = standings[i];
+          else {
+            nextStanding = standings[i];
+            break;
+          }
         }
       }
 
       const card = document.createElement("div");
       card.className = "company-card";
 
-      const h3 = document.createElement("h3");
-      h3.textContent = factionName;
-      card.appendChild(h3);
+      const nameCell = document.createElement("span");
+      nameCell.className = "company-name";
+      nameCell.textContent = factionName;
+      card.appendChild(nameCell);
 
-      const statusLine = document.createElement("p");
-      statusLine.textContent = nextStanding
-        ? t("companyRankProgress", {
-            current: currentStanding.name,
-            next: nextStanding.name,
-            remaining: nextStanding.minReputation - current,
-          })
-        : t("companyRankMax", { current: currentStanding.name });
-      card.appendChild(statusLine);
+      // "Palier actuel" : select toujours modifiable (Auto ou un palier
+      // choisi à la main). Choisir un palier ici démarre à son tout début
+      // (0%), à affiner ensuite avec le curseur.
+      const calibrateSelect = document.createElement("select");
+      calibrateSelect.className = "company-calibrate-select";
+      const autoOption = document.createElement("option");
+      autoOption.value = "";
+      autoOption.textContent = t("companyCalibrateAuto");
+      calibrateSelect.appendChild(autoOption);
+      standings.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.name;
+        opt.textContent = `${s.name} (${s.minReputation})`;
+        if (override && override.tier === s.name) opt.selected = true;
+        calibrateSelect.appendChild(opt);
+      });
+      calibrateSelect.addEventListener("change", () => {
+        if (calibrateSelect.value) {
+          const tier = standings.find((s) => s.name === calibrateSelect.value);
+          state.reputationOverrides[factionName] = { tier: tier.name, points: tier.minReputation };
+        } else {
+          delete state.reputationOverrides[factionName];
+        }
+        saveState();
+        renderCompaniesTab();
+      });
+      card.appendChild(calibrateSelect);
 
-      if (!totals.has(`${factionName}|${ladder.scope}`)) {
-        const hintLine = document.createElement("p");
-        hintLine.className = "hint";
-        hintLine.textContent = t("companyNoProgress");
-        card.appendChild(hintLine);
-      }
-
+      // "Curseur de modification" : affine la position dans le palier
+      // actuel. Actif seulement en calibrage manuel (en mode Auto ou au
+      // palier maximum, rien à affiner) ; met à jour le rang suivant en
+      // direct pendant le glissement, ne sauvegarde qu'au relâchement pour ne
+      // pas spammer localStorage/la synchro cloud à chaque pixel.
       const rangeStart = currentStanding.minReputation;
       const rangeEnd = nextStanding ? nextStanding.minReputation : rangeStart;
-      const pct = rangeEnd > rangeStart ? Math.max(0, Math.min(100, ((current - rangeStart) / (rangeEnd - rangeStart)) * 100)) : 100;
-      const barWrap = document.createElement("div");
-      barWrap.className = "company-progress-bar";
-      const bar = document.createElement("div");
-      bar.className = "company-progress-fill";
-      bar.style.width = `${pct}%`;
-      barWrap.appendChild(bar);
-      card.appendChild(barWrap);
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.className = "company-calibrate-slider";
+      slider.min = String(rangeStart);
+      slider.max = String(rangeEnd);
+      slider.value = String(current);
+      slider.disabled = !overrideStanding || !nextStanding;
+      card.appendChild(slider);
 
-      const ul = document.createElement("ul");
-      ul.className = "company-standings-list";
-      standings.forEach((s) => {
-        const li = document.createElement("li");
-        li.textContent = `${s.name} — ${s.minReputation}`;
-        if (s === currentStanding) li.classList.add("current-standing");
-        ul.appendChild(li);
+      const nextCell = document.createElement("span");
+      nextCell.className = "company-next-rank";
+      const updateNextCell = (value) => {
+        nextCell.textContent = nextStanding
+          ? t("companyNextRank", { next: nextStanding.name, remaining: rangeEnd - value })
+          : t("companyMaxRankLabel");
+      };
+      updateNextCell(current);
+      card.appendChild(nextCell);
+
+      slider.addEventListener("input", () => updateNextCell(Number(slider.value)));
+      slider.addEventListener("change", () => {
+        state.reputationOverrides[factionName] = { tier: currentStanding.name, points: Number(slider.value) };
+        saveState();
       });
-      card.appendChild(ul);
 
       container.appendChild(card);
     });

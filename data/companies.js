@@ -80,6 +80,7 @@ const DEFAULT_COMPANIES = [
   { name: "Cubby Blast", industry: "Commerce" },
   { name: "CureLife", industry: "Medical" },
   { name: "Custom Built Duds", industry: "Fashion" },
+  { name: "Dead Saints", industry: "Illegal — Smuggling" },
   { name: "Denim Manufacture Corporation", industry: "Fashion" },
   { name: "Derion", industry: "Fashion" },
   { name: "Devil May Care Productions", industry: "" },

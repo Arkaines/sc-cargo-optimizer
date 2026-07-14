@@ -16,7 +16,14 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoY2NlY3NvZWVldHJ1YmVhamNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwMzk4NzIsImV4cCI6MjA5OTYxNTg3Mn0.5eQdh0mVom5zjsAYJMSfGmJODL6DfBDfqO1g7o8z_Tc";
 
 const CLOUD_LINKED_FLAG = "sc-cargo-optimizer-cloud-linked";
-const CLOUD_SYNCED_KEYS = ["missions", "customLocations", "distances", "nextMissionId", "selectedShip"];
+const CLOUD_SYNCED_KEYS = [
+  "missions",
+  "customLocations",
+  "distances",
+  "nextMissionId",
+  "selectedShip",
+  "reputationOverrides",
+];
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 const sb =

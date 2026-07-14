@@ -335,6 +335,13 @@ aside#side-panel {
     position: static;
     max-height: none;
   }
+  .company-card {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .company-next-rank {
+    text-align: left;
+  }
 }
 
 main {
@@ -694,56 +701,49 @@ tbody tr:nth-child(even) {
 }
 
 #companies-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0.85rem;
   margin-top: 0.75rem;
 }
 
 .company-card {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr 200px 2fr 200px;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 0.6rem;
+  border-bottom: 1px solid var(--panel-border);
 }
 
-.company-card h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.95rem;
+.company-card:nth-child(even) {
+  background: color-mix(in srgb, var(--panel-border) 18%, transparent);
+}
+
+.company-name {
+  font-size: 0.9rem;
+  font-weight: 700;
   color: var(--accent);
   font-family: var(--heading-font);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
-.company-card p {
-  margin: 0 0 0.5rem;
+.company-calibrate-select {
+  padding: 0.3rem;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
   font-size: 0.85rem;
 }
 
-.company-progress-bar {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--panel-border);
-  overflow: hidden;
-  margin-bottom: 0.6rem;
+.company-calibrate-slider {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
-.company-progress-fill {
-  height: 100%;
-  background: var(--accent);
-}
-
-.company-standings-list {
-  margin: 0;
-  padding-left: 1.1rem;
-  font-size: 0.8rem;
+.company-next-rank {
+  font-size: 0.85rem;
   color: var(--muted);
-}
-
-.company-standings-list .current-standing {
-  color: var(--accent);
-  font-weight: 600;
+  text-align: right;
 }
 
 .hint {
