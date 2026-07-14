@@ -748,6 +748,7 @@ function renderMissionsTable() {
       setMissionIncluded(m.id, cb.checked);
       renderStartLocationOptions();
       renderMissionsTable();
+      renderTrackingTab();
     });
     tdCheck.appendChild(cb);
     tr.appendChild(tdCheck);
@@ -953,6 +954,117 @@ function renderHistoryTable() {
   summary.textContent = missions.length
     ? t("historySummary", { count: missions.length, reward: totalReward })
     : t("noHistoryYet");
+}
+
+// =========================================================================
+// Suivi cargo : correction de la répartition réelle des marchandises ayant
+// plusieurs lieux de retrait possibles (utile quand le jeu regroupe tout au
+// même endroit au lieu de suivre la répartition indiquée dans le contrat).
+// =========================================================================
+function multiPickupGroups(mission) {
+  const groups = new Map();
+  (mission.cargoItems || []).forEach((item, index) => {
+    const key = `${item.commodity}|${item.dropoffId}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ index, ...item });
+  });
+  return Array.from(groups.values()).filter((g) => g.length > 1);
+}
+
+function renderTrackingTab() {
+  const container = document.getElementById("tracking-result");
+  container.innerHTML = "";
+  const missions = activeMissions().filter((m) => m.included);
+  let hasAnyGroup = false;
+
+  missions.forEach((mission) => {
+    const groups = multiPickupGroups(mission);
+    if (!groups.length) return;
+    hasAnyGroup = true;
+
+    const card = document.createElement("div");
+    card.className = "side-block tracking-mission";
+    const title = document.createElement("h2");
+    title.textContent = mission.name;
+    card.appendChild(title);
+
+    const inputs = [];
+    groups.forEach((group) => {
+      const total = group.reduce((s, item) => s + (Number(item.quantity) || 0), 0);
+      const dropoffLoc = getLocationById(group[0].dropoffId);
+
+      const groupBox = document.createElement("div");
+      groupBox.className = "tracking-group";
+      const groupTitle = document.createElement("div");
+      groupTitle.className = "tracking-group-title";
+      groupTitle.textContent = t("trackingGroupTitle", {
+        commodity: group[0].commodity || "?",
+        dropoff: locationLabel(dropoffLoc),
+        total,
+      });
+      groupBox.appendChild(groupTitle);
+
+      const rows = document.createElement("div");
+      rows.className = "tracking-rows";
+      const groupInputs = [];
+      group.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "tracking-row";
+        const label = document.createElement("span");
+        label.textContent = locationLabel(getLocationById(item.pickupId));
+        row.appendChild(label);
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.step = "1";
+        input.value = item.quantity;
+        input.className = "tracking-qty-input";
+        row.appendChild(input);
+        rows.appendChild(row);
+        groupInputs.push({ index: item.index, input });
+        inputs.push({ index: item.index, input });
+      });
+      groupBox.appendChild(rows);
+
+      const sumP = document.createElement("p");
+      sumP.className = "hint tracking-sum";
+      const updateSum = () => {
+        const sum = groupInputs.reduce((s, entry) => s + (Number(entry.input.value) || 0), 0);
+        const ok = sum === total;
+        sumP.textContent = ok ? t("trackingSumOk", { sum, total }) : t("trackingSumMismatch", { sum, total });
+        sumP.classList.toggle("warning-text", !ok);
+      };
+      groupInputs.forEach((entry) => entry.input.addEventListener("input", updateSum));
+      updateSum();
+      groupBox.appendChild(sumP);
+      card.appendChild(groupBox);
+    });
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "btn-primary";
+    saveBtn.textContent = t("trackingSaveBtn");
+    saveBtn.addEventListener("click", () => {
+      inputs.forEach(({ index, input }) => {
+        if (mission.cargoItems[index]) mission.cargoItems[index].quantity = Number(input.value) || 0;
+      });
+      saveState();
+      renderAll();
+      runOptimize();
+      activateTab("optimize-tab");
+    });
+    card.appendChild(saveBtn);
+
+    container.appendChild(card);
+  });
+
+  if (!hasAnyGroup) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = t("trackingNoGroups");
+    container.appendChild(note);
+  }
+  triggerFadeIn(container);
 }
 
 function renderDistanceEditor() {
@@ -1227,6 +1339,7 @@ function renderAll() {
   renderShipCapacity();
   renderMissionsTable();
   renderHistoryTable();
+  renderTrackingTab();
   renderDistanceEditor();
   renderUexStatus();
   document.getElementById("route-result").innerHTML = "";

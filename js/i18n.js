@@ -69,7 +69,17 @@ const TRANSLATIONS = {
 
     newMissionTab: "Nouvelle mission",
     missionsTab: "Missions enregistrées",
+    trackingTab: "Suivi cargo",
     historyTab: "Historique",
+    trackingHint:
+      "Corrige ici la répartition réelle des marchandises ayant plusieurs lieux de retrait possibles, si elle ne correspond pas à l'estimation (ex : tout est en fait au même endroit à cause d'un bug du jeu). Valide pour recalculer automatiquement la route.",
+    trackingNoGroups:
+      "Aucune marchandise à répartir sur plusieurs lieux de retrait parmi les missions sélectionnées.",
+    trackingGroupTitle: "{commodity} → {dropoff} ({total} SCU au total)",
+    trackingSumOk: "{sum} / {total} SCU renseignés.",
+    trackingSumMismatch: "⚠ {sum} / {total} SCU renseignés — vérifie la répartition.",
+    trackingSaveBtn: "Valider et recalculer la route",
+    trackingSaved: "Quantités mises à jour — route recalculée.",
     completeBtn: "Terminer",
     restoreBtn: "Restaurer",
     historySummary: "{count} mission(s) terminée(s) — {reward} aUEC au total.",
@@ -223,7 +233,16 @@ const TRANSLATIONS = {
 
     newMissionTab: "New mission",
     missionsTab: "Saved missions",
+    trackingTab: "Cargo tracking",
     historyTab: "History",
+    trackingHint:
+      "Correct here the actual split of commodities that have several possible pickup locations, if it doesn't match the estimate (e.g. everything ended up at the same spot due to a game bug). Validate to automatically recalculate the route.",
+    trackingNoGroups: "No commodity to split across several pickup locations among the selected missions.",
+    trackingGroupTitle: "{commodity} → {dropoff} ({total} SCU total)",
+    trackingSumOk: "{sum} / {total} SCU entered.",
+    trackingSumMismatch: "⚠ {sum} / {total} SCU entered — check the split.",
+    trackingSaveBtn: "Validate and recalculate the route",
+    trackingSaved: "Quantities updated — route recalculated.",
     completeBtn: "Complete",
     restoreBtn: "Restore",
     historySummary: "{count} completed mission(s) — {reward} aUEC total.",
