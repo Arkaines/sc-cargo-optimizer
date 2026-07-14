@@ -11,6 +11,8 @@ const TRANSLATIONS = {
   fr: {
     themeToggleLabel: "Basculer le thème clair/sombre",
     langToggleLabel: "Changer de langue",
+    fanDisclaimer:
+      "Ceci est un site de fans non-officiel de Star Citizen, non affilié au groupe d'entreprises Cloud Imperium. Tout le contenu de ce site non créé par son hébergeur ou ses utilisateurs appartient à ses propriétaires respectifs. Site officiel :",
     pageTitle: "Optimiseur de routes cargo — Star Citizen",
     appTitle: "Optimiseur de routes cargo",
     appSubtitle: "Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.",
@@ -173,6 +175,8 @@ const TRANSLATIONS = {
   en: {
     themeToggleLabel: "Toggle light/dark theme",
     langToggleLabel: "Switch language",
+    fanDisclaimer:
+      "This is an unofficial Star Citizen fan site, not affiliated with the Cloud Imperium group of companies. All content on this site not authored by its host or users are property of their respective owners. Official site:",
     pageTitle: "Cargo Route Optimizer — Star Citizen",
     appTitle: "Cargo Route Optimizer",
     appSubtitle: "Save your hauling missions and compute the optimal stop order.",

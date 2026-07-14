@@ -117,6 +117,19 @@ body {
   font-weight: 700;
 }
 
+.fan-disclaimer {
+  margin: 0;
+  padding: 0.5rem 2rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.fan-disclaimer a {
+  color: var(--accent-cyan);
+}
+
 header {
   padding: 1.5rem 2rem 1rem;
   border-bottom: 1px solid var(--panel-border);

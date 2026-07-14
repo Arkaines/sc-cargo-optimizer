@@ -4,6 +4,8 @@
 
 <h1 align="center">Optimiseur de routes cargo — Star Citizen</h1>
 
+> Ceci est un site de fans non-officiel de Star Citizen, non affilié au groupe d'entreprises Cloud Imperium. Tout le contenu de ce site non créé par son hébergeur ou ses utilisateurs appartient à ses propriétaires respectifs. Site officiel : [robertsspaceindustries.com](https://robertsspaceindustries.com)
+
 Petit outil web pour enregistrer des missions de transport (Star Citizen) et calculer l'ordre d'arrêts qui minimise la distance parcourue, en tenant compte de la capacité cargo de ton vaisseau.
 
 Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir directement dans le navigateur.
