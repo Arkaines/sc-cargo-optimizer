@@ -4,6 +4,8 @@
 
 <h1 align="center">Optimiseur de routes cargo — Star Citizen</h1>
 
+<p align="center">🇫🇷 Français · <a href="README.en.md">🇬🇧 English</a></p>
+
 > Ceci est un site de fans non-officiel de Star Citizen, non affilié au groupe d'entreprises Cloud Imperium. Tout le contenu de ce site non créé par son hébergeur ou ses utilisateurs appartient à ses propriétaires respectifs. Site officiel : [robertsspaceindustries.com](https://robertsspaceindustries.com)
 
 Petit outil web pour enregistrer des missions de transport (Star Citizen) et calculer l'ordre d'arrêts qui minimise la distance parcourue, en tenant compte de la capacité cargo de ton vaisseau.
@@ -108,3 +110,7 @@ La réputation affichée reste une **estimation** : le jeu n'expose jamais le no
 La sauvegarde cloud optionnelle (connexion Discord) est hébergée sur [Supabase](https://supabase.com/) (base de données + authentification), avec un accès strictement limité aux données du compte connecté (sécurité au niveau des lignes/RLS).
 
 Le logo "Made By The Community" provient du [Fan Kit officiel de Roberts Space Industries](https://robertsspaceindustries.com/fankit), utilisé conformément au [Star Citizen Fankit and Fandom FAQ](https://support.robertsspaceindustries.com/hc/en-us/articles/360006895793-Star-Citizen-Fankit-and-Fandom-FAQ).
+
+## Licence
+
+Code sous licence [MIT](LICENSE). Star Citizen, Roberts Space Industries et les autres marques citées appartiennent à leurs propriétaires respectifs — voir le bandeau de non-affiliation en haut du site.
