@@ -168,7 +168,7 @@ const TRANSLATIONS = {
     pickupAction: "Récupérer",
     dropoffAction: "Déposer",
     scuOf: "{qty} SCU de {commodity}",
-    cargoAlreadyPickedUpElsewhere: "{commodity} — déjà récupéré sur {count} emplacement(s)",
+    cargoAlreadyPickedUpElsewhere: "{commodity} — déjà récupéré à {locations}",
 
     uexLocationsLoaded: "{count} lieux chargés depuis UEX Corp (dernière synchro : {date}).",
     uexLocationsDefault:
@@ -334,7 +334,7 @@ const TRANSLATIONS = {
     pickupAction: "Pick up",
     dropoffAction: "Drop off",
     scuOf: "{qty} SCU of {commodity}",
-    cargoAlreadyPickedUpElsewhere: "{commodity} — already picked up at {count} location(s)",
+    cargoAlreadyPickedUpElsewhere: "{commodity} — already picked up at {locations}",
 
     uexLocationsLoaded: "{count} locations loaded from UEX Corp (last sync: {date}).",
     uexLocationsDefault: '{count} locations built in by default (UEX Corp data). Use "Sync everything" to refresh them.',

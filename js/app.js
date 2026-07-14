@@ -1250,7 +1250,8 @@ function describeCargoItemQuantity(item, mission) {
       (Number(other.quantity) || 0) > 0
   );
   if (siblings.length) {
-    return t("cargoAlreadyPickedUpElsewhere", { commodity: item.commodity || "?", count: siblings.length });
+    const locations = siblings.map((s) => locationLabel(getLocationById(s.pickupId))).join(", ");
+    return t("cargoAlreadyPickedUpElsewhere", { commodity: item.commodity || "?", locations });
   }
   return t("scuOf", { qty: "?", commodity: item.commodity || "?" });
 }
