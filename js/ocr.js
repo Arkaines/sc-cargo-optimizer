@@ -86,15 +86,24 @@ function cleanLocationEdges(text) {
   return text.replace(/[\s:|;,.\-]+$/, "").trim();
 }
 
+// Retire un éventuel symbole de puce de la ligne SUIVANTE qui reste collé en
+// fin de morceau (ex : "Quartz ©") : le découpage par mot-clé coupe juste
+// avant "Livrez à"/"Allez à", donc la puce qui précède ce mot-clé dans le
+// texte brut atterrit à la fin du morceau précédent plutôt que d'être ignorée.
+function stripTrailingBulletNoise(text) {
+  return text.replace(/[^\p{L}\p{N}'-]+$/u, "").trim();
+}
+
 // Analyse le morceau qui suit "Livrez à " jusqu'au prochain mot-clé :
 // "<lieu> [artefacts OCR] X/Y SCU de <marchandise>". Le nombre X et les
 // caractères entre le lieu et "X/Y" sont volontairement tolérés (l'OCR
-// insère parfois des symboles parasites, ex : ": | 0/3 SCU").
+// insère parfois des symboles parasites, ex : ": | 0/3 SCU"), tout comme entre
+// "SCU" et "de" (ex : "SCU | de Quartz", quand la ligne se coupe juste après SCU).
 function parseDropoffChunk(content) {
-  const scuMatch = /^(.*?)SCU\s+de\s+(.+)$/i.exec(content);
+  const scuMatch = /^(.*?)SCU[^a-zA-Z]*de\s+(.+)$/i.exec(content);
   if (!scuMatch) return null;
   const beforeScu = scuMatch[1].trim();
-  const commodity = scuMatch[2].trim();
+  const commodity = stripTrailingBulletNoise(scuMatch[2].trim());
   const qtyMatch = /(\d+)\s*\/\s*(\d+)\s*$/.exec(beforeScu);
   if (!qtyMatch) return null;
   const location = cleanLocationEdges(beforeScu.slice(0, qtyMatch.index));
