@@ -348,13 +348,31 @@ details[open] > *:not(summary) {
   animation: fade-in-up 0.2s ease;
 }
 
+.ocr-help-image-wrap {
+  position: relative;
+  margin-top: 0.75rem;
+}
+
 .ocr-help-image {
   display: block;
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
   border: 1px solid var(--panel-border);
-  margin-top: 0.75rem;
+  margin-top: 0;
+}
+
+/* Logo officiel "Made By The Community" du Fan Kit RSI, requis sur toute
+   imagerie du jeu (voir Star Citizen Fankit and Fandom FAQ). */
+.made-by-community-badge {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  width: 15%;
+  min-width: 40px;
+  max-width: 70px;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .tab-buttons {

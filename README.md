@@ -86,3 +86,5 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 ## Source des données
 
 Toutes les données de jeu (lieux, distances, marchandises, entreprises, vaisseaux) proviennent de l'API publique de [UEX Corp](https://uexcorp.space/).
+
+Le logo "Made By The Community" provient du [Fan Kit officiel de Roberts Space Industries](https://robertsspaceindustries.com/fankit), utilisé conformément au [Star Citizen Fankit and Fandom FAQ](https://support.robertsspaceindustries.com/hc/en-us/articles/360006895793-Star-Citizen-Fankit-and-Fandom-FAQ).
