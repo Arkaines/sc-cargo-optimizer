@@ -988,14 +988,37 @@ function renderHistoryTable() {
 // plusieurs lieux de retrait possibles (utile quand le jeu regroupe tout au
 // même endroit au lieu de suivre la répartition indiquée dans le contrat).
 // =========================================================================
-function multiPickupGroups(mission) {
+function groupCargoItems(mission, keyFn) {
   const groups = new Map();
   (mission.cargoItems || []).forEach((item, index) => {
-    const key = `${item.commodity}|${item.dropoffId}`;
+    const key = keyFn(item);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ index, ...item });
   });
   return Array.from(groups.values()).filter((g) => g.length > 1);
+}
+
+// Plusieurs lieux de retrait possibles pour une même livraison (on ne sait
+// pas où le stock était réellement disponible) : le lieu qui varie d'une
+// ligne à l'autre est le retrait.
+function multiPickupGroups(mission) {
+  return groupCargoItems(mission, (item) => `${item.commodity}|${item.dropoffId}`);
+}
+
+// Un seul lieu de retrait mais plusieurs lieux de dépôt pour la même
+// marchandise (quantités fixes par destination) : le lieu qui varie est le
+// dépôt — utile pour suivre si la livraison a bien été répartie comme prévu.
+function multiDropoffGroups(mission) {
+  return groupCargoItems(mission, (item) => `${item.commodity}|${item.pickupId}`);
+}
+
+// Construit la liste des groupes à afficher pour une mission, retrait et
+// dépôt confondus, chacun annoté de son "kind" pour savoir quel lieu afficher
+// par ligne (celui qui varie) et quel intitulé de groupe utiliser.
+function trackingGroupsForMission(mission) {
+  const pickupGroups = multiPickupGroups(mission).map((items) => ({ kind: "pickup", items }));
+  const dropoffGroups = multiDropoffGroups(mission).map((items) => ({ kind: "dropoff", items }));
+  return [...pickupGroups, ...dropoffGroups];
 }
 
 function renderTrackingTab() {
@@ -1005,7 +1028,7 @@ function renderTrackingTab() {
   let hasAnyGroup = false;
 
   missions.forEach((mission) => {
-    const groups = multiPickupGroups(mission);
+    const groups = trackingGroupsForMission(mission);
     if (!groups.length) return;
     hasAnyGroup = true;
 
@@ -1016,22 +1039,28 @@ function renderTrackingTab() {
     card.appendChild(title);
 
     const inputs = [];
-    groups.forEach((group) => {
+    groups.forEach(({ kind, items: group }) => {
       // Le total de référence reste basé sur les quantités prévues à
       // l'origine du contrat (plannedQuantity), jamais modifiées : la ligne
       // garde toujours trace de ce qui était prévu, même après correction.
       const total = group.reduce((s, item) => s + (Number(item.plannedQuantity) || 0), 0);
-      const dropoffLoc = getLocationById(group[0].dropoffId);
 
       const groupBox = document.createElement("div");
       groupBox.className = "tracking-group";
       const groupTitle = document.createElement("div");
       groupTitle.className = "tracking-group-title";
-      groupTitle.textContent = t("trackingGroupTitle", {
-        commodity: group[0].commodity || "?",
-        dropoff: locationLabel(dropoffLoc),
-        total,
-      });
+      groupTitle.textContent =
+        kind === "pickup"
+          ? t("trackingGroupTitle", {
+              commodity: group[0].commodity || "?",
+              dropoff: locationLabel(getLocationById(group[0].dropoffId)),
+              total,
+            })
+          : t("trackingDropoffGroupTitle", {
+              commodity: group[0].commodity || "?",
+              pickup: locationLabel(getLocationById(group[0].pickupId)),
+              total,
+            });
       groupBox.appendChild(groupTitle);
 
       const rows = document.createElement("div");
@@ -1041,8 +1070,9 @@ function renderTrackingTab() {
         const row = document.createElement("div");
         row.className = "tracking-row";
         const label = document.createElement("span");
+        const rowLocId = kind === "pickup" ? item.pickupId : item.dropoffId;
         label.textContent = t("trackingRowLabel", {
-          location: locationLabel(getLocationById(item.pickupId)),
+          location: locationLabel(getLocationById(rowLocId)),
           planned: item.plannedQuantity,
         });
         row.appendChild(label);

@@ -72,10 +72,11 @@ const TRANSLATIONS = {
     trackingTab: "Suivi cargo",
     historyTab: "Historique",
     trackingHint:
-      "Corrige ici la répartition réelle des marchandises ayant plusieurs lieux de retrait possibles, si elle ne correspond pas à l'estimation (ex : tout est en fait au même endroit à cause d'un bug du jeu). Valide pour recalculer automatiquement la route.",
+      "Corrige ici la répartition réelle des marchandises ayant plusieurs lieux de retrait ou de dépôt possibles, si elle ne correspond pas à ce qui était prévu (ex : tout récupéré ou déposé au même endroit à cause d'un bug du jeu). Valide pour recalculer automatiquement la route.",
     trackingNoGroups:
-      "Aucune marchandise à répartir sur plusieurs lieux de retrait parmi les missions sélectionnées.",
+      "Aucune marchandise à répartir sur plusieurs lieux de retrait ou de dépôt parmi les missions sélectionnées.",
     trackingGroupTitle: "{commodity} → {dropoff} ({total} SCU au total)",
+    trackingDropoffGroupTitle: "{commodity} depuis {pickup} ({total} SCU au total)",
     trackingRowLabel: "{location} (prévu : {planned} SCU)",
     trackingRowMismatch: "⚠ {actual}/{planned} SCU récupérés",
     trackingSumOk: "{sum} / {total} SCU renseignés.",
@@ -242,9 +243,10 @@ const TRANSLATIONS = {
     trackingTab: "Cargo tracking",
     historyTab: "History",
     trackingHint:
-      "Correct here the actual split of commodities that have several possible pickup locations, if it doesn't match the estimate (e.g. everything ended up at the same spot due to a game bug). Validate to automatically recalculate the route.",
-    trackingNoGroups: "No commodity to split across several pickup locations among the selected missions.",
+      "Correct here the actual split of commodities that have several possible pickup or dropoff locations, if it doesn't match what was planned (e.g. everything picked up or delivered at the same spot due to a game bug). Validate to automatically recalculate the route.",
+    trackingNoGroups: "No commodity to split across several pickup or dropoff locations among the selected missions.",
     trackingGroupTitle: "{commodity} → {dropoff} ({total} SCU total)",
+    trackingDropoffGroupTitle: "{commodity} from {pickup} ({total} SCU total)",
     trackingRowLabel: "{location} (planned: {planned} SCU)",
     trackingRowMismatch: "⚠ {actual}/{planned} SCU picked up",
     trackingSumOk: "{sum} / {total} SCU entered.",
