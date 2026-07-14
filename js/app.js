@@ -53,6 +53,17 @@ function migrateMission(m) {
   return { ...rest, cargoItems, completed: m.completed || false };
 }
 
+// Complète le planetHint des lieux personnalisés créés avant l'introduction
+// de ce champ (voir addCustomLocation), en recoupant leur nom avec le jeu de
+// données Star Citizen Wiki de base — ne dépend pas de `state` (pas encore
+// initialisé à ce stade) donc utilise directement les données par défaut.
+function migrateCustomLocation(loc) {
+  if (loc.planetHint) return loc;
+  const scwiki = DEFAULT_SCWIKI_LOCATIONS.find((e) => e.name.toLowerCase() === loc.name.toLowerCase());
+  if (scwiki && scwiki.parent) return { ...loc, planetHint: scwiki.parent };
+  return loc;
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return defaultState();
@@ -60,7 +71,7 @@ function loadState() {
     const parsed = JSON.parse(raw);
     return {
       missions: (parsed.missions || []).map(migrateMission),
-      customLocations: parsed.customLocations || [],
+      customLocations: (parsed.customLocations || []).map(migrateCustomLocation),
       distances: parsed.distances || {},
       nextMissionId: parsed.nextMissionId || 1,
       uexLocations: parsed.uexLocations || [],
