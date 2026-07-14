@@ -1369,17 +1369,29 @@ function renderRouteResult(result) {
         if (items.length) {
           const itemsUl = document.createElement("ul");
           itemsUl.className = "route-cargo-items";
-          items.forEach((item) => {
-            const itemLi = document.createElement("li");
-            // "Déjà récupéré ailleurs" n'a de sens qu'au retrait : au dépôt,
-            // une quantité nulle signifie juste que ce lieu ne fait pas partie
-            // du dépôt final de cette marchandise (jamais "récupéré ailleurs").
-            itemLi.textContent =
-              a.type === "pickup"
-                ? describeCargoItemQuantity(item, a.mission)
-                : t("scuOf", { qty: Number(item.quantity) || 0, commodity: item.commodity || "?" });
-            itemsUl.appendChild(itemLi);
-          });
+          if (a.type === "pickup") {
+            // "Déjà récupéré ailleurs" n'a de sens qu'au retrait, où chaque
+            // fragment garde son propre lieu de retrait.
+            items.forEach((item) => {
+              const itemLi = document.createElement("li");
+              itemLi.textContent = describeCargoItemQuantity(item, a.mission);
+              itemsUl.appendChild(itemLi);
+            });
+          } else {
+            // Au dépôt, les fragments d'une marchandise scindée sur plusieurs
+            // lieux de retrait forment une seule livraison une fois à bord :
+            // on les regroupe pour éviter d'afficher "0 SCU" en double.
+            const totals = new Map();
+            items.forEach((item) => {
+              const commodity = item.commodity || "?";
+              totals.set(commodity, (totals.get(commodity) || 0) + (Number(item.quantity) || 0));
+            });
+            totals.forEach((qty, commodity) => {
+              const itemLi = document.createElement("li");
+              itemLi.textContent = t("scuOf", { qty, commodity });
+              itemsUl.appendChild(itemLi);
+            });
+          }
           actionLi.appendChild(itemsUl);
         }
 
