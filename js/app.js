@@ -585,9 +585,13 @@ function optimizeRoute(missions, startId) {
     const locId = locIds[idx];
     const actions = [];
     missions.forEach((m) => {
-      const pickupItems = (m.cargoItems || []).filter((item) => item.pickupId === locId);
+      // L'index d'origine dans mission.cargoItems est conservé (pas juste la
+      // copie filtrée) pour pouvoir corriger la bonne ligne depuis le suivi
+      // interactif du trajet (quantité réelle, case à cocher).
+      const withIndex = (m.cargoItems || []).map((item, index) => ({ ...item, index }));
+      const pickupItems = withIndex.filter((item) => item.pickupId === locId);
       if (pickupItems.length) actions.push({ type: "pickup", mission: m, items: pickupItems });
-      const dropoffItems = (m.cargoItems || []).filter((item) => item.dropoffId === locId);
+      const dropoffItems = withIndex.filter((item) => item.dropoffId === locId);
       if (dropoffItems.length) actions.push({ type: "dropoff", mission: m, items: dropoffItems });
     });
     return { locId, actions, legDistance: i > 0 ? dist[order[i - 1]][idx] : 0 };
@@ -764,7 +768,6 @@ function renderMissionsTable() {
       setMissionIncluded(m.id, cb.checked);
       renderStartLocationOptions();
       renderMissionsTable();
-      renderTrackingTab();
     });
     tdCheck.appendChild(cb);
     tr.appendChild(tdCheck);
@@ -983,169 +986,6 @@ function renderHistoryTable() {
     : t("noHistoryYet");
 }
 
-// =========================================================================
-// Suivi cargo : correction de la répartition réelle des marchandises ayant
-// plusieurs lieux de retrait possibles (utile quand le jeu regroupe tout au
-// même endroit au lieu de suivre la répartition indiquée dans le contrat).
-// =========================================================================
-function groupCargoItems(mission, keyFn) {
-  const groups = new Map();
-  (mission.cargoItems || []).forEach((item, index) => {
-    const key = keyFn(item);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ index, ...item });
-  });
-  return Array.from(groups.values()).filter((g) => g.length > 1);
-}
-
-// Plusieurs lieux de retrait possibles pour une même livraison (on ne sait
-// pas où le stock était réellement disponible) : le lieu qui varie d'une
-// ligne à l'autre est le retrait.
-function multiPickupGroups(mission) {
-  return groupCargoItems(mission, (item) => `${item.commodity}|${item.dropoffId}`);
-}
-
-// Un seul lieu de retrait mais plusieurs lieux de dépôt pour la même
-// marchandise (quantités fixes par destination) : le lieu qui varie est le
-// dépôt — utile pour suivre si la livraison a bien été répartie comme prévu.
-function multiDropoffGroups(mission) {
-  return groupCargoItems(mission, (item) => `${item.commodity}|${item.pickupId}`);
-}
-
-// Construit la liste des groupes à afficher pour une mission, retrait et
-// dépôt confondus, chacun annoté de son "kind" pour savoir quel lieu afficher
-// par ligne (celui qui varie) et quel intitulé de groupe utiliser.
-function trackingGroupsForMission(mission) {
-  const pickupGroups = multiPickupGroups(mission).map((items) => ({ kind: "pickup", items }));
-  const dropoffGroups = multiDropoffGroups(mission).map((items) => ({ kind: "dropoff", items }));
-  return [...pickupGroups, ...dropoffGroups];
-}
-
-function renderTrackingTab() {
-  const container = document.getElementById("tracking-result");
-  container.innerHTML = "";
-  const missions = activeMissions().filter((m) => m.included);
-  let hasAnyGroup = false;
-
-  missions.forEach((mission) => {
-    const groups = trackingGroupsForMission(mission);
-    if (!groups.length) return;
-    hasAnyGroup = true;
-
-    const card = document.createElement("div");
-    card.className = "side-block tracking-mission";
-    const title = document.createElement("h2");
-    title.textContent = mission.name;
-    card.appendChild(title);
-
-    const inputs = [];
-    groups.forEach(({ kind, items: group }) => {
-      // Le total de référence reste basé sur les quantités prévues à
-      // l'origine du contrat (plannedQuantity), jamais modifiées : la ligne
-      // garde toujours trace de ce qui était prévu, même après correction.
-      const total = group.reduce((s, item) => s + (Number(item.plannedQuantity) || 0), 0);
-
-      const groupBox = document.createElement("div");
-      groupBox.className = "tracking-group";
-      const groupTitle = document.createElement("div");
-      groupTitle.className = "tracking-group-title";
-      groupTitle.textContent =
-        kind === "pickup"
-          ? t("trackingGroupTitle", {
-              commodity: group[0].commodity || "?",
-              dropoff: locationLabel(getLocationById(group[0].dropoffId)),
-              total,
-            })
-          : t("trackingDropoffGroupTitle", {
-              commodity: group[0].commodity || "?",
-              pickup: locationLabel(getLocationById(group[0].pickupId)),
-              total,
-            });
-      groupBox.appendChild(groupTitle);
-
-      const rows = document.createElement("div");
-      rows.className = "tracking-rows";
-      const groupInputs = [];
-      group.forEach((item) => {
-        const row = document.createElement("div");
-        row.className = "tracking-row";
-        const label = document.createElement("span");
-        const rowLocId = kind === "pickup" ? item.pickupId : item.dropoffId;
-        label.textContent = t("trackingRowLabel", {
-          location: locationLabel(getLocationById(rowLocId)),
-          planned: item.plannedQuantity,
-        });
-        row.appendChild(label);
-
-        const inputWrap = document.createElement("div");
-        inputWrap.className = "tracking-input-wrap";
-        const input = document.createElement("input");
-        input.type = "number";
-        input.min = "0";
-        input.step = "1";
-        input.value = item.quantity;
-        input.className = "tracking-qty-input";
-        inputWrap.appendChild(input);
-
-        const rowWarning = document.createElement("span");
-        rowWarning.className = "tracking-row-warning warning-text";
-        const updateRowWarning = () => {
-          const val = Number(input.value) || 0;
-          const planned = Number(item.plannedQuantity) || 0;
-          rowWarning.textContent = val !== planned ? t("trackingRowMismatch", { actual: val, planned }) : "";
-        };
-        input.addEventListener("input", updateRowWarning);
-        updateRowWarning();
-        inputWrap.appendChild(rowWarning);
-        row.appendChild(inputWrap);
-
-        rows.appendChild(row);
-        groupInputs.push({ index: item.index, input });
-        inputs.push({ index: item.index, input });
-      });
-      groupBox.appendChild(rows);
-
-      const sumP = document.createElement("p");
-      sumP.className = "hint tracking-sum";
-      const updateSum = () => {
-        const sum = groupInputs.reduce((s, entry) => s + (Number(entry.input.value) || 0), 0);
-        const ok = sum === total;
-        sumP.textContent = ok ? t("trackingSumOk", { sum, total }) : t("trackingSumMismatch", { sum, total });
-        sumP.classList.toggle("warning-text", !ok);
-      };
-      groupInputs.forEach((entry) => entry.input.addEventListener("input", updateSum));
-      updateSum();
-      groupBox.appendChild(sumP);
-      card.appendChild(groupBox);
-    });
-
-    const saveBtn = document.createElement("button");
-    saveBtn.type = "button";
-    saveBtn.className = "btn-primary";
-    saveBtn.textContent = t("trackingSaveBtn");
-    saveBtn.addEventListener("click", () => {
-      inputs.forEach(({ index, input }) => {
-        if (mission.cargoItems[index]) mission.cargoItems[index].quantity = Number(input.value) || 0;
-      });
-      saveState();
-      renderAll();
-      runOptimize();
-      activateTab("optimize-tab");
-    });
-    card.appendChild(saveBtn);
-
-    container.appendChild(card);
-  });
-
-  if (!hasAnyGroup) {
-    const note = document.createElement("p");
-    note.className = "hint";
-    note.textContent = t("trackingNoGroups");
-    container.appendChild(note);
-  }
-  triggerFadeIn(container);
-}
-
 function renderDistanceEditor() {
   const container = document.getElementById("distance-editor");
   container.innerHTML = "";
@@ -1264,14 +1104,11 @@ function filterDistanceRows() {
   });
 }
 
-// Décrit une ligne de cargaison dans le résultat de trajet. Quantité nulle
-// (corrigée dans l'onglet Suivi cargo, ex : tout récupéré à un seul endroit
-// au lieu de plusieurs) : indique où la marchandise a réellement été
-// récupérée plutôt que d'afficher "? SCU", qui laisserait croire à une
-// quantité inconnue.
-function describeCargoItemQuantity(item, mission) {
-  const qty = Number(item.quantity) || 0;
-  if (qty > 0) return t("scuOf", { qty, commodity: item.commodity || "?" });
+// Pour un retrait à quantité nulle (corrigée en direct, ex : tout récupéré à
+// un seul endroit au lieu de plusieurs comme prévu) : précise où la
+// marchandise a réellement été récupérée. Retourne "" si non applicable.
+function pickedUpElsewhereNote(item, mission) {
+  if ((Number(item.quantity) || 0) > 0) return "";
   const siblings = (mission.cargoItems || []).filter(
     (other) =>
       other !== item &&
@@ -1279,11 +1116,105 @@ function describeCargoItemQuantity(item, mission) {
       other.dropoffId === item.dropoffId &&
       (Number(other.quantity) || 0) > 0
   );
-  if (siblings.length) {
-    const locations = siblings.map((s) => locationLabel(getLocationById(s.pickupId))).join(", ");
-    return t("cargoAlreadyPickedUpElsewhere", { commodity: item.commodity || "?", locations });
+  if (!siblings.length) return "";
+  const locations = siblings.map((s) => locationLabel(getLocationById(s.pickupId))).join(", ");
+  return t("cargoAlreadyPickedUpElsewhere", { commodity: item.commodity || "?", locations });
+}
+
+// Une ligne de cargaison interactive dans le résultat de trajet : trois
+// boutons rapides pour indiquer ce qui a réellement été récupéré/déposé à cet
+// arrêt (tout / partiel / rien), comme une feuille de route qu'on coche au
+// fil de la mission — plus rapide qu'un champ à taper à chaque fois.
+function renderCargoItemRow(item, mission, type) {
+  const row = document.createElement("div");
+  row.className = "route-cargo-row";
+
+  const label = document.createElement("span");
+  label.className = "route-cargo-label";
+  label.textContent = t("routeCargoRowLabel", {
+    commodity: item.commodity || "?",
+    planned: item.plannedQuantity ?? item.quantity,
+  });
+  row.appendChild(label);
+
+  const planned = Number(item.plannedQuantity) || 0;
+  const confirmedField = type === "pickup" ? "pickupConfirmed" : "dropoffConfirmed";
+
+  function applyQuantity(qty) {
+    if (!mission.cargoItems[item.index]) return;
+    mission.cargoItems[item.index].quantity = qty;
+    mission.cargoItems[item.index][confirmedField] = true;
+    saveState();
+    runOptimize();
   }
-  return t("scuOf", { qty: "?", commodity: item.commodity || "?" });
+
+  const btnGroup = document.createElement("div");
+  btnGroup.className = "route-cargo-btns";
+
+  const partialInput = document.createElement("input");
+  partialInput.type = "number";
+  partialInput.min = "0";
+  partialInput.step = "1";
+  partialInput.value = item.quantity;
+  partialInput.className = "route-cargo-partial-input";
+  partialInput.style.display = "none";
+  partialInput.addEventListener("change", () => applyQuantity(Number(partialInput.value) || 0));
+
+  const fullBtn = document.createElement("button");
+  fullBtn.type = "button";
+  fullBtn.className = "route-cargo-btn route-cargo-btn-full";
+  fullBtn.textContent = t("routeCargoFullBtn");
+  fullBtn.addEventListener("click", () => applyQuantity(planned));
+
+  const partialBtn = document.createElement("button");
+  partialBtn.type = "button";
+  partialBtn.className = "route-cargo-btn route-cargo-btn-partial";
+  partialBtn.textContent = t("routeCargoPartialBtn");
+  partialBtn.addEventListener("click", () => {
+    partialInput.style.display = "";
+    partialInput.focus();
+  });
+
+  const noneBtn = document.createElement("button");
+  noneBtn.type = "button";
+  noneBtn.className = "route-cargo-btn route-cargo-btn-none";
+  noneBtn.textContent = t("routeCargoNoneBtn");
+  noneBtn.addEventListener("click", () => applyQuantity(0));
+
+  // Met en évidence le bouton qui correspond à la quantité actuellement
+  // enregistrée, mais seulement une fois qu'un choix a été fait explicitement
+  // (aucun bouton sélectionné par défaut, même si la quantité vaut encore
+  // celle prévue à l'origine).
+  const current = Number(item.quantity) || 0;
+  let state = null;
+  if (item[confirmedField]) {
+    if (planned > 0 && current === planned) state = "full";
+    else if (current === 0) state = "none";
+    else state = "partial";
+  }
+  fullBtn.classList.toggle("active", state === "full");
+  partialBtn.classList.toggle("active", state === "partial");
+  noneBtn.classList.toggle("active", state === "none");
+  if (state === "partial") partialInput.style.display = "";
+
+  btnGroup.appendChild(fullBtn);
+  btnGroup.appendChild(partialBtn);
+  btnGroup.appendChild(noneBtn);
+  btnGroup.appendChild(partialInput);
+  row.appendChild(btnGroup);
+
+  const wrapper = document.createElement("li");
+  wrapper.appendChild(row);
+  if (type === "pickup") {
+    const note = pickedUpElsewhereNote(item, mission);
+    if (note) {
+      const noteP = document.createElement("div");
+      noteP.className = "hint route-cargo-note";
+      noteP.textContent = note;
+      wrapper.appendChild(noteP);
+    }
+  }
+  return wrapper;
 }
 
 function renderRouteResult(result) {
@@ -1399,29 +1330,9 @@ function renderRouteResult(result) {
         if (items.length) {
           const itemsUl = document.createElement("ul");
           itemsUl.className = "route-cargo-items";
-          if (a.type === "pickup") {
-            // "Déjà récupéré ailleurs" n'a de sens qu'au retrait, où chaque
-            // fragment garde son propre lieu de retrait.
-            items.forEach((item) => {
-              const itemLi = document.createElement("li");
-              itemLi.textContent = describeCargoItemQuantity(item, a.mission);
-              itemsUl.appendChild(itemLi);
-            });
-          } else {
-            // Au dépôt, les fragments d'une marchandise scindée sur plusieurs
-            // lieux de retrait forment une seule livraison une fois à bord :
-            // on les regroupe pour éviter d'afficher "0 SCU" en double.
-            const totals = new Map();
-            items.forEach((item) => {
-              const commodity = item.commodity || "?";
-              totals.set(commodity, (totals.get(commodity) || 0) + (Number(item.quantity) || 0));
-            });
-            totals.forEach((qty, commodity) => {
-              const itemLi = document.createElement("li");
-              itemLi.textContent = t("scuOf", { qty, commodity });
-              itemsUl.appendChild(itemLi);
-            });
-          }
+          items.forEach((item) => {
+            itemsUl.appendChild(renderCargoItemRow(item, a.mission, a.type));
+          });
           actionLi.appendChild(itemsUl);
         }
 
@@ -1458,7 +1369,6 @@ function renderAll() {
   renderShipCapacity();
   renderMissionsTable();
   renderHistoryTable();
-  renderTrackingTab();
   renderDistanceEditor();
   renderUexStatus();
   document.getElementById("route-result").innerHTML = "";
