@@ -142,9 +142,10 @@ header {
 
 .header-brand {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto auto;
+  justify-content: center;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
   flex: 1;
 }
 
@@ -166,10 +167,7 @@ header {
 }
 
 .made-by-community-logo {
-  width: 64px;
-  height: 64px;
   opacity: 0.85;
-  justify-self: end;
 }
 
 header h1 {
