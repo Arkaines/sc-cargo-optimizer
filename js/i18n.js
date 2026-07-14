@@ -35,8 +35,8 @@ const TRANSLATIONS = {
 
     importMissionTitle: "Importer une mission (capture d'écran)",
     importMissionHint:
-      "Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici (Ctrl+V) ou dépose l'image. La reconnaissance de texte tourne entièrement dans le navigateur.",
-    ocrDropzoneText: "Colle (Ctrl+V) ou dépose une image ici",
+      "Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici (Ctrl+V) ou dépose l'image. Tu peux aussi sélectionner ou déposer plusieurs captures à la fois pour créer plusieurs missions d'un coup. La reconnaissance de texte tourne entièrement dans le navigateur.",
+    ocrDropzoneText: "Colle (Ctrl+V) ou dépose une ou plusieurs images ici",
     ocrPreviewAlt: "Capture importée",
     ocrHelpTitle: "Quelle capture faire ?",
     ocrHelpText:
@@ -55,6 +55,15 @@ const TRANSLATIONS = {
     ocrNoTextRecognized: "(aucun texte reconnu)",
     ocrUseFieldsBtn: "Utiliser ces champs dans le formulaire",
     ocrNoFieldsRecognized: "Aucun champ reconnu — vérifie le texte brut ci-dessous et complète à la main.",
+    ocrBatchProgress: "Reconnaissance de l'image {done}/{total}...",
+    ocrBatchDone: "{count}/{total} mission(s) créée(s) automatiquement — vérifie-les dans l'onglet Missions enregistrées.",
+    ocrBatchItemCreated: "✓ {file} — mission « {name} » créée",
+    ocrBatchItemFailed: "✗ {file} — {reason}",
+    ocrBatchNoCargo: "aucune marchandise reconnue",
+    ocrBatchLocationCreated: "lieu « {name} » créé automatiquement, vérifie-le",
+
+    routeOverloadCulprits: "Mission(s) en cause au moment du dépassement :",
+    deselectAndRecalcBtn: "Désélectionner et recalculer",
 
     newMissionTab: "Nouvelle mission",
     missionsTab: "Missions enregistrées",
@@ -177,8 +186,8 @@ const TRANSLATIONS = {
 
     importMissionTitle: "Import a mission (screenshot)",
     importMissionHint:
-      "Take a screenshot of the contract details screen in-game (Win+Shift+S), then paste it here (Ctrl+V) or drop the image. Text recognition runs entirely in your browser.",
-    ocrDropzoneText: "Paste (Ctrl+V) or drop an image here",
+      "Take a screenshot of the contract details screen in-game (Win+Shift+S), then paste it here (Ctrl+V) or drop the image. You can also select or drop several screenshots at once to create several missions in one go. Text recognition runs entirely in your browser.",
+    ocrDropzoneText: "Paste (Ctrl+V) or drop one or more images here",
     ocrPreviewAlt: "Imported screenshot",
     ocrHelpTitle: "What screenshot should I take?",
     ocrHelpText:
@@ -197,6 +206,15 @@ const TRANSLATIONS = {
     ocrNoTextRecognized: "(no text recognized)",
     ocrUseFieldsBtn: "Use these fields in the form",
     ocrNoFieldsRecognized: "No fields recognized — check the raw text below and fill in manually.",
+    ocrBatchProgress: "Recognizing image {done}/{total}...",
+    ocrBatchDone: "{count}/{total} mission(s) created automatically — check them in the Saved missions tab.",
+    ocrBatchItemCreated: "✓ {file} — mission \"{name}\" created",
+    ocrBatchItemFailed: "✗ {file} — {reason}",
+    ocrBatchNoCargo: "no commodity recognized",
+    ocrBatchLocationCreated: "location \"{name}\" created automatically, please check it",
+
+    routeOverloadCulprits: "Mission(s) causing the overload at that point:",
+    deselectAndRecalcBtn: "Deselect and recalculate",
 
     newMissionTab: "New mission",
     missionsTab: "Saved missions",

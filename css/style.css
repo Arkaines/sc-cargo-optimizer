@@ -588,6 +588,13 @@ tbody tr:nth-child(even) {
   font-weight: 600;
 }
 
+.route-culprits {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.25rem 0 1rem;
+}
+
 .optimize-row {
   display: flex;
   gap: 1rem;

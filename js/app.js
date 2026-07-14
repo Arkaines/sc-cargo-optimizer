@@ -484,6 +484,18 @@ function optimizeRoute(missions, startId) {
   return { steps, total, approximate, stopCount: n, maxCargoLoad: maxLoad };
 }
 
+// Repère les missions ramassées à l'arrêt précis où la capacité est dépassée
+// pour la première fois le long du trajet (celles qui font basculer la charge
+// au-dessus du maximum) — pas les autres missions déjà à bord avant ce point.
+function computeOverloadCulprits(result, ship) {
+  if (!ship) return [];
+  const overloadIndex = result.steps.findIndex((s) => s.cargoLoad > ship.scu);
+  if (overloadIndex === -1) return [];
+  return result.steps[overloadIndex].actions
+    .filter((a) => a.type === "pickup")
+    .map((a) => a.mission);
+}
+
 // =========================================================================
 // Rendu DOM
 // =========================================================================
@@ -973,8 +985,9 @@ function renderRouteResult(result) {
 
   const ship = getSelectedShip();
   const loadP = document.createElement("p");
+  let over = false;
   if (ship) {
-    const over = result.maxCargoLoad > ship.scu;
+    over = result.maxCargoLoad > ship.scu;
     loadP.className = over ? "cargo-overload" : "cargo-ok";
     loadP.textContent = over
       ? t("maxLoadOverload", { load: result.maxCargoLoad, scu: ship.scu, over: roundScu(result.maxCargoLoad - ship.scu) })
@@ -984,6 +997,39 @@ function renderRouteResult(result) {
     loadP.textContent = t("maxLoadNoShip", { load: result.maxCargoLoad });
   }
   container.appendChild(loadP);
+
+  if (ship && over) {
+    const culprits = computeOverloadCulprits(result, ship);
+    if (culprits.length) {
+      const culpritLabel = document.createElement("p");
+      culpritLabel.className = "hint warning-text";
+      culpritLabel.textContent = t("routeOverloadCulprits");
+      container.appendChild(culpritLabel);
+
+      const culpritList = document.createElement("div");
+      culpritList.className = "route-culprits";
+      culprits.forEach((mission) => {
+        const row = document.createElement("div");
+        row.className = "actions-cell";
+        const label = document.createElement("span");
+        label.textContent = mission.name;
+        row.appendChild(label);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-danger-sm";
+        btn.textContent = t("deselectAndRecalcBtn");
+        btn.addEventListener("click", () => {
+          mission.included = false;
+          saveState();
+          renderMissionsTable();
+          runOptimize();
+        });
+        row.appendChild(btn);
+        culpritList.appendChild(row);
+      });
+      container.appendChild(culpritList);
+    }
+  }
 
   const ol = document.createElement("ol");
   ol.className = "route-steps";
@@ -1039,6 +1085,13 @@ function renderRouteResult(result) {
   });
   container.appendChild(ol);
   triggerFadeIn(container);
+}
+
+function runOptimize() {
+  const startId = document.getElementById("start-location").value || null;
+  const included = activeMissions().filter((m) => m.included);
+  const result = optimizeRoute(included, startId);
+  renderRouteResult(result);
 }
 
 function renderUexStatus() {
@@ -1356,6 +1409,95 @@ async function processOcrImage(blob) {
   }
 }
 
+// Résout un lieu OCR vers un lieu existant (correspondance approximative),
+// ou en crée un nouveau à la volée si aucun ne correspond, pour ne jamais
+// bloquer la création automatique d'une mission en import multiple.
+function resolveOrCreateLocation(rawText, notes) {
+  if (!rawText) return null;
+  const existing = looseLocationMatch(rawText);
+  if (existing) return existing;
+  const created = addCustomLocation(rawText, "Personnalisé");
+  if (created) notes.push(t("ocrBatchLocationCreated", { name: created.name }));
+  return created;
+}
+
+// Crée directement une mission à partir d'un résultat OCR (utilisé en import
+// multiple, où revoir chaque champ à la main annulerait l'intérêt du lot).
+function createMissionFromOcrResult(parsed) {
+  const notes = [];
+  const cargoItems = [];
+  (parsed.cargoItems || []).forEach((item) => {
+    const pickupLoc = resolveOrCreateLocation(item.pickupText, notes);
+    const dropoffLoc = resolveOrCreateLocation(item.dropoffText, notes);
+    if (!pickupLoc || !dropoffLoc) return;
+    cargoItems.push({
+      commodity: item.commodity || "",
+      quantity: item.quantity || "",
+      pickupId: pickupLoc.id,
+      dropoffId: dropoffLoc.id,
+    });
+  });
+  if ((parsed.cargoItems || []).some((item) => item.approximate)) {
+    notes.push(t("ocrApproxWarning"));
+  }
+  if (!cargoItems.length) {
+    return { mission: null, notes: [t("ocrBatchNoCargo"), ...notes] };
+  }
+  const mission = addMission({ name: parsed.name, giver: parsed.giver, cargoItems, reward: parsed.reward });
+  return { mission, notes };
+}
+
+function renderOcrBatchResult(results) {
+  const container = document.getElementById("ocr-result");
+  container.innerHTML = "";
+
+  const summary = document.createElement("div");
+  summary.className = "ocr-summary";
+  results.forEach(({ file, mission, notes }) => {
+    const row = document.createElement("div");
+    row.className = "ocr-summary-row";
+    row.textContent = mission
+      ? t("ocrBatchItemCreated", { file: file.name, name: mission.name })
+      : t("ocrBatchItemFailed", { file: file.name, reason: notes[0] || "?" });
+    summary.appendChild(row);
+    if (mission && notes.length) {
+      const noteRow = document.createElement("div");
+      noteRow.className = "ocr-summary-row hint";
+      noteRow.textContent = notes.join(" — ");
+      summary.appendChild(noteRow);
+    }
+  });
+  container.appendChild(summary);
+  triggerFadeIn(container);
+}
+
+async function processOcrImagesBatch(files) {
+  const status = document.getElementById("ocr-status");
+  const preview = document.getElementById("ocr-preview");
+  const results = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    status.textContent = t("ocrBatchProgress", { done: i + 1, total: files.length });
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+    try {
+      const rawText = await runOcrOnImage(file);
+      const parsed = parseOcrText(rawText);
+      const { mission, notes } = createMissionFromOcrResult(parsed);
+      results.push({ file, mission, notes });
+    } catch (e) {
+      results.push({ file, mission: null, notes: [t("ocrError", { msg: e.message })] });
+    }
+  }
+
+  const created = results.filter((r) => r.mission).length;
+  status.textContent = t("ocrBatchDone", { count: created, total: files.length });
+  renderOcrBatchResult(results);
+  renderAll();
+  activateTab("missions-tab");
+}
+
 // =========================================================================
 // Câblage des événements
 // =========================================================================
@@ -1415,8 +1557,9 @@ document.addEventListener("DOMContentLoaded", () => {
   ocrDropzone.addEventListener("click", () => ocrFileInput.click());
 
   ocrFileInput.addEventListener("change", () => {
-    const file = ocrFileInput.files[0];
-    if (file) processOcrImage(file);
+    const files = Array.from(ocrFileInput.files);
+    if (files.length === 1) processOcrImage(files[0]);
+    else if (files.length > 1) processOcrImagesBatch(files);
   });
 
   ocrDropzone.addEventListener("dragover", (e) => {
@@ -1427,15 +1570,17 @@ document.addEventListener("DOMContentLoaded", () => {
   ocrDropzone.addEventListener("drop", (e) => {
     e.preventDefault();
     ocrDropzone.classList.remove("dragover");
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) processOcrImage(file);
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 1) processOcrImage(files[0]);
+    else if (files.length > 1) processOcrImagesBatch(files);
   });
 
   document.addEventListener("paste", (e) => {
     const items = Array.from(e.clipboardData.items).filter((i) => i.type.startsWith("image/"));
     if (items.length === 0) return;
-    const blob = items[0].getAsFile();
-    if (blob) processOcrImage(blob);
+    const files = items.map((i) => i.getAsFile()).filter(Boolean);
+    if (files.length === 1) processOcrImage(files[0]);
+    else if (files.length > 1) processOcrImagesBatch(files);
   });
 
   document.getElementById("mission-form").addEventListener("submit", (e) => {
@@ -1494,12 +1639,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   });
 
-  document.getElementById("optimize-btn").addEventListener("click", () => {
-    const startId = document.getElementById("start-location").value || null;
-    const included = activeMissions().filter((m) => m.included);
-    const result = optimizeRoute(included, startId);
-    renderRouteResult(result);
-  });
+  document.getElementById("optimize-btn").addEventListener("click", runOptimize);
 
   document.getElementById("reset-all").addEventListener("click", () => {
     if (confirm(t("confirmResetAll"))) {
