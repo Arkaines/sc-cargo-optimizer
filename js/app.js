@@ -30,7 +30,11 @@ function defaultState() {
 // lieux et qu'on ne savait pas quelle marchandise allait où).
 function migrateMission(m) {
   if (m.cargoItems && m.cargoItems.length && m.cargoItems[0].pickupId !== undefined) {
-    return { ...m, completed: m.completed || false };
+    return {
+      ...m,
+      completed: m.completed || false,
+      cargoItems: m.cargoItems.map((item) => ({ ...item, plannedQuantity: item.plannedQuantity ?? item.quantity })),
+    };
   }
 
   const oldPickupIds = m.pickupIds || (m.pickupId ? [m.pickupId] : []);
@@ -45,6 +49,7 @@ function migrateMission(m) {
   const cargoItems = oldItems.map((item) => ({
     commodity: item.commodity || "",
     quantity: item.quantity || "",
+    plannedQuantity: item.plannedQuantity ?? item.quantity ?? "",
     pickupId: oldPickupIds[0] || "",
     dropoffId: oldDropoffIds[0] || "",
   }));
@@ -289,7 +294,13 @@ function addMission(mission) {
     id: state.nextMissionId++,
     name: mission.name || `Mission ${state.nextMissionId - 1}`,
     giver: mission.giver || "",
-    cargoItems: mission.cargoItems || [],
+    // plannedQuantity garde la quantité d'origine du contrat, jamais modifiée
+    // par la suite : sert de référence dans l'onglet Suivi cargo quand la
+    // quantité réellement récupérée (quantity) est corrigée après coup.
+    cargoItems: (mission.cargoItems || []).map((item) => ({
+      ...item,
+      plannedQuantity: item.plannedQuantity ?? item.quantity,
+    })),
     reward: mission.reward,
     included: true,
     completed: false,
@@ -990,7 +1001,10 @@ function renderTrackingTab() {
 
     const inputs = [];
     groups.forEach((group) => {
-      const total = group.reduce((s, item) => s + (Number(item.quantity) || 0), 0);
+      // Le total de référence reste basé sur les quantités prévues à
+      // l'origine du contrat (plannedQuantity), jamais modifiées : la ligne
+      // garde toujours trace de ce qui était prévu, même après correction.
+      const total = group.reduce((s, item) => s + (Number(item.plannedQuantity) || 0), 0);
       const dropoffLoc = getLocationById(group[0].dropoffId);
 
       const groupBox = document.createElement("div");
@@ -1011,15 +1025,34 @@ function renderTrackingTab() {
         const row = document.createElement("div");
         row.className = "tracking-row";
         const label = document.createElement("span");
-        label.textContent = locationLabel(getLocationById(item.pickupId));
+        label.textContent = t("trackingRowLabel", {
+          location: locationLabel(getLocationById(item.pickupId)),
+          planned: item.plannedQuantity,
+        });
         row.appendChild(label);
+
+        const inputWrap = document.createElement("div");
+        inputWrap.className = "tracking-input-wrap";
         const input = document.createElement("input");
         input.type = "number";
         input.min = "0";
         input.step = "1";
         input.value = item.quantity;
         input.className = "tracking-qty-input";
-        row.appendChild(input);
+        inputWrap.appendChild(input);
+
+        const rowWarning = document.createElement("span");
+        rowWarning.className = "tracking-row-warning warning-text";
+        const updateRowWarning = () => {
+          const val = Number(input.value) || 0;
+          const planned = Number(item.plannedQuantity) || 0;
+          rowWarning.textContent = val !== planned ? t("trackingRowMismatch", { actual: val, planned }) : "";
+        };
+        input.addEventListener("input", updateRowWarning);
+        updateRowWarning();
+        inputWrap.appendChild(rowWarning);
+        row.appendChild(inputWrap);
+
         rows.appendChild(row);
         groupInputs.push({ index: item.index, input });
         inputs.push({ index: item.index, input });

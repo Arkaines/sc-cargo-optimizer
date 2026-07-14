@@ -76,6 +76,8 @@ const TRANSLATIONS = {
     trackingNoGroups:
       "Aucune marchandise à répartir sur plusieurs lieux de retrait parmi les missions sélectionnées.",
     trackingGroupTitle: "{commodity} → {dropoff} ({total} SCU au total)",
+    trackingRowLabel: "{location} (prévu : {planned} SCU)",
+    trackingRowMismatch: "⚠ {actual}/{planned} SCU récupérés",
     trackingSumOk: "{sum} / {total} SCU renseignés.",
     trackingSumMismatch: "⚠ {sum} / {total} SCU renseignés — vérifie la répartition.",
     trackingSaveBtn: "Valider et recalculer la route",
@@ -239,6 +241,8 @@ const TRANSLATIONS = {
       "Correct here the actual split of commodities that have several possible pickup locations, if it doesn't match the estimate (e.g. everything ended up at the same spot due to a game bug). Validate to automatically recalculate the route.",
     trackingNoGroups: "No commodity to split across several pickup locations among the selected missions.",
     trackingGroupTitle: "{commodity} → {dropoff} ({total} SCU total)",
+    trackingRowLabel: "{location} (planned: {planned} SCU)",
+    trackingRowMismatch: "⚠ {actual}/{planned} SCU picked up",
     trackingSumOk: "{sum} / {total} SCU entered.",
     trackingSumMismatch: "⚠ {sum} / {total} SCU entered — check the split.",
     trackingSaveBtn: "Validate and recalculate the route",
