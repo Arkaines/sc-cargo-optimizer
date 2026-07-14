@@ -910,6 +910,7 @@ function renderMissionsTable() {
     doneBtn.textContent = t("completeBtn");
     doneBtn.addEventListener("click", () => {
       m.completed = true;
+      m.completedAt = Date.now();
       saveState();
       renderAll();
     });
@@ -1157,31 +1158,29 @@ function renderCompaniesTab() {
       // Le jeu n'affiche jamais le nombre exact de réputation, seulement le
       // palier atteint + une barre de progression sans valeur — l'estimation
       // par historique peut donc dériver (missions non enregistrées, calcul
-      // approximatif). Un calibrage manuel (palier + position sur la barre)
-      // remplace alors l'estimation automatique pour cette entreprise,
-      // jusqu'à ce que le joueur le change ou le retire.
+      // approximatif). Un calibrage manuel sert de POINT DE DÉPART ("j'en
+      // suis là en jeu, maintenant") : les missions terminées ENSUITE
+      // continuent de s'additionner par-dessus automatiquement, plutôt que de
+      // figer l'affichage pour toujours.
       const override = state.reputationOverrides[factionName];
-      const overrideStanding = override ? standings.find((s) => s.name === override.tier) : null;
-
-      let currentStanding;
-      let nextStanding;
       let current;
-      if (overrideStanding) {
-        currentStanding = overrideStanding;
-        const idx = standings.indexOf(overrideStanding);
-        nextStanding = standings[idx + 1] || null;
-        const maxPoints = nextStanding ? nextStanding.minReputation : currentStanding.minReputation;
-        current = Math.max(currentStanding.minReputation, Math.min(maxPoints, override.points));
+      if (override) {
+        const missionsSinceCalibration = historyMissions().filter(
+          (m) => (m.completedAt || 0) > (override.calibratedAt || 0)
+        );
+        const gainedSince = computeReputationTotals(missionsSinceCalibration).get(`${factionName}|${totalsScope}`) || 0;
+        current = override.points + gainedSince;
       } else {
         current = totals.get(`${factionName}|${totalsScope}`) || 0;
-        currentStanding = standings[0];
-        nextStanding = null;
-        for (let i = 0; i < standings.length; i++) {
-          if (current >= standings[i].minReputation) currentStanding = standings[i];
-          else {
-            nextStanding = standings[i];
-            break;
-          }
+      }
+
+      let currentStanding = standings[0];
+      let nextStanding = null;
+      for (let i = 0; i < standings.length; i++) {
+        if (current >= standings[i].minReputation) currentStanding = standings[i];
+        else {
+          nextStanding = standings[i];
+          break;
         }
       }
 
@@ -1202,17 +1201,27 @@ function renderCompaniesTab() {
       autoOption.value = "";
       autoOption.textContent = t("companyCalibrateAuto");
       calibrateSelect.appendChild(autoOption);
+      autoOption.selected = !override;
       standings.forEach((s) => {
         const opt = document.createElement("option");
         opt.value = s.name;
         opt.textContent = `${s.name} (${s.minReputation})`;
-        if (override && override.tier === s.name) opt.selected = true;
+        // Reflète le palier réellement atteint (calibrage + missions
+        // accumulées depuis), pas forcément celui choisi au calibrage initial.
+        if (override && currentStanding.name === s.name) opt.selected = true;
         calibrateSelect.appendChild(opt);
       });
       calibrateSelect.addEventListener("change", () => {
         if (calibrateSelect.value) {
+          // Déverrouillé au départ : le curseur reste modifiable tant que le
+          // joueur n'a pas cliqué le cadenas pour verrouiller sa position.
           const tier = standings.find((s) => s.name === calibrateSelect.value);
-          state.reputationOverrides[factionName] = { tier: tier.name, points: tier.minReputation };
+          state.reputationOverrides[factionName] = {
+            tier: tier.name,
+            points: tier.minReputation,
+            calibratedAt: Date.now(),
+            locked: false,
+          };
         } else {
           delete state.reputationOverrides[factionName];
         }
@@ -1223,19 +1232,45 @@ function renderCompaniesTab() {
 
       // "Curseur de modification" : affine la position dans le palier
       // actuel. Actif seulement en calibrage manuel (en mode Auto ou au
-      // palier maximum, rien à affiner) ; met à jour le rang suivant en
-      // direct pendant le glissement, ne sauvegarde qu'au relâchement pour ne
-      // pas spammer localStorage/la synchro cloud à chaque pixel.
+      // palier maximum, rien à affiner). Le glissement seul ne sauvegarde
+      // rien (juste un aperçu en direct) : il faut cliquer "Définir" pour
+      // verrouiller la position, comme choisir "Automatique" verrouille le
+      // calcul automatique. Graduations 0/25/50/75/100 % affichées sous la
+      // barre en plus des repères natifs du curseur.
       const rangeStart = currentStanding.minReputation;
       const rangeEnd = nextStanding ? nextStanding.minReputation : rangeStart;
+      const isDisabled = !override || !nextStanding;
+      const rawLocked = !!(override && override.locked);
+      const isLocked = isDisabled || rawLocked;
+
+      const sliderWrap = document.createElement("div");
+      sliderWrap.className = "company-slider-wrap";
+
+      // Barre + graduations empilées dans une colonne dédiée, pour que les
+      // chiffres restent alignés sous la barre quel que soit ce qu'il y a à
+      // côté (le cadenas, placé après, pas en dessous).
+      const sliderCol = document.createElement("div");
+      sliderCol.className = "company-slider-col";
+
       const slider = document.createElement("input");
       slider.type = "range";
       slider.className = "company-calibrate-slider";
       slider.min = String(rangeStart);
       slider.max = String(rangeEnd);
       slider.value = String(current);
-      slider.disabled = !overrideStanding || !nextStanding;
-      card.appendChild(slider);
+      slider.disabled = isLocked;
+
+      const ticksId = `company-ticks-${factionName.replace(/[^a-zA-Z0-9]/g, "-")}`;
+      const ticks = document.createElement("datalist");
+      ticks.id = ticksId;
+      [0, 25, 50, 75, 100].forEach((pct) => {
+        const tick = document.createElement("option");
+        tick.value = String(Math.round(rangeStart + ((rangeEnd - rangeStart) * pct) / 100));
+        ticks.appendChild(tick);
+      });
+      slider.setAttribute("list", ticksId);
+      sliderCol.appendChild(ticks);
+      sliderCol.appendChild(slider);
 
       const nextCell = document.createElement("span");
       nextCell.className = "company-next-rank";
@@ -1245,13 +1280,64 @@ function renderCompaniesTab() {
           : t("companyMaxRankLabel");
       };
       updateNextCell(current);
+
+      // Graduations cliquables : place le curseur directement sur ce
+      // pourcentage (juste un aperçu, il faut ensuite cliquer le cadenas
+      // pour verrouiller la position, comme un glissement classique).
+      const scaleLabels = document.createElement("div");
+      scaleLabels.className = "company-slider-scale";
+      [0, 25, 50, 75, 100].forEach((pct) => {
+        const label = document.createElement("button");
+        label.type = "button";
+        label.className = "company-slider-tick";
+        label.textContent = `${pct}`;
+        label.disabled = isLocked;
+        label.addEventListener("click", () => {
+          const value = Math.round(rangeStart + ((rangeEnd - rangeStart) * pct) / 100);
+          slider.value = String(value);
+          updateNextCell(value);
+        });
+        scaleLabels.appendChild(label);
+      });
+      sliderCol.appendChild(scaleLabels);
+      sliderWrap.appendChild(sliderCol);
+
+      // Cadenas ouvert (rouge) = curseur modifiable, aperçu seulement.
+      // Cadenas fermé (vert) = position verrouillée, la progression suit
+      // ensuite automatiquement les missions terminées par-dessus.
+      const lockBtn = document.createElement("button");
+      lockBtn.type = "button";
+      lockBtn.className = "company-lock-btn";
+      lockBtn.classList.toggle("locked", rawLocked);
+      lockBtn.classList.toggle("unlocked", !rawLocked);
+      lockBtn.textContent = rawLocked ? "🔒" : "🔓";
+      lockBtn.disabled = isDisabled;
+      lockBtn.setAttribute("aria-label", t(rawLocked ? "companyUnlockAria" : "companyLockAria"));
+      lockBtn.addEventListener("click", () => {
+        if (rawLocked) {
+          state.reputationOverrides[factionName] = {
+            tier: currentStanding.name,
+            points: current,
+            calibratedAt: Date.now(),
+            locked: false,
+          };
+        } else {
+          state.reputationOverrides[factionName] = {
+            tier: currentStanding.name,
+            points: Number(slider.value),
+            calibratedAt: Date.now(),
+            locked: true,
+          };
+        }
+        saveState();
+        renderCompaniesTab();
+      });
+      sliderWrap.appendChild(lockBtn);
+
+      card.appendChild(sliderWrap);
       card.appendChild(nextCell);
 
       slider.addEventListener("input", () => updateNextCell(Number(slider.value)));
-      slider.addEventListener("change", () => {
-        state.reputationOverrides[factionName] = { tier: currentStanding.name, points: Number(slider.value) };
-        saveState();
-      });
 
       container.appendChild(card);
     });
@@ -2353,9 +2439,13 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   });
   document.getElementById("complete-selected-missions").addEventListener("click", () => {
+    const now = Date.now();
     activeMissions()
       .filter((m) => m.included)
-      .forEach((m) => (m.completed = true));
+      .forEach((m) => {
+        m.completed = true;
+        m.completedAt = now;
+      });
     saveState();
     renderAll();
   });

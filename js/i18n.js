@@ -78,6 +78,8 @@ const TRANSLATIONS = {
     companyCalibrateAuto: "Automatique",
     companyNextRank: "{next} (encore {remaining})",
     companyMaxRankLabel: "Palier maximum",
+    companyLockAria: "Verrouiller la position",
+    companyUnlockAria: "Déverrouiller pour modifier",
 
     loginBtn: "Se connecter avec Discord",
     logoutBtn: "Se déconnecter",
@@ -259,6 +261,8 @@ const TRANSLATIONS = {
     companyCalibrateAuto: "Automatic",
     companyNextRank: "{next} ({remaining} more)",
     companyMaxRankLabel: "Maximum tier",
+    companyLockAria: "Lock position",
+    companyUnlockAria: "Unlock to edit",
 
     loginBtn: "Log in with Discord",
     logoutBtn: "Log out",
