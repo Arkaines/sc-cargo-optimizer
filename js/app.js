@@ -818,14 +818,14 @@ function renderMissionsTable() {
 
     const editBtn = document.createElement("button");
     editBtn.type = "button";
-    editBtn.className = "btn-secondary";
+    editBtn.className = "btn-primary";
     editBtn.textContent = t("editBtn");
     editBtn.addEventListener("click", () => startEditMission(m));
     actionsWrap.appendChild(editBtn);
 
     const doneBtn = document.createElement("button");
     doneBtn.type = "button";
-    doneBtn.className = "btn-secondary";
+    doneBtn.className = "btn-primary";
     doneBtn.textContent = t("completeBtn");
     doneBtn.addEventListener("click", () => {
       m.completed = true;
