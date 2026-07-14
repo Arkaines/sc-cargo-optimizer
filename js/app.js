@@ -1260,16 +1260,9 @@ function renderCompaniesTab() {
       slider.value = String(current);
       slider.disabled = isLocked;
 
-      const ticksId = `company-ticks-${factionName.replace(/[^a-zA-Z0-9]/g, "-")}`;
-      const ticks = document.createElement("datalist");
-      ticks.id = ticksId;
-      [0, 25, 50, 75, 100].forEach((pct) => {
-        const tick = document.createElement("option");
-        tick.value = String(Math.round(rangeStart + ((rangeEnd - rangeStart) * pct) / 100));
-        ticks.appendChild(tick);
-      });
-      slider.setAttribute("list", ticksId);
-      sliderCol.appendChild(ticks);
+      // Pas de graduations natives (datalist) : leurs petits traits ne
+      // s'alignaient pas avec nos chiffres cliquables en dessous — un seul
+      // repère (les chiffres) plutôt que deux qui se contredisent.
       sliderCol.appendChild(slider);
 
       const nextCell = document.createElement("span");
