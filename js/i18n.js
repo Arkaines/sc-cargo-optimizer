@@ -17,6 +17,7 @@ const TRANSLATIONS = {
     appTitle: "Optimiseur de routes cargo",
     appSubtitle: "Enregistre tes missions de transport et calcule l'ordre optimal des arrêts.",
     poweredByPrefix: "Données fournies par l'API publique",
+    poweredByAnd: "et",
 
     myShipTitle: "Mon vaisseau",
     shipUsedLabel: "Vaisseau utilisé",
@@ -181,6 +182,7 @@ const TRANSLATIONS = {
     appTitle: "Cargo Route Optimizer",
     appSubtitle: "Save your hauling missions and compute the optimal stop order.",
     poweredByPrefix: "Data provided by the public",
+    poweredByAnd: "and",
 
     myShipTitle: "My ship",
     shipUsedLabel: "Ship used",
