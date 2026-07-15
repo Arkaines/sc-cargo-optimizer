@@ -36,8 +36,8 @@ function colorForMission(missionId) {
 }
 
 // Étiquette de repère (Avant/Arrière/Gauche/Droite) affichée dans la scène :
-// un sprite (toujours face à la caméra) plutôt qu'un texte 3D, plus simple et
-// largement suffisant pour un simple repère d'orientation.
+// un plan posé à plat sur la base de la grille (comme un marquage au sol),
+// visible des deux faces puisque la caméra peut passer dessous en tournant.
 function makeAxisLabel(text) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
@@ -51,9 +51,13 @@ function makeAxisLabel(text) {
   ctx.textBaseline = "middle";
   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
-  sprite.scale.set(4, 1, 1);
-  return sprite;
+  const geom = new THREE.PlaneGeometry(4, 1);
+  const mesh = new THREE.Mesh(
+    geom,
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthTest: false })
+  );
+  mesh.rotation.x = -Math.PI / 2; // couché à plat (plan XZ), face visible vers le haut
+  return mesh;
 }
 
 function ensureScene(container) {
@@ -172,16 +176,16 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   // vaisseau, inconnu — voir le commentaire en tête de fichier).
   const margin = Math.max(2, totalWidth * 0.15);
   const front = makeAxisLabel(t("axisFront"));
-  front.position.set(midX, midY, maxDz + margin);
+  front.position.set(midX, 0, maxDz + margin);
   contentGroup.add(front);
   const rear = makeAxisLabel(t("axisRear"));
-  rear.position.set(midX, midY, -margin);
+  rear.position.set(midX, 0, -margin);
   contentGroup.add(rear);
   const left = makeAxisLabel(t("axisLeft"));
-  left.position.set(-margin, midY, midZ);
+  left.position.set(-margin, 0, midZ);
   contentGroup.add(left);
   const right = makeAxisLabel(t("axisRight"));
-  right.position.set(totalWidth + margin, midY, midZ);
+  right.position.set(totalWidth + margin, 0, midZ);
   contentGroup.add(right);
 
   // Recentre la caméra/les contrôles sur l'ensemble des modules affichés.
