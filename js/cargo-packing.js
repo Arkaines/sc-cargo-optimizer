@@ -14,16 +14,19 @@
 // standard sont des multiples entiers de cette unité sur chaque axe).
 const SCU_UNIT_METERS = 1.25;
 
-// Tailles de caisses standard du jeu, en crans de grille (x,y,z), du plus
-// grand au plus petit.
+// Tailles de caisses standard du jeu, du plus grand au plus petit, en crans
+// de grille. Une caisse ne repose jamais que sur une seule face possible (le
+// jeu ne permet pas de la coucher sur le flanc) : "footprint" est son
+// empreinte au sol (les deux dimensions posées à plat, interchangeables par
+// rotation à plat de 90°) et "height" sa hauteur réelle fixe.
 const SCU_BOX_SIZES = [
-  { scu: 32, cells: [2, 2, 8] },
-  { scu: 24, cells: [2, 2, 6] },
-  { scu: 16, cells: [2, 2, 4] },
-  { scu: 8, cells: [2, 2, 2] },
-  { scu: 4, cells: [1, 2, 2] },
-  { scu: 2, cells: [1, 1, 2] },
-  { scu: 1, cells: [1, 1, 1] },
+  { scu: 32, footprint: [2, 8], height: 2 },
+  { scu: 24, footprint: [2, 6], height: 2 },
+  { scu: 16, footprint: [2, 4], height: 2 },
+  { scu: 8, footprint: [2, 2], height: 2 },
+  { scu: 4, footprint: [1, 2], height: 2 },
+  { scu: 2, footprint: [1, 2], height: 1 },
+  { scu: 1, footprint: [1, 1], height: 1 },
 ];
 
 // Décompose une quantité en un nombre minimal de caisses standard (glouton :
@@ -46,7 +49,7 @@ function decomposeIntoBoxes(quantity, maxBoxScu) {
       remaining -= size.scu;
     }
   }
-  if (remaining > 0) boxes.push({ scu: remaining, cells: [1, 1, 1] });
+  if (remaining > 0) boxes.push({ scu: remaining, footprint: [1, 1], height: 1 });
   return boxes;
 }
 
@@ -100,32 +103,33 @@ function markPlaced(grid, pos, size, value) {
   }
 }
 
-// Les 6 permutations possibles des 3 axes d'une caisse (orientations
-// axis-aligned) : une caisse dont la plus grande face ne rentre pas dans le
-// sens "naturel" peut très bien rentrer une fois tournée sur un autre axe.
-function axisPermutations([a, b, c]) {
+// Une caisse ne peut tourner qu'à plat, autour de son axe vertical réel — le
+// jeu ne permet pas de la coucher sur une autre face (une caisse de 4 SCU
+// couchée pour "faire tenir" une orientation différente n'existe pas en
+// jeu). Sa hauteur reste donc toujours sur l'axe vertical (Z, voir
+// cellsFromDimensions) ; seules les deux dimensions posées au sol peuvent
+// s'échanger par une rotation à plat de 90°.
+function boxOrientations(box) {
+  const [a, b] = box.footprint;
+  const h = box.height;
   return [
-    [a, b, c],
-    [a, c, b],
-    [b, a, c],
-    [b, c, a],
-    [c, a, b],
-    [c, b, a],
+    [a, b, h],
+    [b, a, h],
   ];
 }
 
-// Essaie de placer une caisse dans un module, en testant toutes les
-// orientations possibles au premier emplacement libre trouvé — pas une
-// recherche du meilleur agencement possible, juste un rangement réaliste et
-// sans recouvrement, comme un joueur caserait effectivement ses caisses.
-// L'axe de profondeur (depthAxis) est la boucle la plus externe, balayée à
-// l'envers (du fond vers l'accès) : chaque plan de profondeur est rempli en
-// entier (réparti sur les deux autres axes) avant de passer au plan
-// suivant, plus proche de l'accès. Sans ça (profondeur en boucle interne),
-// tout finirait entassé contre un seul côté du module au lieu de se
-// répartir sur toute sa largeur.
-function tryPlaceInModule(grid, cellDims, boxCells, depthAxis) {
-  const orientations = axisPermutations(boxCells);
+// Essaie de placer une caisse dans un module, en testant les deux rotations
+// à plat possibles (voir boxOrientations) au premier emplacement libre
+// trouvé — pas une recherche du meilleur agencement possible, juste un
+// rangement réaliste et sans recouvrement, comme un joueur caserait
+// effectivement ses caisses. L'axe de profondeur (depthAxis) est la boucle
+// la plus externe, balayée à l'envers (du fond vers l'accès) : chaque plan
+// de profondeur est rempli en entier (réparti sur les deux autres axes)
+// avant de passer au plan suivant, plus proche de l'accès. Sans ça
+// (profondeur en boucle interne), tout finirait entassé contre un seul côté
+// du module au lieu de se répartir sur toute sa largeur.
+function tryPlaceInModule(grid, cellDims, box, depthAxis) {
+  const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const range = (size) => Array.from({ length: size }, (_, i) => i);
   const depths = range(cellDims[depthAxis]).reverse();
@@ -265,7 +269,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         let placed = null;
         for (const m of byFreeSpace) {
           if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
-          const result = tryPlaceInModule(m.grid, m.cellDims, b.box.cells, m.depthAxis);
+          const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis);
           if (result) {
             placed = { module: m, position: result.position, size: result.size };
             break;
