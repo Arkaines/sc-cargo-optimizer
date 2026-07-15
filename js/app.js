@@ -121,6 +121,10 @@ let state = loadState();
 // mission" (null quand le formulaire sert à en créer une nouvelle) — voir
 // startEditMission/cancelEditMission.
 let editingMissionId = null;
+// Taille maximum de caisse reconnue par le dernier import OCR passé en revue
+// dans le formulaire "Nouvelle mission" (pas de champ de formulaire dédié :
+// portée jusqu'à la soumission via cette variable, comme editingMissionId).
+let pendingOcrMaxCargoBoxSize = null;
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -316,6 +320,11 @@ function addMission(mission) {
       plannedQuantity: item.plannedQuantity ?? item.quantity,
     })),
     reward: mission.reward,
+    // Taille maximum de caisse annoncée par le contrat ("Taille maximum du
+    // cargo : X SCU", voir js/ocr.js:extractMaxCargoBoxSize) — utilisée pour
+    // décomposer la cargaison en caisses réalistes plutôt qu'en supposant
+    // arbitrairement la plus grosse caisse standard (voir js/cargo-packing.js).
+    maxCargoBoxSize: mission.maxCargoBoxSize || null,
     included: true,
     completed: false,
   };
@@ -2028,6 +2037,7 @@ function gatherCargoEntriesForPacking() {
           quantity: qty,
           commodity: item.commodity || "?",
           mission: m,
+          maxCargoBoxSize: m.maxCargoBoxSize || null,
           pickupId: item.pickupId,
           dropoffId: item.dropoffId,
         });
@@ -2519,6 +2529,7 @@ function startEditMission(mission) {
 
 function cancelEditMission() {
   editingMissionId = null;
+  pendingOcrMaxCargoBoxSize = null;
   document.getElementById("mission-form").reset();
   resetCargoFields();
   document.getElementById("mission-submit-btn").textContent = t("addMissionBtn");
@@ -2530,6 +2541,7 @@ function applyOcrResultToForm(parsed) {
   // était en train de modifier une mission existante, on annule ce mode pour
   // éviter d'écraser la mauvaise mission à la soumission.
   if (editingMissionId !== null) cancelEditMission();
+  pendingOcrMaxCargoBoxSize = parsed.maxCargoBoxSize || null;
   if (parsed.name) document.getElementById("mission-name").value = parsed.name;
   if (parsed.giver) document.getElementById("mission-giver").value = parsed.giver;
   if (parsed.reward) document.getElementById("mission-reward").value = parsed.reward;
@@ -2562,6 +2574,7 @@ function renderOcrResult(rawText, parsed) {
     [t("ocrLabelName"), parsed.name],
     [t("ocrLabelGiver"), parsed.giver],
     [t("ocrLabelReward"), parsed.reward ? `${parsed.reward} aUEC` : ""],
+    [t("ocrLabelMaxBoxSize"), parsed.maxCargoBoxSize ? `${parsed.maxCargoBoxSize} SCU` : ""],
   ];
   rows.forEach(([label, value]) => {
     if (!value) return;
@@ -2778,7 +2791,13 @@ function createMissionFromOcrResult(parsed) {
     return { mission: null, notes: [t("ocrBatchDuplicate")] };
   }
 
-  const mission = addMission({ name: parsed.name, giver: parsed.giver, cargoItems, reward: parsed.reward });
+  const mission = addMission({
+    name: parsed.name,
+    giver: parsed.giver,
+    cargoItems,
+    reward: parsed.reward,
+    maxCargoBoxSize: parsed.maxCargoBoxSize,
+  });
   return { mission, notes };
 }
 
@@ -2978,7 +2997,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       cancelEditMission();
     } else {
-      addMission({ name, giver, cargoItems, reward });
+      addMission({ name, giver, cargoItems, reward, maxCargoBoxSize: pendingOcrMaxCargoBoxSize });
+      pendingOcrMaxCargoBoxSize = null;
       e.target.reset();
       resetCargoFields();
       // La mission est enregistrée : la capture/le texte reconnu qui a servi

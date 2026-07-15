@@ -29,8 +29,10 @@ async function cropImageToCanvas(imageSource, left, top, width, height) {
 
 // L'écran de détails de contrat a une bande du haut pleine largeur (titre à
 // gauche, récompense/échéance/donneur à droite) puis deux colonnes en
-// dessous : description de la mission à gauche (aucune information utile,
-// ignorée), objectifs à droite. Faire lire toute la bande du haut d'un bloc
+// dessous : panneau "DÉTAILS" à gauche (donneur, type de mission, point de
+// collecte/destination en clair, et surtout "Taille maximum du cargo : X SCU"
+// — la seule info utile de ce panneau, le reste étant redondant avec les
+// objectifs), objectifs à droite. Faire lire toute la bande du haut d'un bloc
 // mélange parfois l'ordre de lecture entre le titre et le bloc récompense
 // (constaté empiriquement : les deux se retrouvent alors imbriqués ligne par
 // ligne, titre et récompense corrompus) — on découpe donc aussi la bande du
@@ -45,18 +47,20 @@ async function runOcrOnMissionScreenshot(imageSource) {
   const topBandHeight = Math.round(h * 0.22);
   const rightColumnLeft = Math.round(w * 0.45);
 
-  const [topLeftCanvas, topRightCanvas, rightCanvas] = await Promise.all([
+  const [topLeftCanvas, topRightCanvas, bottomLeftCanvas, rightCanvas] = await Promise.all([
     cropImageToCanvas(imageSource, 0, 0, rightColumnLeft, topBandHeight),
     cropImageToCanvas(imageSource, rightColumnLeft, 0, w - rightColumnLeft, topBandHeight),
+    cropImageToCanvas(imageSource, 0, topBandHeight, rightColumnLeft, h - topBandHeight),
     cropImageToCanvas(imageSource, rightColumnLeft, topBandHeight, w - rightColumnLeft, h - topBandHeight),
   ]);
 
-  const [topLeftResult, topRightResult, rightResult] = await Promise.all([
+  const [topLeftResult, topRightResult, bottomLeftResult, rightResult] = await Promise.all([
     Tesseract.recognize(topLeftCanvas, "fra+eng"),
     Tesseract.recognize(topRightCanvas, "fra+eng"),
+    Tesseract.recognize(bottomLeftCanvas, "fra+eng"),
     Tesseract.recognize(rightCanvas, "fra+eng"),
   ]);
-  return `${topLeftResult.data.text}\n${topRightResult.data.text}\n${rightResult.data.text}`;
+  return `${topLeftResult.data.text}\n${topRightResult.data.text}\n${bottomLeftResult.data.text}\n${rightResult.data.text}`;
 }
 
 const E_ACUTE = String.fromCharCode(0x00e9); // e minuscule accent aigu
@@ -344,6 +348,27 @@ function extractReward(normalized) {
   return m[1].replace(/[,.\s]/g, "");
 }
 
+// Le panneau "DÉTAILS" (colonne du bas à gauche) affiche la taille maximum de
+// caisse que le contrat accepte ("Taille maximum du cargo : X SCU") : le jeu
+// décompose alors la quantité à récupérer en caisses de cette taille (ex : 7
+// SCU à récupérer avec un plafond de 4 SCU donne des caisses de 4 + 2 + 1),
+// c'est cette limite qu'on veut récupérer plutôt que deviner arbitrairement la
+// plus grosse caisse standard côté rangement (voir js/cargo-packing.js).
+// "carg\w*" tolère un OCR imparfait de "cargo", comme le filler entre le
+// libellé et le nombre (ponctuation parasite fréquente ailleurs dans l'OCR).
+function extractMaxCargoBoxSize(normalized) {
+  const reFr = /Taille\s+maximum\s+du\s+carg\w*\s*[^0-9]{0,3}(\d+)\s*SCU/i;
+  const reEn = /Max(?:imum)?\s+Cargo\s+Size\s*[^0-9]{0,3}(\d+)\s*SCU/i;
+  // Repli : le paragraphe "Notes" (texte d'ambiance, sous le champ structuré
+  // ci-dessus) redit souvent la même limite sous une autre forme ("vous savez
+  // gérer des conteneurs de X SCU") — utile quand le champ structuré est mal
+  // lu par l'OCR (ligne dense en accents/ponctuation) mais que cette
+  // deuxième mention, elle, passe.
+  const reNotesFr = /(?:conteneurs?|caisses?)\s+de\s+(\d+)\s*SCU/i;
+  const m = reFr.exec(normalized) || reEn.exec(normalized) || reNotesFr.exec(normalized);
+  return m ? Number(m[1]) : null;
+}
+
 // Le jeu ajoute au nom du lieu une précision de position qui n'en fait pas
 // partie : "sur <corps>" (ou "on <corps>" en anglais) pour un lieu en
 // surface, "au-dessus de/d'<corps>" ou "au L4 Lagrange de <corps>" pour un
@@ -575,6 +600,7 @@ function parseOcrText(text) {
     matchKnownMissionTitle(text, reward) ||
     matchFrenchTitleTemplate(text, giver) ||
     matchGenericTierSizeTitle(titleGuess, giver, reward);
+  const maxCargoBoxSize = extractMaxCargoBoxSize(normalized);
 
   return {
     raw: text,
@@ -582,5 +608,6 @@ function parseOcrText(text) {
     giver,
     cargoItems,
     reward,
+    maxCargoBoxSize,
   };
 }

@@ -150,10 +150,20 @@ function packCargoIntoHolds(cargoEntries, holds) {
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
 
   // Les plus grosses caisses d'abord (premier ajustement décroissant) :
-  // heuristique simple et efficace pour le rangement en bacs.
+  // heuristique simple et efficace pour le rangement en bacs. Le plafond de
+  // décomposition est le plus petit entre ce que le vaisseau accepte et la
+  // taille maximum annoncée par le contrat lui-même ("Taille maximum du
+  // cargo : X SCU", voir js/ocr.js) quand elle est connue — le jeu découpe
+  // réellement la cargaison à récupérer selon cette limite (ex : 7 SCU à
+  // récupérer avec un plafond de 4 SCU donne des caisses de 4 + 2 + 1), donc
+  // s'en tenir uniquement à la capacité du vaisseau produirait des caisses
+  // plus grosses que celles qu'on trouvera vraiment en jeu.
   const allBoxes = [];
   cargoEntries.forEach((entry) => {
-    decomposeIntoBoxes(entry.quantity, shipMaxContainerSize).forEach((box) => allBoxes.push({ box, entry }));
+    const cap = entry.maxCargoBoxSize
+      ? Math.min(entry.maxCargoBoxSize, shipMaxContainerSize)
+      : shipMaxContainerSize;
+    decomposeIntoBoxes(entry.quantity, cap).forEach((box) => allBoxes.push({ box, entry }));
   });
   allBoxes.sort((a, b) => b.box.scu - a.box.scu);
 

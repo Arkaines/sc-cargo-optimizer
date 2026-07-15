@@ -56,6 +56,7 @@ const TRANSLATIONS = {
     ocrLabelName: "Nom",
     ocrLabelGiver: "Donneur",
     ocrLabelReward: "Récompense",
+    ocrLabelMaxBoxSize: "Taille de caisse",
     ocrApproxWarning:
       "⚠ Marchandise disponible à plusieurs lieux de retrait : la quantité est répartie également à titre d'estimation — vérifie le stock réel en jeu et corrige les quantités si besoin.",
     ocrItemLine: "{qty} SCU de {commodity} : {pickup} → {dropoff}{approx}",
@@ -270,6 +271,7 @@ const TRANSLATIONS = {
     ocrLabelName: "Name",
     ocrLabelGiver: "Giver",
     ocrLabelReward: "Reward",
+    ocrLabelMaxBoxSize: "Crate size",
     ocrApproxWarning:
       "⚠ This commodity is available at several pickup locations: the quantity is split evenly as an estimate — check actual stock in-game and correct the quantities if needed.",
     ocrItemLine: "{qty} SCU of {commodity}: {pickup} → {dropoff}{approx}",
