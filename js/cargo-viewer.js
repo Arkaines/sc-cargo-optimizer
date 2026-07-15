@@ -188,9 +188,16 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   let maxDy = 0;
   let maxDz = 0;
   displayHolds.forEach((hold) => {
+    // FleetYards renvoie les dimensions dans le repère natif du jeu (moteur
+    // dérivé de CryEngine, axe Z vers le haut) : x = largeur, y = profondeur
+    // (le long axe d'une soute allongée), z = hauteur réelle. Three.js étant
+    // Y-vers-le-haut, on échange y/z ici pour que le rendu tienne à plat
+    // dans le bon sens plutôt que debout sur la tranche (confirmé visuellement
+    // par capture FleetYards : les caisses du C8 Pisces sont couchées, pas
+    // dressées en hauteur).
     const dx = hold.dimensions.x;
-    const dy = hold.dimensions.y;
-    const dz = hold.dimensions.z;
+    const dy = hold.dimensions.z;
+    const dz = hold.dimensions.y;
     maxDy = Math.max(maxDy, dy);
     maxDz = Math.max(maxDz, dz);
 
@@ -199,12 +206,18 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
     wireframe.position.set(offsetX, 0, 0);
     contentGroup.add(wireframe);
 
-    // Caisses rangées dans ce module.
+    // Caisses rangées dans ce module (même échange y/z que ci-dessus : les
+    // caisses sont calculées par js/cargo-packing.js dans le repère natif
+    // x/y/z du hold, position/size gardent donc cet ordre jusqu'ici).
     placements
       .filter((p) => p.module === hold)
       .forEach((p) => {
-        const [sx, sy, sz] = p.size.map((c) => c * UNIT);
-        const [px, py, pz] = p.position;
+        const sx = p.size[0] * UNIT;
+        const sy = p.size[2] * UNIT;
+        const sz = p.size[1] * UNIT;
+        const px = p.position[0];
+        const py = p.position[2];
+        const pz = p.position[1];
         const geom = new THREE.BoxGeometry(sx * 0.94, sy * 0.94, sz * 0.94); // léger retrait visuel entre caisses
         const mat = new THREE.MeshStandardMaterial({
           color: colorForMission(p.entry.mission ? p.entry.mission.id : 0),
