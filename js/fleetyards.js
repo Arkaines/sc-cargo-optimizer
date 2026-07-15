@@ -47,6 +47,15 @@ async function syncFleetyardsCargoHolds() {
       dimensions: h.dimensions,
       capacity: h.capacity,
       maxContainerSize: h.maxContainerSize ? h.maxContainerSize.size : null,
+      // Position relative de ce module dans le vaisseau — fiable pour les
+      // vaisseaux aux modules tous différents (ex. Hull B, dont les noms de
+      // hardpoint encodent même la position : "bottom_front_left_lower"...),
+      // mais identique entre plusieurs instances d'un même module répété
+      // (ex. les 4 baies du Caterpillar) puisqu'il s'agit alors de l'offset
+      // local au préfab répété, pas d'une position absolue sur le vaisseau —
+      // voir js/cargo-viewer.js qui détecte ce cas et retombe sur une
+      // disposition en rangée pour les modules à l'offset dupliqué.
+      offset: h.offset || null,
     }));
   });
 

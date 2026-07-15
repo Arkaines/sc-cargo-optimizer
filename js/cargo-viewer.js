@@ -195,26 +195,76 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
     (h) => (h.capacity || 0) >= maxCapacity * 0.25 || placements.some((p) => p.module === h)
   );
 
-  let offsetX = 0;
+  // FleetYards.net fournit parfois la vraie position relative de chaque
+  // module (offset), mais seulement fiable quand elle est UNIQUE parmi tous
+  // les modules du vaisseau : un même offset partagé par plusieurs modules
+  // (ex. les 4 baies identiques du Caterpillar) est l'offset local au préfab
+  // répété, pas une position absolue sur le vaisseau, et ne permet pas de
+  // les situer les uns par rapport aux autres — dans ce cas (ou en l'absence
+  // d'offset) on retombe sur une simple rangée, comme avant. Pour les
+  // vaisseaux aux modules tous différents (ex. Hull B, dont les noms
+  // encodent même la position : "bottom_front_left_lower"...), la vraie
+  // disposition dans l'espace est utilisée.
+  const offsetKey = (o) => (o ? `${o.x.toFixed(2)},${o.y.toFixed(2)},${o.z.toFixed(2)}` : null);
+  const offsetCounts = new Map();
+  holds.forEach((h) => {
+    const key = offsetKey(h.offset);
+    if (key) offsetCounts.set(key, (offsetCounts.get(key) || 0) + 1);
+  });
+  const hasReliableOffset = (h) => offsetCounts.get(offsetKey(h.offset)) === 1;
+
+  // dx/dy/dz : mêmes dimensions que ci-dessous (échange y/z, repère
+  // Three.js), calculées une fois par module affiché.
+  const layout = displayHolds.map((hold) => ({
+    hold,
+    dx: hold.dimensions.x,
+    dy: hold.dimensions.z,
+    dz: hold.dimensions.y,
+  }));
+
+  const positioned = layout.filter((l) => hasReliableOffset(l.hold));
+  const fallback = layout.filter((l) => !hasReliableOffset(l.hold));
+
+  // Modules à offset fiable : position réelle (même échange y/z que les
+  // dimensions, x reste x).
+  positioned.forEach((l) => {
+    const o = l.hold.offset;
+    l.worldPos = [o.x, o.z, o.y];
+  });
+
+  // Modules sans offset exploitable : rangée de repli, placée juste après
+  // l'ensemble des modules déjà positionnés réellement pour ne pas les
+  // chevaucher.
+  let fallbackOffsetX = positioned.reduce((max, l) => Math.max(max, l.worldPos[0] + l.dx), 0);
+  if (positioned.length && fallback.length) fallbackOffsetX += MODULE_GAP;
+  fallback.forEach((l) => {
+    l.worldPos = [fallbackOffsetX, 0, 0];
+    fallbackOffsetX += l.dx + MODULE_GAP;
+  });
+
+  // Ramène tout à des coordonnées positives (les offsets réels peuvent
+  // démarrer n'importe où) pour que les étiquettes/la caméra ci-dessous
+  // restent cohérentes.
+  const minX = Math.min(0, ...layout.map((l) => l.worldPos[0]));
+  const minZ = Math.min(0, ...layout.map((l) => l.worldPos[2]));
+  layout.forEach((l) => {
+    l.worldPos[0] -= minX;
+    l.worldPos[2] -= minZ;
+  });
+
   let maxDy = 0;
   let maxDz = 0;
-  displayHolds.forEach((hold) => {
-    // FleetYards renvoie les dimensions dans le repère natif du jeu (moteur
-    // dérivé de CryEngine, axe Z vers le haut) : x = largeur, y = profondeur
-    // (le long axe d'une soute allongée), z = hauteur réelle. Three.js étant
-    // Y-vers-le-haut, on échange y/z ici pour que le rendu tienne à plat
-    // dans le bon sens plutôt que debout sur la tranche (confirmé visuellement
-    // par capture FleetYards : les caisses du C8 Pisces sont couchées, pas
-    // dressées en hauteur).
-    const dx = hold.dimensions.x;
-    const dy = hold.dimensions.z;
-    const dz = hold.dimensions.y;
-    maxDy = Math.max(maxDy, dy);
-    maxDz = Math.max(maxDz, dz);
+  let totalWidth = 0;
+  layout.forEach((l) => {
+    maxDy = Math.max(maxDy, l.worldPos[1] + l.dy);
+    maxDz = Math.max(maxDz, l.worldPos[2] + l.dz);
+    totalWidth = Math.max(totalWidth, l.worldPos[0] + l.dx);
+  });
 
+  layout.forEach(({ hold, dx, dy, dz, worldPos }) => {
     // Caisson du module : arêtes nettes + grille de crans sur les faces.
     const wireframe = makeModuleWireframe(dx, dy, dz);
-    wireframe.position.set(offsetX, 0, 0);
+    wireframe.position.set(worldPos[0], worldPos[1], worldPos[2]);
     contentGroup.add(wireframe);
 
     // Caisses rangées dans ce module (même échange y/z que ci-dessus : les
@@ -234,7 +284,11 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
           color: colorForMission(p.entry.mission ? p.entry.mission.id : 0),
         });
         const mesh = new THREE.Mesh(geom, mat);
-        mesh.position.set(offsetX + px * UNIT + sx / 2, py * UNIT + sy / 2, pz * UNIT + sz / 2);
+        mesh.position.set(
+          worldPos[0] + px * UNIT + sx / 2,
+          worldPos[1] + py * UNIT + sy / 2,
+          worldPos[2] + pz * UNIT + sz / 2
+        );
         contentGroup.add(mesh);
 
         const edges = new THREE.LineSegments(
@@ -244,11 +298,8 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
         edges.position.copy(mesh.position);
         contentGroup.add(edges);
       });
-
-    offsetX += dx + MODULE_GAP;
   });
 
-  const totalWidth = offsetX - MODULE_GAP;
   sceneBounds = { minX: 0, maxX: totalWidth, minY: 0, maxY: maxDy, minZ: 0, maxZ: maxDz };
   const midX = totalWidth / 2;
   const midY = maxDy / 2;
@@ -287,8 +338,14 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   // l'autre pour le même vaisseau.
   const frameKey = `${totalWidth.toFixed(2)}|${maxDy.toFixed(2)}|${maxDz.toFixed(2)}`;
   if (frameKey !== lastFrameKey) {
+    // La scène n'est pas toujours une rangée longue et fine (les modules à
+    // offset réel, voir plus haut, peuvent former un vrai volume 3D presque
+    // cubique, ex. Hull B) : la distance de la caméra doit tenir compte des
+    // 3 dimensions de la scène, pas seulement de sa largeur, sous peine de
+    // se retrouver au milieu des modules plutôt qu'à bonne distance.
+    const sceneScaleForCamera = Math.max(totalWidth, maxDy, maxDz, 1);
     controls.target.set(midX, midY, midZ);
-    camera.position.set(midX, Math.max(6, totalWidth * 0.4), Math.max(10, totalWidth * 0.7));
+    camera.position.set(midX, Math.max(6, sceneScaleForCamera * 0.6), Math.max(10, sceneScaleForCamera * 1.1));
     controls.update();
     lastFrameKey = frameKey;
   }
