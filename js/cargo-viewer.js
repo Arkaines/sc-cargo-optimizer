@@ -173,7 +173,10 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
 
   // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : un simple
   // repère d'orientation pour ce rendu (pas l'avant/arrière réel du
-  // vaisseau, inconnu — voir le commentaire en tête de fichier).
+  // vaisseau, inconnu — voir le commentaire en tête de fichier). Avant = +Z :
+  // en repère main droite avec l'axe Y vers le haut, faire face à +Z met la
+  // droite du côté -X et la gauche du côté +X (règle de la main droite,
+  // pas l'inverse) — d'où gauche posée du côté totalWidth+margin ci-dessous.
   const margin = Math.max(2, totalWidth * 0.15);
   const front = makeAxisLabel(t("axisFront"));
   front.position.set(midX, 0, maxDz + margin);
@@ -182,10 +185,10 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   rear.position.set(midX, 0, -margin);
   contentGroup.add(rear);
   const left = makeAxisLabel(t("axisLeft"));
-  left.position.set(-margin, 0, midZ);
+  left.position.set(totalWidth + margin, 0, midZ);
   contentGroup.add(left);
   const right = makeAxisLabel(t("axisRight"));
-  right.position.set(totalWidth + margin, 0, midZ);
+  right.position.set(-margin, 0, midZ);
   contentGroup.add(right);
 
   // Recentre la caméra/les contrôles sur l'ensemble des modules affichés.
@@ -205,10 +208,13 @@ function setCargoViewerView(view) {
   const midZ = (minZ + maxZ) / 2;
   const distance = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 6) * 1.6;
   controls.target.set(midX, midY, midZ);
+  // Cohérent avec les étiquettes ci-dessus (Avant = +Z, Gauche = +X) : la
+  // "vue gauche" place la caméra du côté gauche (+X) pour regarder vers le
+  // vaisseau depuis ce côté.
   if (view === "front") camera.position.set(midX, midY, midZ + distance);
   else if (view === "rear") camera.position.set(midX, midY, midZ - distance);
-  else if (view === "left") camera.position.set(midX - distance, midY, midZ);
-  else if (view === "right") camera.position.set(midX + distance, midY, midZ);
+  else if (view === "left") camera.position.set(midX + distance, midY, midZ);
+  else if (view === "right") camera.position.set(midX - distance, midY, midZ);
   controls.update();
 }
 window.setCargoViewerView = setCargoViewerView;
