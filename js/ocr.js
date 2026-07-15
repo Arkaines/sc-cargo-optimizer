@@ -102,12 +102,18 @@ const RANK_TIER_PREFIX_RE = new RegExp(
 //    donneur ("Contracted By"/"Proposé Par"/"Émis Par"), où le titre se
 //    retrouve coincé (parfois précédé d'un badge de palier de rang).
 function extractContractTitle(rawText) {
+  // L'UI du jeu affiche parfois un glyphe "|" (puce de section, vu aussi
+  // devant "Notes" dans le panneau DÉTAILS) juste devant le titre, capté par
+  // le recadrage OCR de la bande du haut — jamais légitime dans un titre,
+  // on le retire quel que soit le gabarit ci-dessous qui a matché.
+  const stripLeadingGlyph = (s) => s.replace(/^[|\s]+/, "");
+
   const xpLine = rawText.split("\n").find((l) => /\[\s*\d+\s*xp\s*\]/i.test(l));
-  if (xpLine) return xpLine.replace(/\[\s*\d+\s*xp\s*\]/i, "").trim();
+  if (xpLine) return stripLeadingGlyph(xpLine.replace(/\[\s*\d+\s*xp\s*\]/i, "").trim());
 
   const beforeReward = new RegExp("^([\\s\\S]*?)(?:R" + E_ACUTE_UP + "COMPENSE|Paiement|Reward)", "i").exec(rawText);
   if (beforeReward && beforeReward[1].trim()) {
-    return beforeReward[1].replace(/\s+/g, " ").trim();
+    return stripLeadingGlyph(beforeReward[1].replace(/\s+/g, " ").trim());
   }
 
   const giverLabelSrc = "Contracted\\s*By|Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par";
@@ -120,7 +126,7 @@ function extractContractTitle(rawText) {
     "(?:Trainee|Rookie|Junior|Member|Experienced|Senior|Master)\\s+Rank\\s+(.+?)\\s+(?:" + giverLabelSrc + ")",
     "i"
   ).exec(rawText);
-  if (rankTitle) return rankTitle[1].replace(/\s+/g, " ").trim();
+  if (rankTitle) return stripLeadingGlyph(rankTitle[1].replace(/\s+/g, " ").trim());
 
   const beforeGiver = new RegExp("([\\s\\S]*?)(?:" + giverLabelSrc + ")", "i").exec(rawText);
   if (!beforeGiver) return "";
@@ -129,7 +135,102 @@ function extractContractTitle(rawText) {
   // précède (récompense, échéance...), en se limitant aux derniers mots.
   const words = cleaned.split(" ");
   const tail = words.slice(-8).join(" ");
-  return tail.replace(RANK_TIER_PREFIX_RE, "").trim();
+  return stripLeadingGlyph(tail.replace(RANK_TIER_PREFIX_RE, "").trim());
+}
+
+// Certaines entreprises proposent des contrats génériques dont le titre
+// (client français) suit le gabarit "PALIER - TAILLE - PORTÉE" (ex : "JUNIOR
+// - PETIT - STELLAIRE [50 xp]"), sans jamais nommer l'entreprise — le
+// catalogue (data/mission-reputation-by-title.js) n'a que le titre anglais
+// correspondant (ex : "Junior Hauler Needed for Small Shipment"), donc sans
+// traduction ce titre ne correspond jamais à une entrée connue et l'estimation
+// de réputation retombe sur la moyenne par donneur (moins précise). La
+// "PORTÉE" (Stellaire/Interstellaire, portée système vs inter-système) n'a
+// pas d'équivalent dans le catalogue anglais et est donc ignorée.
+// Traductions à corriger si une capture en jeu prouve le contraire — seules
+// "Junior"/"Petit"/"Moyen" sont confirmées par des captures réelles, le reste
+// est une estimation raisonnable (convention habituelle de localisation FR).
+function stripDiacritics(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+const GENERIC_TITLE_TIER_FR_TO_EN = {
+  stagiaire: "Trainee",
+  debutant: "Rookie",
+  junior: "Junior",
+  membre: "Member",
+  experimente: "Experienced",
+  senior: "Senior",
+  maitre: "Master",
+};
+
+const GENERIC_TITLE_SIZE_FR_TO_EN = {
+  "extra petit": "Extra Small",
+  petit: "Small",
+  moyen: "Medium",
+  grand: "Large",
+  vrac: "Bulk",
+};
+
+function matchGenericTierSizeTitle(title, giver, reward) {
+  if (typeof DEFAULT_MISSION_REPUTATION_BY_TITLE === "undefined") return null;
+  if (!title || !giver) return null;
+
+  const cleaned = title.replace(/^[^\p{L}]+/u, "");
+  const parts = cleaned.split(/\s*-\s*/);
+  if (parts.length < 3) return null;
+
+  const tier = GENERIC_TITLE_TIER_FR_TO_EN[stripDiacritics(parts[0]).trim().toLowerCase()];
+  const size = GENERIC_TITLE_SIZE_FR_TO_EN[stripDiacritics(parts[1]).trim().toLowerCase()];
+  if (!tier || !size) return null;
+
+  const tierRe = new RegExp("\\b" + tier + "\\b", "i");
+  // "Small" est aussi un mot entier dans "Extra Small" : on l'exclut
+  // explicitement plutôt que de confondre les deux tailles.
+  const sizeRe = size === "Small" ? /(?<!Extra )\bSmall\b/i : new RegExp("\\b" + size + "\\b", "i");
+  const candidates = Object.keys(DEFAULT_MISSION_REPUTATION_BY_TITLE).filter(
+    (k) => tierRe.test(k) && sizeRe.test(k)
+  );
+  if (!candidates.length) return null;
+
+  const giverWords = new Set(giver.toLowerCase().split(/\s+/).filter(Boolean));
+  const matchesGiver = (k) =>
+    DEFAULT_MISSION_REPUTATION_BY_TITLE[k].some((v) =>
+      v.rep.some((r) => {
+        if (!r.faction) return false;
+        const factionWords = r.faction.toLowerCase().split(/\s+/).filter(Boolean);
+        return factionWords.every((w) => giverWords.has(w));
+      })
+    );
+
+  // Le donneur doit correspondre à l'entreprise du candidat : plusieurs
+  // entreprises ont chacune leur propre gabarit "Palier - Taille..." pour un
+  // même palier/taille (ex : Covalex "Junior Rank - Small Cargo Haul" vs Red
+  // Wind Linehaul "Junior Hauler Needed for Small Shipment"), donc sans cette
+  // vérification on risquerait d'attribuer la réputation à la mauvaise
+  // entreprise plutôt que de repartir en toute sécurité sur l'estimation par
+  // donneur (comportement actuel, imprécis mais jamais faux).
+  const giverMatches = candidates.filter(matchesGiver);
+  if (!giverMatches.length) return null;
+  if (giverMatches.length === 1) return giverMatches[0];
+
+  // Plusieurs candidats restants pour ce donneur (ex : variante "Direct" ou
+  // non, indistincte depuis le titre français) : on départage par la
+  // récompense exacte, comme matchKnownMissionTitle.
+  const rewardNum = Number(reward) || 0;
+  let best = null;
+  let bestInRange = false;
+  giverMatches.forEach((k) => {
+    const variants = DEFAULT_MISSION_REPUTATION_BY_TITLE[k];
+    const inRange =
+      rewardNum > 0 &&
+      variants.some((v) => v.rewardMin > 0 && rewardNum >= v.rewardMin && rewardNum <= (v.rewardMax > 0 ? v.rewardMax : v.rewardMin));
+    if (best === null || (inRange && !bestInRange)) {
+      best = k;
+      bestInRange = inRange;
+    }
+  });
+  return best;
 }
 
 // Recoupe le texte brut de l'OCR avec la base des titres de mission connus
@@ -279,7 +380,7 @@ function parseDropoffChunk(content) {
   const scuMatch = /^(.*?)SCU[^a-zA-Z]*de\s+(.+)$/i.exec(content);
   if (!scuMatch) return null;
   const beforeScu = scuMatch[1].trim();
-  const commodity = stripTrailingBulletNoise(scuMatch[2].trim());
+  const commodity = stripTrailingBulletNoise(stripBracketNoise(scuMatch[2].trim()));
   const qtyMatch = /(\d+)\s*\/\s*(\d+)\s*$/.exec(beforeScu);
   if (!qtyMatch) return null;
   const location = cleanLocationEdges(stripBracketNoise(beforeScu.slice(0, qtyMatch.index)));
@@ -378,7 +479,7 @@ function parseDropoffChunkAlt(content) {
   );
   const m = re.exec(content);
   if (!m) return null;
-  const commodity = m[3].trim();
+  const commodity = stripTrailingBulletNoise(stripBracketNoise(m[3].trim()));
   const location = stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[4])));
   return { location, quantity: Number(m[2]), commodity };
 }
@@ -406,7 +507,7 @@ function extractObjectivesAlt(normalized) {
 function parseDropoffChunkEn(content) {
   const m = /^(\d+)\s*\/\s*(\d+)\s*SCU\s+of\s+(.+?)\s+to\s+(.+)$/i.exec(content);
   if (!m) return null;
-  const commodity = m[3].trim();
+  const commodity = stripTrailingBulletNoise(stripBracketNoise(m[3].trim()));
   const location = stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(m[4])));
   return { location, quantity: Number(m[2]), commodity };
 }
@@ -469,11 +570,15 @@ function parseOcrText(text) {
 
   const reward = extractReward(normalized);
   const giver = extractGiver(normalized);
-  const knownTitle = matchKnownMissionTitle(text, reward) || matchFrenchTitleTemplate(text, giver);
+  const titleGuess = extractContractTitle(text);
+  const knownTitle =
+    matchKnownMissionTitle(text, reward) ||
+    matchFrenchTitleTemplate(text, giver) ||
+    matchGenericTierSizeTitle(titleGuess, giver, reward);
 
   return {
     raw: text,
-    name: knownTitle || extractContractTitle(text),
+    name: knownTitle || titleGuess,
     giver,
     cargoItems,
     reward,

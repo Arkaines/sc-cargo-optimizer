@@ -345,6 +345,48 @@ function missionSignature(m) {
   return `${m.giver || ""}::${items}::${m.reward || ""}`;
 }
 
+// Plusieurs missions peuvent porter exactement le même nom (ex : titres
+// génériques comme "JUNIOR - PETIT - STELLAIRE") — sur la feuille de route,
+// où seul le nom est affiché à chaque étape, ça rend impossible de savoir à
+// quelle mission précise se rapporte une ligne de ramassage/dépôt. On calcule
+// donc un tag "(n/total)" par mission, uniquement quand son nom est dupliqué
+// parmi les missions du trajet en cours, numéroté selon l'ordre de première
+// apparition dans le trajet (plus lisible que l'ordre de création).
+function collectRouteMissionsInOrder(result) {
+  const seen = new Set();
+  const missions = [];
+  result.steps.forEach((step) => {
+    step.actions.forEach((a) => {
+      if (!seen.has(a.mission.id)) {
+        seen.add(a.mission.id);
+        missions.push(a.mission);
+      }
+    });
+  });
+  return missions;
+}
+
+function buildMissionRouteTags(missions) {
+  const counts = new Map();
+  missions.forEach((m) => counts.set(m.name, (counts.get(m.name) || 0) + 1));
+  const seenIndex = new Map();
+  const tags = new Map();
+  missions.forEach((m) => {
+    const total = counts.get(m.name);
+    if (total > 1) {
+      const idx = (seenIndex.get(m.name) || 0) + 1;
+      seenIndex.set(m.name, idx);
+      tags.set(m.id, `${idx}/${total}`);
+    }
+  });
+  return tags;
+}
+
+function missionRouteLabel(mission, tags) {
+  const tag = tags.get(mission.id);
+  return tag ? `${mission.name} (${tag})` : mission.name;
+}
+
 function removeMission(id) {
   state.missions = state.missions.filter((m) => m.id !== id);
   saveState();
@@ -361,10 +403,53 @@ function setMissionIncluded(id, included) {
 // =========================================================================
 // Optimisation (TSP avec contraintes de précédence pickup -> dropoff)
 // =========================================================================
-function computeUniqueLocationIds(missions) {
+
+// Lieux dont l'ascenseur de fret est signalé HS par le joueur : aucun
+// ramassage ni dépôt n'y est possible tant que ce n'est pas réactivé.
+// Volontairement PAS dans `state` (donc pas persisté ni synchronisé) : un
+// ascenseur HS est un état serveur temporaire propre à la session de jeu en
+// cours, qui ne veut plus rien dire à la prochaine connexion.
+const brokenElevatorLocationIds = new Set();
+
+function isElevatorBroken(locId) {
+  return brokenElevatorLocationIds.has(locId);
+}
+
+function toggleElevatorBroken(locId) {
+  if (brokenElevatorLocationIds.has(locId)) brokenElevatorLocationIds.delete(locId);
+  else brokenElevatorLocationIds.add(locId);
+  renderBrokenElevatorsList();
+  runOptimize();
+}
+
+function renderBrokenElevatorsList() {
+  const container = document.getElementById("broken-elevators");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!brokenElevatorLocationIds.size) return;
+
+  const label = document.createElement("span");
+  label.className = "hint";
+  label.textContent = t("brokenElevatorsLabel");
+  container.appendChild(label);
+
+  Array.from(brokenElevatorLocationIds).forEach((locId) => {
+    const loc = getLocationById(locId);
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "broken-elevator-chip";
+    chip.textContent = t("elevatorReactivateBtn", { location: loc ? loc.name : locId });
+    chip.addEventListener("click", () => toggleElevatorBroken(locId));
+    container.appendChild(chip);
+  });
+}
+
+function computeUniqueLocationIds(missions, broken) {
+  const skip = broken || new Set();
   const set = new Set();
   missions.forEach((m) => {
     (m.cargoItems || []).forEach((item) => {
+      if (skip.has(item.pickupId) || skip.has(item.dropoffId)) return;
       if (item.pickupId) set.add(item.pickupId);
       if (item.dropoffId) set.add(item.dropoffId);
     });
@@ -536,10 +621,16 @@ function roundScu(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function optimizeRoute(missions, startId) {
+function optimizeRoute(missions, startId, brokenLocationIds) {
   if (missions.length === 0) return { error: t("selectMissionError") };
 
-  const locIds = computeUniqueLocationIds(missions);
+  // Un ascenseur de fret HS rend son lieu inutilisable pour le ramassage
+  // COMME le dépôt : toute ligne de cargaison qui s'appuie dessus (d'un côté
+  // ou de l'autre) est ignorée pour ce calcul, comme si elle n'existait pas.
+  const broken = brokenLocationIds || new Set();
+  const isUsable = (item) => !broken.has(item.pickupId) && !broken.has(item.dropoffId);
+
+  const locIds = computeUniqueLocationIds(missions, broken);
   const n = locIds.length;
   const idxOf = {};
   locIds.forEach((id, i) => (idxOf[id] = i));
@@ -557,6 +648,7 @@ function optimizeRoute(missions, startId) {
   const constraints = [];
   missions.forEach((m) => {
     (m.cargoItems || []).forEach((item) => {
+      if (!isUsable(item)) return;
       if (item.pickupId && item.dropoffId && item.pickupId !== item.dropoffId) {
         constraints.push([idxOf[item.pickupId], idxOf[item.dropoffId]]);
       }
@@ -591,7 +683,7 @@ function optimizeRoute(missions, startId) {
       // L'index d'origine dans mission.cargoItems est conservé (pas juste la
       // copie filtrée) pour pouvoir corriger la bonne ligne depuis le suivi
       // interactif du trajet (quantité réelle, case à cocher).
-      const withIndex = (m.cargoItems || []).map((item, index) => ({ ...item, index }));
+      const withIndex = (m.cargoItems || []).map((item, index) => ({ ...item, index })).filter(isUsable);
       const pickupItems = withIndex.filter((item) => item.pickupId === locId);
       if (pickupItems.length) actions.push({ type: "pickup", mission: m, items: pickupItems });
       const dropoffItems = withIndex.filter((item) => item.dropoffId === locId);
@@ -1575,6 +1667,8 @@ function renderRouteResult(result) {
 
   if (!result) return;
 
+  const missionTags = result.steps ? buildMissionRouteTags(collectRouteMissionsInOrder(result)) : new Map();
+
   if (result.error) {
     const p = document.createElement("p");
     p.className = "error";
@@ -1625,7 +1719,7 @@ function renderRouteResult(result) {
         const row = document.createElement("div");
         row.className = "actions-cell";
         const label = document.createElement("span");
-        label.textContent = mission.name;
+        label.textContent = missionRouteLabel(mission, missionTags);
         row.appendChild(label);
         const btn = document.createElement("button");
         btn.type = "button";
@@ -1651,12 +1745,20 @@ function renderRouteResult(result) {
     const loc = getLocationById(step.locId);
     const header = document.createElement("div");
     header.className = "route-step-header";
-    header.textContent = locationLabel(loc);
+
+    // Regroupées dans un même bloc pour former la première colonne de la
+    // grille d'en-tête, alignée avec la colonne du libellé de marchandise des
+    // lignes de cargaison en dessous (même gabarit de colonnes) — le bouton
+    // "Ascenseur HS" se retrouve ainsi dans la seconde colonne, à la même
+    // position horizontale que les boutons Tout/Partiel/Rien.
+    const infoWrap = document.createElement("span");
+    infoWrap.className = "route-step-info";
+    infoWrap.textContent = locationLabel(loc);
     if (step.legDistance) {
       const legSpan = document.createElement("span");
       legSpan.className = "route-leg";
       legSpan.textContent = ` (+${step.legDistance} Gm)`;
-      header.appendChild(legSpan);
+      infoWrap.appendChild(legSpan);
     }
     const loadSpan = document.createElement("span");
     if (ship) {
@@ -1667,7 +1769,17 @@ function renderRouteResult(result) {
       loadSpan.className = "route-load";
       loadSpan.textContent = t("onBoardNoShip", { load: step.cargoLoad });
     }
-    header.appendChild(loadSpan);
+    infoWrap.appendChild(loadSpan);
+    header.appendChild(infoWrap);
+
+    const elevatorBtn = document.createElement("button");
+    elevatorBtn.type = "button";
+    elevatorBtn.className = "btn-elevator-hs";
+    elevatorBtn.title = t("elevatorHsHint");
+    elevatorBtn.textContent = t("elevatorHsBtn");
+    elevatorBtn.addEventListener("click", () => toggleElevatorBroken(step.locId));
+    header.appendChild(elevatorBtn);
+
     li.appendChild(header);
 
     if (step.actions.length) {
@@ -1676,7 +1788,7 @@ function renderRouteResult(result) {
       step.actions.forEach((a) => {
         const actionLi = document.createElement("li");
         actionLi.className = a.type === "pickup" ? "action-pickup" : "action-dropoff";
-        actionLi.textContent = `${a.type === "pickup" ? t("pickupAction") : t("dropoffAction")} — ${a.mission.name}`;
+        actionLi.textContent = `${a.type === "pickup" ? t("pickupAction") : t("dropoffAction")} — ${missionRouteLabel(a.mission, missionTags)}`;
 
         const items = a.items || [];
         if (items.length) {
@@ -1695,13 +1807,32 @@ function renderRouteResult(result) {
     ol.appendChild(li);
   });
   container.appendChild(ol);
+
+  // Centre chaque bouton "Ascenseur HS" sur le groupe Tout/Partiel/Rien des
+  // lignes de cargaison en dessous : on compare directement le centre réel
+  // des deux (getBoundingClientRect) et on translate le bouton de l'écart
+  // constaté, plutôt que de supposer une position CSS particulière (centré,
+  // à droite...) pour le groupe — reste juste quelle que soit cette position
+  // ou la largeur des libellés Tout/Partiel/Rien (donc aussi en anglais).
+  const sampleBtnGroup = container.querySelector(".route-cargo-btns");
+  if (sampleBtnGroup) {
+    const groupRect = sampleBtnGroup.getBoundingClientRect();
+    const groupCenter = groupRect.left + groupRect.width / 2;
+    container.querySelectorAll(".btn-elevator-hs").forEach((btn) => {
+      btn.style.transform = "";
+      const btnRect = btn.getBoundingClientRect();
+      const btnCenter = btnRect.left + btnRect.width / 2;
+      btn.style.transform = `translateX(${groupCenter - btnCenter}px)`;
+    });
+  }
+
   triggerFadeIn(container);
 }
 
 function runOptimize() {
   const startId = document.getElementById("start-location").value || null;
   const included = activeMissions().filter((m) => m.included);
-  const result = optimizeRoute(included, startId);
+  const result = optimizeRoute(included, startId, brokenElevatorLocationIds);
   renderRouteResult(result);
 }
 
@@ -1724,6 +1855,7 @@ function renderAll() {
   renderCompaniesTab();
   renderDistanceEditor();
   renderUexStatus();
+  renderBrokenElevatorsList();
   document.getElementById("route-result").innerHTML = "";
 }
 

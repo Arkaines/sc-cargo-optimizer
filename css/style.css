@@ -867,6 +867,16 @@ tbody tr:nth-child(even) {
 
 .route-step-header {
   font-weight: 600;
+  display: grid;
+  /* Colonne d'info élastique (ne force jamais le texte à la ligne) + bouton
+     calé sur le bord droit (voir .btn-elevator-hs) : une largeur fixe pour
+     la colonne d'info faisait passer les titres longs à la ligne. Aligné à
+     droite plutôt que sur la largeur de .route-cargo-row (qui varie selon la
+     longueur du libellé de marchandise) — le bord droit, lui, est le même
+     pour les deux, quel que soit le texte à gauche. */
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1rem;
 }
 
 .route-leg {
@@ -884,6 +894,54 @@ tbody tr:nth-child(even) {
 .route-load-overload {
   color: var(--danger);
   font-weight: 600;
+}
+
+/* Mêmes dimensions que les boutons Tout/Partiel/Rien des lignes de
+   cargaison (.route-cargo-btn), même couleur d'avertissement que "Partiel"
+   (.route-cargo-btn-partial) — seul le texte plus long fait varier la
+   largeur réelle du bouton. */
+.btn-elevator-hs {
+  justify-self: center;
+  padding: 0.3rem 0.9rem;
+  min-width: 72px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  background: transparent;
+  cursor: pointer;
+}
+
+.btn-elevator-hs:hover {
+  background: var(--warning);
+  color: var(--bg);
+}
+
+.broken-elevators-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.broken-elevator-chip {
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.broken-elevator-chip:hover {
+  background: var(--warning);
+  color: var(--bg);
 }
 
 .route-actions {
@@ -910,15 +968,13 @@ tbody tr:nth-child(even) {
 
 .route-cargo-row {
   display: grid;
-  grid-template-columns: 170px 1fr;
+  grid-template-columns: minmax(220px, max-content) 1fr;
   align-items: center;
   gap: 1rem;
   padding: 0.15rem 0;
 }
 
 .route-cargo-row .route-cargo-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -927,6 +983,7 @@ tbody tr:nth-child(even) {
   align-items: center;
   justify-self: center;
   gap: 0.3rem;
+  position: relative;
 }
 
 .route-cargo-btn {
@@ -967,9 +1024,16 @@ tbody tr:nth-child(even) {
   color: var(--on-accent);
 }
 
+/* Masqué (pas affiché) tant que "Partiel" n'a pas été cliqué, mais reste
+   positionné hors du flux flex (absolute) plutôt qu'avec un simple
+   visibility:hidden : sinon, même invisible, il continuait à réserver 90px
+   dans .route-cargo-btns, décalant tout calcul de largeur/alignement basé
+   sur ce groupe de boutons (dont le bouton "Ascenseur HS" de l'en-tête). */
 .route-cargo-partial-input {
+  position: absolute;
+  left: 100%;
+  margin-left: 0.3rem;
   width: 90px;
-  flex: none;
 }
 
 .route-cargo-note {
