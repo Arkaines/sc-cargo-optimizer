@@ -180,8 +180,11 @@ function boxOrientations(box) {
 //    temps que) celle qu'on pose : jamais besoin de la déplacer avant
 //    l'heure pour atteindre ce qu'il y a dessous.
 // 3. Empilée sur n'importe quoi, en dernier recours si aucune des deux
-//    options ci-dessus n'existe nulle part dans le module — l'appelant
-//    (voir simulateRoutePacking) détecte et signale alors le vrai conflit.
+//    options ci-dessus n'existe nulle part dans le module. Plutôt que la
+//    première trouvée, on prend celle dont le support part le plus tard
+//    (la moins mauvaise) : ça ne rend jamais l'accès garanti, mais ça
+//    limite les cas où l'appelant (voir simulateRoutePacking) doit
+//    finalement signaler un vrai conflit.
 function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
@@ -194,7 +197,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
-  for (const phase of ["floor", "safeStack", "anyStack"]) {
+  for (const phase of ["floor", "safeStack"]) {
     for (const d of depths) {
       for (const o of outers) {
         for (const i of inners) {
@@ -213,6 +216,31 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
         }
       }
     }
+  }
+
+  // Dernier recours : passe en revue TOUTES les positions empilées possibles
+  // (pas juste la première) pour garder celle dont le support part le plus
+  // tard, plutôt que de subir l'ordre de balayage.
+  let best = null;
+  for (const d of depths) {
+    for (const o of outers) {
+      for (const i of inners) {
+        const pos = [0, 0, 0];
+        pos[depthAxis] = d;
+        pos[outerPlaneAxis] = o;
+        pos[innerPlaneAxis] = i;
+        if (pos[2] === 0) continue;
+        for (const size of orientations) {
+          if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
+          const support = supportDropoffStop(grid, pos, size);
+          if (!best || support > best.support) best = { position: pos.slice(), size, support };
+        }
+      }
+    }
+  }
+  if (best) {
+    markPlaced(grid, best.position, best.size, { dropoffStop });
+    return { position: best.position, size: best.size };
   }
   return null;
 }
