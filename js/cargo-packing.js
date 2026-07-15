@@ -66,11 +66,9 @@ function cellsFromDimensions(dimensions) {
 }
 
 // Chaque cellule vaut null (libre) ou un objet { dropoffStop } identifiant
-// la caisse qui l'occupe — pas juste un booléen, pour pouvoir répondre à
-// "qu'est-ce qui me soutient, et jusqu'à quand reste-t-il ?" (voir
-// supportDropoffStop) sans quoi une caisse pourrait se retrouver empilée sur
-// une autre qui doit partir avant elle, forçant à la déplacer en cours de
-// route pour rien alors qu'un autre choix évitait le problème.
+// la caisse qui l'occupe — sert au test de support physique (hasSupport) :
+// jamais de recouvrement, une caisse repose au sol ou sur une autre déjà
+// posée (jamais dans le vide).
 function createOccupancyGrid(cellDims) {
   const [dx, dy, dz] = cellDims;
   const grid = [];
@@ -117,25 +115,6 @@ function hasSupport(grid, pos, size) {
   return true;
 }
 
-// La date de livraison la plus proche parmi les caisses qui soutiennent
-// directement cette position (Infinity si posée au sol, sans rien en
-// dessous) : empiler une nouvelle caisse dessus n'est sans risque que si
-// elle part elle-même avant (ou en même temps que) toutes ces caisses de
-// soutien — sinon, il faudra la déplacer pour les libérer avant l'heure.
-function supportDropoffStop(grid, pos, size) {
-  const [px, py, pz] = pos;
-  const [sx, sy] = size;
-  if (pz === 0) return Infinity;
-  let min = Infinity;
-  for (let x = px; x < px + sx; x++) {
-    for (let y = py; y < py + sy; y++) {
-      const occupant = grid[x][y][pz - 1];
-      if (occupant && occupant.dropoffStop < min) min = occupant.dropoffStop;
-    }
-  }
-  return min;
-}
-
 // value = true pour occuper (récupération), false pour libérer (livraison,
 // voir simulateRoutePacking) — la place libérée par une livraison redevient
 // disponible pour une récupération plus tardive du même trajet.
@@ -166,26 +145,58 @@ function boxOrientations(box) {
   ];
 }
 
+// Une position n'est sûre que si elle n'entre en conflit avec AUCUNE caisse
+// active du module, dans AUCUN des deux sens : ni bloquée par une caisse
+// déjà là plus proche de l'accès qui part avant elle (voir isBlocking), ni
+// en train de bloquer, elle, une caisse déjà là plus profonde qui doit
+// partir avant elle — sans ce deuxième sens, deux caisses posées toutes les
+// deux au sol mais à des profondeurs différentes (donc jamais empilées
+// l'une sur l'autre) peuvent quand même se bloquer l'une l'autre si la plus
+// proche de l'accès reste plus longtemps à bord.
+function isSafePosition(depthAxis, activeBoxes, pos, size, dropoffStop) {
+  for (const other of activeBoxes) {
+    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) return false;
+    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) return false;
+  }
+  return true;
+}
+
+// Gravité d'un conflit potentiel pour une position donnée : la date de
+// livraison la plus proche parmi les caisses avec lesquelles ça coincerait
+// (dans un sens ou dans l'autre) — Infinity si aucun conflit. Sert à choisir
+// la moins mauvaise option en dernier recours (voir tryPlaceInModule),
+// plutôt que de subir l'ordre de balayage.
+function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
+  let worst = Infinity;
+  for (const other of activeBoxes) {
+    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) {
+      worst = Math.min(worst, other.dropoffStop);
+    }
+    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) {
+      worst = Math.min(worst, dropoffStop);
+    }
+  }
+  return worst;
+}
+
 // Essaie de placer une caisse dans un module, en testant les deux rotations
 // à plat possibles (voir boxOrientations) — pas une recherche du meilleur
 // agencement possible, juste un rangement réaliste et sans recouvrement,
-// comme un joueur caserait effectivement ses caisses. Trois passes, de la
-// plus sûre au dernier recours :
-// 1. Au sol (Z=0), sur toute la profondeur disponible du module — une place
-//    au sol n'entre jamais en conflit avec une autre caisse, donc priorité
-//    absolue avant même d'envisager d'empiler (sans ça, tout se tasserait
-//    dans un seul coin du module, le laissant vide par ailleurs même à
-//    pleine charge).
-// 2. Empilée, mais seulement sur une caisse qui part après (ou en même
-//    temps que) celle qu'on pose : jamais besoin de la déplacer avant
-//    l'heure pour atteindre ce qu'il y a dessous.
-// 3. Empilée sur n'importe quoi, en dernier recours si aucune des deux
-//    options ci-dessus n'existe nulle part dans le module. Plutôt que la
-//    première trouvée, on prend celle dont le support part le plus tard
-//    (la moins mauvaise) : ça ne rend jamais l'accès garanti, mais ça
-//    limite les cas où l'appelant (voir simulateRoutePacking) doit
-//    finalement signaler un vrai conflit.
-function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
+// comme un joueur caserait effectivement ses caisses. activeBoxes est la
+// liste des caisses actuellement à bord DANS CE MODULE ({position, size,
+// dropoffStop}), utilisée pour juger si une position est sûre (voir
+// isSafePosition) — pas seulement pour l'empilement vertical, mais aussi
+// pour deux caisses posées au sol à des profondeurs différentes : la plus
+// proche de l'accès bloque l'autre exactement de la même façon si elle part
+// plus tard. Trois passes, de la plus sûre au dernier recours :
+// 1. Au sol (Z=0), sûre, sur toute la profondeur disponible du module — pour
+//    se répartir sur toute sa longueur plutôt que de se tasser dans un
+//    coin, sans pour autant ignorer les conflits de profondeur au sol.
+// 2. Empilée, sûre.
+// 3. N'importe quelle position valide géométriquement, en dernier recours :
+//    on garde celle dont le pire conflit part le plus tard (la moins
+//    mauvaise), plutôt que la première trouvée dans l'ordre de balayage.
+function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -197,7 +208,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
-  for (const phase of ["floor", "safeStack"]) {
+  for (const floorOnly of [true, false]) {
     for (const d of depths) {
       for (const o of outers) {
         for (const i of inners) {
@@ -205,11 +216,11 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
           pos[depthAxis] = d;
           pos[outerPlaneAxis] = o;
           pos[innerPlaneAxis] = i;
-          if (phase === "floor" && pos[2] !== 0) continue;
-          if (phase !== "floor" && pos[2] === 0) continue; // déjà couvert par la passe "floor"
+          if (floorOnly && pos[2] !== 0) continue;
+          if (!floorOnly && pos[2] === 0) continue; // déjà couvert par la passe "floor"
           for (const size of orientations) {
             if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
-            if (phase === "safeStack" && supportDropoffStop(grid, pos, size) < dropoffStop) continue;
+            if (!isSafePosition(depthAxis, activeBoxes, pos, size, dropoffStop)) continue;
             markPlaced(grid, pos, size, { dropoffStop });
             return { position: pos, size };
           }
@@ -218,9 +229,9 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
     }
   }
 
-  // Dernier recours : passe en revue TOUTES les positions empilées possibles
-  // (pas juste la première) pour garder celle dont le support part le plus
-  // tard, plutôt que de subir l'ordre de balayage.
+  // Dernier recours : passe en revue TOUTES les positions valides possibles
+  // (pas juste la première) pour garder celle dont le pire conflit part le
+  // plus tard.
   let best = null;
   for (const d of depths) {
     for (const o of outers) {
@@ -229,11 +240,10 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
         pos[depthAxis] = d;
         pos[outerPlaneAxis] = o;
         pos[innerPlaneAxis] = i;
-        if (pos[2] === 0) continue;
         for (const size of orientations) {
           if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
-          const support = supportDropoffStop(grid, pos, size);
-          if (!best || support > best.support) best = { position: pos.slice(), size, support };
+          const severity = worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop);
+          if (!best || severity > best.severity) best = { position: pos.slice(), size, severity };
         }
       }
     }
@@ -318,6 +328,10 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
       grid: createOccupancyGrid(cellDims),
       depthAxis: depthAxisIndex(cellDims),
       usedCells: 0,
+      // Caisses actuellement à bord dans ce module précis ({ position, size,
+      // dropoffStop }) : sert à juger si une nouvelle position est sûre
+      // (voir isSafePosition), pas seulement via la grille d'occupation.
+      activeBoxes: [],
     };
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
@@ -372,6 +386,8 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         }
         markPlaced(m.grid, b.placement.position, b.placement.size, null);
         m.usedCells -= b.placement.size[0] * b.placement.size[1] * b.placement.size[2];
+        const activeIdx = m.activeBoxes.indexOf(b.placement.activeEntry);
+        if (activeIdx !== -1) m.activeBoxes.splice(activeIdx, 1);
         b.active = false;
       });
 
@@ -396,7 +412,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
           const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
           for (const m of byFreeSpace) {
             if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
-            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop);
+            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes);
             if (result) {
               placed = { module: m, position: result.position, size: result.size };
               break;
@@ -410,6 +426,8 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         b.placement = placed;
         b.active = true;
         placed.module.usedCells += placed.size[0] * placed.size[1] * placed.size[2];
+        placed.activeEntry = { position: placed.position, size: placed.size, dropoffStop: b.dropoffStop };
+        placed.module.activeBoxes.push(placed.activeEntry);
       });
 
     loadAtStep[step] = boxes.filter((b) => b.active).reduce((sum, b) => sum + b.box.scu, 0);
