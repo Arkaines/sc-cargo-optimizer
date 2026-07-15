@@ -158,9 +158,6 @@ function boxOrientations(box) {
 function tryPlaceInModule(grid, cellDims, box, depthAxis) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
-  // Si Z fait partie des deux axes de plan (cas courant), il passe en boucle
-  // médiane (priorité sol avant empilement) ; l'autre axe latéral reste la
-  // boucle la plus interne.
   const zIsPlaneAxis = planeAxes.includes(2);
   const outerPlaneAxis = zIsPlaneAxis ? 2 : planeAxes[0];
   const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
@@ -170,17 +167,27 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis) {
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
-  for (const d of depths) {
-    for (const o of outers) {
-      for (const i of inners) {
-        const pos = [0, 0, 0];
-        pos[depthAxis] = d;
-        pos[outerPlaneAxis] = o;
-        pos[innerPlaneAxis] = i;
-        for (const size of orientations) {
-          if (canPlace(grid, cellDims, pos, size) && hasSupport(grid, pos, size)) {
-            markPlaced(grid, pos, size, true);
-            return { position: pos, size };
+  // Une place au sol (Z=0) n'entre jamais en conflit avec une autre caisse,
+  // quelle que soit sa profondeur : autant utiliser toute la longueur
+  // disponible du module (passe 1, sol uniquement sur TOUTE la profondeur)
+  // plutôt que de tasser le sol d'un seul plan de profondeur avant de
+  // passer au suivant, ce qui laisserait la majeure partie du module vide
+  // même à pleine charge. L'empilement (passe 2) n'intervient qu'en dernier
+  // recours, une fois qu'aucune place au sol ne reste nulle part.
+  for (const floorOnly of [true, false]) {
+    for (const d of depths) {
+      for (const o of outers) {
+        for (const i of inners) {
+          const pos = [0, 0, 0];
+          pos[depthAxis] = d;
+          pos[outerPlaneAxis] = o;
+          pos[innerPlaneAxis] = i;
+          if (floorOnly && pos[2] !== 0) continue;
+          for (const size of orientations) {
+            if (canPlace(grid, cellDims, pos, size) && hasSupport(grid, pos, size)) {
+              markPlaced(grid, pos, size, true);
+              return { position: pos, size };
+            }
           }
         }
       }
@@ -256,7 +263,13 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
 function simulateRoutePacking(cargoEntries, holds, stepCount) {
   const modules = holds.map((h) => {
     const cellDims = cellsFromDimensions(h.dimensions);
-    return { hold: h, cellDims, grid: createOccupancyGrid(cellDims), depthAxis: depthAxisIndex(cellDims), usedCells: 0 };
+    return {
+      hold: h,
+      cellDims,
+      grid: createOccupancyGrid(cellDims),
+      depthAxis: depthAxisIndex(cellDims),
+      usedCells: 0,
+    };
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
 
