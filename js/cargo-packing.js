@@ -65,13 +65,19 @@ function cellsFromDimensions(dimensions) {
   ];
 }
 
+// Chaque cellule vaut null (libre) ou un objet { dropoffStop } identifiant
+// la caisse qui l'occupe — pas juste un booléen, pour pouvoir répondre à
+// "qu'est-ce qui me soutient, et jusqu'à quand reste-t-il ?" (voir
+// supportDropoffStop) sans quoi une caisse pourrait se retrouver empilée sur
+// une autre qui doit partir avant elle, forçant à la déplacer en cours de
+// route pour rien alors qu'un autre choix évitait le problème.
 function createOccupancyGrid(cellDims) {
   const [dx, dy, dz] = cellDims;
   const grid = [];
   for (let x = 0; x < dx; x++) {
     grid.push([]);
     for (let y = 0; y < dy; y++) {
-      grid[x].push(new Array(dz).fill(false));
+      grid[x].push(new Array(dz).fill(null));
     }
   }
   return grid;
@@ -111,6 +117,25 @@ function hasSupport(grid, pos, size) {
   return true;
 }
 
+// La date de livraison la plus proche parmi les caisses qui soutiennent
+// directement cette position (Infinity si posée au sol, sans rien en
+// dessous) : empiler une nouvelle caisse dessus n'est sans risque que si
+// elle part elle-même avant (ou en même temps que) toutes ces caisses de
+// soutien — sinon, il faudra la déplacer pour les libérer avant l'heure.
+function supportDropoffStop(grid, pos, size) {
+  const [px, py, pz] = pos;
+  const [sx, sy] = size;
+  if (pz === 0) return Infinity;
+  let min = Infinity;
+  for (let x = px; x < px + sx; x++) {
+    for (let y = py; y < py + sy; y++) {
+      const occupant = grid[x][y][pz - 1];
+      if (occupant && occupant.dropoffStop < min) min = occupant.dropoffStop;
+    }
+  }
+  return min;
+}
+
 // value = true pour occuper (récupération), false pour libérer (livraison,
 // voir simulateRoutePacking) — la place libérée par une livraison redevient
 // disponible pour une récupération plus tardive du même trajet.
@@ -142,20 +167,22 @@ function boxOrientations(box) {
 }
 
 // Essaie de placer une caisse dans un module, en testant les deux rotations
-// à plat possibles (voir boxOrientations) au premier emplacement libre
-// trouvé — pas une recherche du meilleur agencement possible, juste un
-// rangement réaliste et sans recouvrement, comme un joueur caserait
-// effectivement ses caisses. Ordre de balayage, du plus externe au plus
-// interne : (1) l'axe de profondeur (depthAxis), à l'envers (du fond vers
-// l'accès) — chaque plan de profondeur se remplit avant de passer au
-// suivant, plus proche de l'accès ; (2) l'axe vertical réel (Z), du sol vers
-// le haut — une caisse ne s'empile sur une autre que si tout le sol de ce
-// plan de profondeur est déjà occupé, jamais avant d'avoir essayé une place
-// au sol toute fraîche ailleurs (sans ça, des caisses s'empilent inutilement
-// l'une sur l'autre alors que la soute reste par ailleurs largement vide,
-// créant des conflits de chargement évitables) ; (3) l'axe latéral restant,
-// pour se répartir sur toute la largeur plutôt que de s'entasser d'un côté.
-function tryPlaceInModule(grid, cellDims, box, depthAxis) {
+// à plat possibles (voir boxOrientations) — pas une recherche du meilleur
+// agencement possible, juste un rangement réaliste et sans recouvrement,
+// comme un joueur caserait effectivement ses caisses. Trois passes, de la
+// plus sûre au dernier recours :
+// 1. Au sol (Z=0), sur toute la profondeur disponible du module — une place
+//    au sol n'entre jamais en conflit avec une autre caisse, donc priorité
+//    absolue avant même d'envisager d'empiler (sans ça, tout se tasserait
+//    dans un seul coin du module, le laissant vide par ailleurs même à
+//    pleine charge).
+// 2. Empilée, mais seulement sur une caisse qui part après (ou en même
+//    temps que) celle qu'on pose : jamais besoin de la déplacer avant
+//    l'heure pour atteindre ce qu'il y a dessous.
+// 3. Empilée sur n'importe quoi, en dernier recours si aucune des deux
+//    options ci-dessus n'existe nulle part dans le module — l'appelant
+//    (voir simulateRoutePacking) détecte et signale alors le vrai conflit.
+function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -167,14 +194,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis) {
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
-  // Une place au sol (Z=0) n'entre jamais en conflit avec une autre caisse,
-  // quelle que soit sa profondeur : autant utiliser toute la longueur
-  // disponible du module (passe 1, sol uniquement sur TOUTE la profondeur)
-  // plutôt que de tasser le sol d'un seul plan de profondeur avant de
-  // passer au suivant, ce qui laisserait la majeure partie du module vide
-  // même à pleine charge. L'empilement (passe 2) n'intervient qu'en dernier
-  // recours, une fois qu'aucune place au sol ne reste nulle part.
-  for (const floorOnly of [true, false]) {
+  for (const phase of ["floor", "safeStack", "anyStack"]) {
     for (const d of depths) {
       for (const o of outers) {
         for (const i of inners) {
@@ -182,12 +202,13 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis) {
           pos[depthAxis] = d;
           pos[outerPlaneAxis] = o;
           pos[innerPlaneAxis] = i;
-          if (floorOnly && pos[2] !== 0) continue;
+          if (phase === "floor" && pos[2] !== 0) continue;
+          if (phase !== "floor" && pos[2] === 0) continue; // déjà couvert par la passe "floor"
           for (const size of orientations) {
-            if (canPlace(grid, cellDims, pos, size) && hasSupport(grid, pos, size)) {
-              markPlaced(grid, pos, size, true);
-              return { position: pos, size };
-            }
+            if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
+            if (phase === "safeStack" && supportDropoffStop(grid, pos, size) < dropoffStop) continue;
+            markPlaced(grid, pos, size, { dropoffStop });
+            return { position: pos, size };
           }
         }
       }
@@ -203,7 +224,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis) {
 // tient dans celle de la caisse existante (un support plein est requis, voir
 // hasSupport) : une caisse plus large que celle du dessous continue de
 // passer par la recherche générale (voir tryPlaceInModule).
-function tryStackOnExisting(existingBoxes, box) {
+function tryStackOnExisting(existingBoxes, box, dropoffStop) {
   for (const other of existingBoxes) {
     const m = other.placement.module;
     const basePos = other.placement.position;
@@ -212,7 +233,7 @@ function tryStackOnExisting(existingBoxes, box) {
     for (const size of boxOrientations(box)) {
       if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
       if (canPlace(m.grid, m.cellDims, pos, size) && hasSupport(m.grid, pos, size)) {
-        markPlaced(m.grid, pos, size, true);
+        markPlaced(m.grid, pos, size, { dropoffStop });
         return { module: m, position: pos, size };
       }
     }
@@ -321,7 +342,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         if (blockers.length) {
           conflicts.push({ box: b.box, entry: b.entry, blockedBy: blockers.map((x) => x.entry), atStep: step });
         }
-        markPlaced(m.grid, b.placement.position, b.placement.size, false);
+        markPlaced(m.grid, b.placement.position, b.placement.size, null);
         m.usedCells -= b.placement.size[0] * b.placement.size[1] * b.placement.size[2];
         b.active = false;
       });
@@ -335,7 +356,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         // 2 SCU posée sur celle de 4 SCU du même contrat) plutôt que
         // dispersées dans la soute, comme un joueur le ferait naturellement.
         const sameEntryActive = boxes.filter((other) => other !== b && other.active && other.entry === b.entry);
-        let placed = tryStackOnExisting(sameEntryActive, b.box);
+        let placed = tryStackOnExisting(sameEntryActive, b.box, b.dropoffStop);
 
         // Sinon, modules les moins remplis d'abord (recalculé à chaque
         // caisse, pas une fois par arrêt : plusieurs caisses peuvent être
@@ -347,7 +368,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
           const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
           for (const m of byFreeSpace) {
             if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
-            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis);
+            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop);
             if (result) {
               placed = { module: m, position: result.position, size: result.size };
               break;
