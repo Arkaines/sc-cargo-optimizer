@@ -18,13 +18,17 @@ const SCU_UNIT_METERS = 1.25;
 // de grille. Une caisse ne repose jamais que sur une seule face possible (le
 // jeu ne permet pas de la coucher sur le flanc) : "footprint" est son
 // empreinte au sol (les deux dimensions posées à plat, interchangeables par
-// rotation à plat de 90°) et "height" sa hauteur réelle fixe.
+// rotation à plat de 90°) et "height" sa hauteur réelle fixe. Dimensions
+// réelles vérifiées directement via l'API FleetYards (champ
+// maxContainerSize.dimensions/limits de plusieurs vaisseaux, ex. 4 SCU =
+// 2,5×2,5×1,25 m sur le 300i, PAS 1,25×2,5×2,5 — une caisse de 4 SCU est
+// large et basse, pas haute et étroite).
 const SCU_BOX_SIZES = [
   { scu: 32, footprint: [2, 8], height: 2 },
   { scu: 24, footprint: [2, 6], height: 2 },
   { scu: 16, footprint: [2, 4], height: 2 },
   { scu: 8, footprint: [2, 2], height: 2 },
-  { scu: 4, footprint: [1, 2], height: 2 },
+  { scu: 4, footprint: [2, 2], height: 1 },
   { scu: 2, footprint: [1, 2], height: 1 },
   { scu: 1, footprint: [1, 1], height: 1 },
 ];
