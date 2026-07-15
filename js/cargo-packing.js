@@ -2,11 +2,12 @@
 
 // =========================================================================
 // Rangement des marchandises dans les soutes de cargo réelles du vaisseau
-// (données FleetYards.net, voir js/fleetyards.js) : décompose chaque ligne
-// de cargaison en caisses de tailles standard, puis les place dans les
-// modules de la soute avec un algorithme glouton simple (premier
-// emplacement libre, sans recouvrement) — pas un solveur d'optimalité, un
-// rangement correct et lisible, pour savoir où mettre chaque marchandise.
+// (données FleetYards.net, voir js/fleetyards.js). Le placement n'est pas
+// une recherche du premier emplacement libre : pour CHAQUE caisse, toutes
+// les positions valides sont énumérées puis notées par une fonction de
+// score unique (voir scorePosition/findBestPosition) et seule la meilleure
+// est retenue — la recherche géométrique décide QUOI est possible, le score
+// décide LAQUELLE est la meilleure.
 // =========================================================================
 
 // Un cran de grille = 1,25 m = 1 SCU (confirmé par l'API FleetYards : la
@@ -22,7 +23,9 @@ const SCU_UNIT_METERS = 1.25;
 // réelles vérifiées directement via l'API FleetYards (champ
 // maxContainerSize.dimensions/limits de plusieurs vaisseaux, ex. 4 SCU =
 // 2,5×2,5×1,25 m sur le 300i, PAS 1,25×2,5×2,5 — une caisse de 4 SCU est
-// large et basse, pas haute et étroite).
+// large et basse, pas haute et étroite). Gardées telles quelles malgré une
+// table générique différente suggérée entre-temps (ex. "8 SCU = 2×4") : ces
+// dimensions-ci sont vérifiées contre la donnée réelle du jeu, pas devinées.
 const SCU_BOX_SIZES = [
   { scu: 32, footprint: [2, 8], height: 2 },
   { scu: 24, footprint: [2, 6], height: 2 },
@@ -73,10 +76,10 @@ function cellsFromDimensions(dimensions) {
   ];
 }
 
-// Chaque cellule vaut null (libre) ou un objet { dropoffStop } identifiant
-// la caisse qui l'occupe — sert au test de support physique (hasSupport) :
-// jamais de recouvrement, une caisse repose au sol ou sur une autre déjà
-// posée (jamais dans le vide).
+// Chaque cellule vaut null (libre) ou un objet { dropoffStop, scu }
+// identifiant la caisse qui l'occupe (scu sert à la règle d'empilement, voir
+// hasValidSupport) — jamais de recouvrement, une caisse repose au sol ou sur
+// une autre déjà posée (jamais dans le vide).
 function createOccupancyGrid(cellDims) {
   const [dx, dy, dz] = cellDims;
   const grid = [];
@@ -104,28 +107,41 @@ function canPlace(grid, cellDims, pos, size) {
   return true;
 }
 
+// Règle d'empilement : une caisse ne peut reposer sur une autre que si sa
+// taille est STRICTEMENT plus petite que celle de la caisse du dessous (ex.
+// une caisse de 4 SCU crée une surface sur laquelle seules des caisses de 1
+// ou 2 SCU peuvent être empilées, jamais 4 SCU ou plus) — spécifique au jeu,
+// pas une simple histoire de tenir géométriquement dans l'empreinte.
+function canStackOn(newScu, baseScu) {
+  return newScu < baseScu;
+}
+
 // Une caisse ne peut jamais flotter : elle doit reposer au sol (z=0) ou avoir
 // toute son empreinte directement soutenue par d'autres caisses juste en
-// dessous (contact complet, pas de trou) — sans cette vérification, une
-// caisse de 4 SCU pourrait par exemple se retrouver posée pour moitié sur une
-// caisse de 2 SCU et pour moitié dans le vide, ce que le jeu ne permet pas.
-// z (index 2) est toujours l'axe vertical réel (voir cellsFromDimensions),
-// indépendamment de l'axe d'accès choisi pour ce module (depthAxis).
-function hasSupport(grid, pos, size) {
+// dessous (contact complet, pas de trou, ET chacune de taille strictement
+// supérieure — voir canStackOn) — sans cette vérification, une caisse de 4
+// SCU pourrait par exemple se retrouver posée pour moitié sur une caisse de
+// 2 SCU et pour moitié dans le vide, ou empilée sur une caisse trop petite
+// pour la porter, ce que le jeu ne permet pas. z (index 2) est toujours
+// l'axe vertical réel (voir cellsFromDimensions), indépendamment de l'axe
+// d'accès choisi pour ce module (depthAxis).
+function hasValidSupport(grid, pos, size, boxScu) {
   const [px, py, pz] = pos;
   const [sx, sy] = size;
   if (pz === 0) return true;
   for (let x = px; x < px + sx; x++) {
     for (let y = py; y < py + sy; y++) {
-      if (!grid[x][y][pz - 1]) return false;
+      const below = grid[x][y][pz - 1];
+      if (!below || !canStackOn(boxScu, below.scu)) return false;
     }
   }
   return true;
 }
 
-// value = true pour occuper (récupération), false pour libérer (livraison,
-// voir simulateRoutePacking) — la place libérée par une livraison redevient
-// disponible pour une récupération plus tardive du même trajet.
+// value = { dropoffStop, scu } pour occuper (récupération), null pour
+// libérer (livraison, voir simulateRoutePacking) — la place libérée par une
+// livraison redevient disponible pour une récupération plus tardive du même
+// trajet.
 function markPlaced(grid, pos, size, value) {
   const [px, py, pz] = pos;
   const [sx, sy, sz] = size;
@@ -155,9 +171,10 @@ function boxOrientations(box) {
 
 // Ajuste l'occupation de chaque plan de profondeur couvert par une caisse
 // (une caisse peut s'étendre sur plusieurs plans si sa dimension sur cet
-// axe dépasse 1 cran) — delta positif à la pose, négatif au retrait. Sert à
-// préférer le plan le moins rempli plutôt que le premier "jamais touché"
-// (voir tryPlaceInModule).
+// axe dépasse 1 cran) — delta positif à la pose, négatif au retrait. Sert de
+// terme secondaire de la fonction de score (voir scorePosition) pour se
+// répartir sur toute la longueur du module plutôt que de se tasser dans un
+// coin, à égalité des autres critères.
 function bumpLayerUsage(layerUsage, depthAxis, pos, size, delta) {
   const start = pos[depthAxis];
   const span = size[depthAxis];
@@ -165,196 +182,6 @@ function bumpLayerUsage(layerUsage, depthAxis, pos, size, delta) {
   for (let d = start; d < start + span; d++) {
     layerUsage.set(d, (layerUsage.get(d) || 0) + delta * footprintArea);
   }
-}
-
-// Une position n'est sûre que si elle n'entre en conflit avec AUCUNE caisse
-// active du module, dans AUCUN des deux sens : ni bloquée par une caisse
-// déjà là plus proche de l'accès qui part avant elle (voir isBlocking), ni
-// en train de bloquer, elle, une caisse déjà là plus profonde qui doit
-// partir avant elle — sans ce deuxième sens, deux caisses posées toutes les
-// deux au sol mais à des profondeurs différentes (donc jamais empilées
-// l'une sur l'autre) peuvent quand même se bloquer l'une l'autre si la plus
-// proche de l'accès reste plus longtemps à bord.
-function isSafePosition(depthAxis, activeBoxes, pos, size, dropoffStop) {
-  for (const other of activeBoxes) {
-    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) return false;
-    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) return false;
-  }
-  return true;
-}
-
-// Gravité d'un conflit potentiel pour une position donnée : la date de
-// livraison la plus proche parmi les caisses avec lesquelles ça coincerait
-// (dans un sens ou dans l'autre) — Infinity si aucun conflit. Sert à choisir
-// la moins mauvaise option en dernier recours (voir tryPlaceInModule),
-// plutôt que de subir l'ordre de balayage.
-function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
-  let worst = Infinity;
-  for (const other of activeBoxes) {
-    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) {
-      worst = Math.min(worst, other.dropoffStop);
-    }
-    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) {
-      worst = Math.min(worst, dropoffStop);
-    }
-  }
-  return worst;
-}
-
-// Essaie de placer une caisse dans un module, en testant les deux rotations
-// à plat possibles (voir boxOrientations) — pas une recherche du meilleur
-// agencement possible, juste un rangement réaliste et sans recouvrement,
-// comme un joueur caserait effectivement ses caisses. activeBoxes est la
-// liste des caisses actuellement à bord DANS CE MODULE ({position, size,
-// dropoffStop}), utilisée pour juger si une position est sûre (voir
-// isSafePosition) — pas seulement pour l'empilement vertical, mais aussi
-// pour deux caisses posées au sol à des profondeurs différentes : la plus
-// proche de l'accès bloque l'autre exactement de la même façon si elle part
-// plus tard. Trois passes, de la plus sûre au dernier recours :
-// 1. Au sol (Z=0), sûre, sur toute la profondeur disponible du module — pour
-//    se répartir sur toute sa longueur plutôt que de se tasser dans un
-//    coin, sans pour autant ignorer les conflits de profondeur au sol.
-// 2. Empilée, sûre.
-// 3. N'importe quelle position valide géométriquement, en dernier recours :
-//    on garde celle dont le pire conflit part le plus tard (la moins
-//    mauvaise), plutôt que la première trouvée dans l'ordre de balayage.
-//
-// Scindé en deux fonctions (voir plus bas) plutôt qu'une seule qui gère les
-// trois passes d'un coup : le niveau au-dessus (simulateRoutePacking) doit
-// pouvoir essayer la passe "sûre" dans TOUS les modules du vaisseau avant de
-// se rabattre sur la passe 3 dans N'IMPORTE LEQUEL — sinon un module presque
-// plein mais encore "le moins rempli" force un conflit évitable alors qu'un
-// autre module, plus rempli au global mais avec un emplacement encore
-// totalement libre pour cette caisse précise, existe ailleurs sur le
-// vaisseau. C'était le bug : la caisse était forcée dans le premier module
-// testé dès qu'une position géométriquement valide existait, même conflictuelle,
-// sans jamais regarder si un autre module avait une place réellement libre.
-function computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac) {
-  const range = (size) => Array.from({ length: size }, (_, i) => i);
-  const allDepths = range(cellDims[depthAxis]).reverse();
-  const maxDepthIdx = cellDims[depthAxis] - 1;
-  const idealDepth = dropoffFrac != null ? dropoffFrac * maxDepthIdx : null;
-  return allDepths.slice().sort((a, b) => {
-    if (idealDepth != null) {
-      const diff = Math.abs(a - idealDepth) - Math.abs(b - idealDepth);
-      if (diff !== 0) return diff;
-    }
-    return layerUsage ? (layerUsage.get(a) || 0) - (layerUsage.get(b) || 0) : 0;
-  });
-}
-
-// Passes 1 et 2 (sol sûr, puis empilé sûr) : ne commite (markPlaced) que si
-// une position sûre est trouvée, renvoie null sinon sans aucun effet de bord
-// — permet au niveau au-dessus d'essayer un autre module sans avoir à
-// annuler quoi que ce soit.
-function trySafePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac, allowedDepths) {
-  const orientations = boxOrientations(box);
-  const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
-  const zIsPlaneAxis = planeAxes.includes(2);
-  const outerPlaneAxis = zIsPlaneAxis ? 2 : planeAxes[0];
-  const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
-
-  const range = (size) => Array.from({ length: size }, (_, i) => i);
-  // Ordre de préférence des plans de profondeur : d'abord par proximité avec
-  // la profondeur "idéale" pour cette caisse d'après sa date de livraison
-  // (dropoffFrac, 0 = part tout de suite, 1 = part en dernier) — une caisse
-  // qui part tôt doit rester près de l'accès (profondeur faible) et une
-  // caisse qui reste longtemps peut aller au fond, pour que l'ordre spatial
-  // corresponde à l'ordre réel de sortie et ne force jamais un blocage
-  // évitable. À proximité égale, préfère le plan le moins rempli (occupation
-  // RÉELLE, pas juste "déjà touché une fois") pour se répartir sur toute la
-  // longueur du module plutôt que de se tasser dans un coin. allowedDepths,
-  // si fourni, restreint la recherche à la zone réservée au contrat de cette
-  // caisse (voir assignMissionZones) — une caisse d'un autre contrat ne doit
-  // pas venir s'y intercaler.
-  let depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
-  if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
-  const outers = range(cellDims[outerPlaneAxis]);
-  const inners = range(cellDims[innerPlaneAxis]);
-
-  for (const floorOnly of [true, false]) {
-    for (const d of depths) {
-      for (const o of outers) {
-        for (const i of inners) {
-          const pos = [0, 0, 0];
-          pos[depthAxis] = d;
-          pos[outerPlaneAxis] = o;
-          pos[innerPlaneAxis] = i;
-          if (floorOnly && pos[2] !== 0) continue;
-          if (!floorOnly && pos[2] === 0) continue; // déjà couvert par la passe "floor"
-          for (const size of orientations) {
-            if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
-            if (!isSafePosition(depthAxis, activeBoxes, pos, size, dropoffStop)) continue;
-            markPlaced(grid, pos, size, { dropoffStop });
-            if (layerUsage) bumpLayerUsage(layerUsage, depthAxis, pos, size, 1);
-            return { position: pos, size };
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-// Passe 3 (dernier recours) : passe en revue TOUTES les positions valides
-// possibles de CE module et renvoie celle dont le pire conflit part le plus
-// tard — SANS commiter, pour que le niveau au-dessus puisse comparer avec les
-// autres modules du vaisseau avant de choisir où placer réellement la caisse.
-function tryWorstCasePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac, allowedDepths) {
-  const orientations = boxOrientations(box);
-  const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
-  const zIsPlaneAxis = planeAxes.includes(2);
-  const outerPlaneAxis = zIsPlaneAxis ? 2 : planeAxes[0];
-  const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
-
-  const range = (size) => Array.from({ length: size }, (_, i) => i);
-  let depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
-  if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
-  const outers = range(cellDims[outerPlaneAxis]);
-  const inners = range(cellDims[innerPlaneAxis]);
-
-  let best = null;
-  for (const d of depths) {
-    for (const o of outers) {
-      for (const i of inners) {
-        const pos = [0, 0, 0];
-        pos[depthAxis] = d;
-        pos[outerPlaneAxis] = o;
-        pos[innerPlaneAxis] = i;
-        for (const size of orientations) {
-          if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
-          const severity = worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop);
-          if (!best || severity > best.severity) best = { position: pos.slice(), size, severity };
-        }
-      }
-    }
-  }
-  return best;
-}
-
-// Essaie de poser une caisse directement au-dessus (axe vertical réel Z)
-// d'une caisse déjà placée passée en argument, alignée sur son coin — pour
-// grouper les caisses d'une même ligne de cargaison plutôt que les disperser
-// dans la soute. Ne fonctionne que si l'empreinte de la nouvelle caisse
-// tient dans celle de la caisse existante (un support plein est requis, voir
-// hasSupport) : une caisse plus large que celle du dessous continue de
-// passer par la recherche générale (voir tryPlaceInModule).
-function tryStackOnExisting(existingBoxes, box, dropoffStop) {
-  for (const other of existingBoxes) {
-    const m = other.placement.module;
-    const basePos = other.placement.position;
-    const baseSize = other.placement.size;
-    const pos = [basePos[0], basePos[1], basePos[2] + baseSize[2]];
-    for (const size of boxOrientations(box)) {
-      if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
-      if (canPlace(m.grid, m.cellDims, pos, size) && hasSupport(m.grid, pos, size)) {
-        markPlaced(m.grid, pos, size, { dropoffStop });
-        if (m.layerUsage) bumpLayerUsage(m.layerUsage, m.depthAxis, pos, size, 1);
-        return { module: m, position: pos, size };
-      }
-    }
-  }
-  return null;
 }
 
 // Choisit l'axe le plus long d'un module comme axe de profondeur (accès
@@ -384,6 +211,189 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
     if (aEnd <= bStart || bEnd <= aStart) return false;
   }
   return true;
+}
+
+// Gravité d'un conflit potentiel pour une position donnée : la date de
+// livraison la plus proche parmi les caisses avec lesquelles ça coincerait
+// (dans un sens ou dans l'autre) — Infinity si aucun conflit. Utilisé par la
+// fonction de score (voir scorePosition) pour transformer un blocage
+// potentiel en pénalité : plus le conflit arrive tôt (livraison proche), plus
+// il coûte cher, pour toujours préférer déplacer un blocage lointain plutôt
+// qu'un blocage imminent quand aucune position n'est totalement sûre.
+function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
+  let worst = Infinity;
+  for (const other of activeBoxes) {
+    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) {
+      worst = Math.min(worst, other.dropoffStop);
+    }
+    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) {
+      worst = Math.min(worst, dropoffStop);
+    }
+  }
+  return worst;
+}
+
+// Compte les faces de la caisse en contact avec une paroi du module (bord de
+// la grille sur un axe) — favorise les caisses collées aux parois plutôt que
+// posées en plein milieu d'un espace ouvert, plus stables et qui laissent de
+// plus grands espaces libres continus ailleurs.
+function countWallTouches(cellDims, pos, size) {
+  let touches = 0;
+  for (let axis = 0; axis < 3; axis++) {
+    if (pos[axis] === 0) touches++;
+    if (pos[axis] + size[axis] === cellDims[axis]) touches++;
+  }
+  return touches;
+}
+
+// Compte les faces de la caisse en contact avec une autre caisse déjà posée
+// (pas avec une paroi, déjà comptée par countWallTouches) — favorise les
+// caisses collées les unes aux autres, qui tassent le chargement plutôt que
+// de fragmenter l'espace libre en petites poches inutilisables. Si
+// missionId est fourni, ne compte QUE les caisses du MÊME contrat (voir
+// isBetterPosition, niveau 2 : regrouper un contrat avant d'optimiser la
+// compacité générale) ; sinon compte toute caisse, quel que soit son contrat.
+function countNeighborTouches(grid, cellDims, pos, size, missionId) {
+  let touches = 0;
+  for (let axis = 0; axis < 3; axis++) {
+    const otherAxes = [0, 1, 2].filter((a) => a !== axis);
+    const [oa, ob] = otherAxes;
+    [pos[axis] - 1, pos[axis] + size[axis]].forEach((coord) => {
+      if (coord < 0 || coord >= cellDims[axis]) return; // paroi, déjà comptée ailleurs
+      for (let u = pos[oa]; u < pos[oa] + size[oa]; u++) {
+        for (let v = pos[ob]; v < pos[ob] + size[ob]; v++) {
+          const c = [0, 0, 0];
+          c[axis] = coord;
+          c[oa] = u;
+          c[ob] = v;
+          const occupant = grid[c[0]][c[1]][c[2]];
+          if (!occupant) continue;
+          if (missionId === undefined || occupant.missionId === missionId) touches++;
+        }
+      }
+    });
+  }
+  return touches;
+}
+
+// Compare deux positions valides et renvoie true si `a` est strictement
+// meilleure que `b` — HIÉRARCHIQUE, pas additif : chaque critère ne
+// départage qu'à égalité stricte du (des) critère(s) plus prioritaire(s),
+// jamais compensé par une accumulation de petits bonus de niveau inférieur.
+// Un score additif (somme pondérée) laisse toujours une combinaison de
+// bonus spatiaux mineurs l'emporter sur un critère de livraison si les poids
+// ne sont pas parfaitement calibrés (mesuré : un scénario adversarial est
+// passé de 21 à 36 conflits en introduisant un score additif) — la
+// hiérarchie stricte élimine ce risque par construction. Ordre de priorité :
+//  1. Sécurité : une position totalement sûre (severity=Infinity) bat
+//     TOUJOURS une position en conflit ; entre deux conflits, celui qui
+//     bloque une livraison plus tardive est le moins grave (voir
+//     worstConflictDropoff).
+//  2. Ordre de livraison : la profondeur la plus proche de l'idéal d'après
+//     la date de livraison de cette caisse (part tôt = près de l'accès, part
+//     tard = peut aller au fond) — la contrainte de livraison prime sur
+//     toute optimisation spatiale.
+//  3. Sol avant empilé (comme l'ancienne recherche en deux passes).
+//  4. Organisation logistique : contact avec d'autres caisses du MÊME
+//     contrat (voir countNeighborTouches) — regrouper un contrat prime sur
+//     la compacité générale, pas seulement sur la sécurité.
+//  5. Compacité générale : contact avec les parois du module, puis avec
+//     n'importe quelle caisse déjà posée (limite la fragmentation de
+//     l'espace libre restant) — ne départage qu'entre positions déjà à
+//     égalité sur tout ce qui précède.
+//  6. Départage final : préfère le plan de profondeur le moins rempli, pour
+//     se répartir sur toute la longueur du module plutôt que de se tasser
+//     dans un coin quand tout le reste est rigoureusement équivalent.
+function isBetterPosition(a, b) {
+  if (a.severity !== b.severity) return a.severity > b.severity;
+  if (a.depthDistance !== b.depthDistance) return a.depthDistance < b.depthDistance;
+  if (a.isFloor !== b.isFloor) return a.isFloor;
+  if (a.missionTouches !== b.missionTouches) return a.missionTouches > b.missionTouches;
+  if (a.wallTouches !== b.wallTouches) return a.wallTouches > b.wallTouches;
+  if (a.neighborTouches !== b.neighborTouches) return a.neighborTouches > b.neighborTouches;
+  return a.layerFill < b.layerFill;
+}
+
+// Explore TOUTES les positions valides possibles pour une caisse dans un
+// module (les deux rotations à plat, tous les plans de profondeur autorisés,
+// toutes les positions latérales) et renvoie la meilleure au sens de
+// isBetterPosition — pas la première trouvée dans un ordre de balayage
+// arbitraire. allowedDepths, si fourni, restreint la recherche à la zone
+// réservée au contrat de cette caisse (voir assignMissionZones). missionId
+// sert au niveau 4 (regroupement du contrat, voir isBetterPosition).
+function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac, allowedDepths, missionId) {
+  const orientations = boxOrientations(box);
+  const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
+  const zIsPlaneAxis = planeAxes.includes(2);
+  const outerPlaneAxis = zIsPlaneAxis ? 2 : planeAxes[0];
+  const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
+
+  const range = (size) => Array.from({ length: size }, (_, i) => i);
+  let depths = range(cellDims[depthAxis]);
+  if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
+  const outers = range(cellDims[outerPlaneAxis]);
+  const inners = range(cellDims[innerPlaneAxis]);
+
+  const maxDepthIdx = cellDims[depthAxis] - 1;
+  const idealDepth = dropoffFrac != null && maxDepthIdx > 0 ? dropoffFrac * maxDepthIdx : null;
+
+  let best = null;
+  for (const d of depths) {
+    for (const o of outers) {
+      for (const i of inners) {
+        const pos = [0, 0, 0];
+        pos[depthAxis] = d;
+        pos[outerPlaneAxis] = o;
+        pos[innerPlaneAxis] = i;
+        for (const size of orientations) {
+          if (!canPlace(grid, cellDims, pos, size)) continue;
+          if (!hasValidSupport(grid, pos, size, box.scu)) continue;
+
+          const candidate = {
+            position: pos.slice(),
+            size,
+            severity: worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop),
+            depthDistance: idealDepth != null ? Math.abs(d - idealDepth) : 0,
+            isFloor: pos[2] === 0,
+            missionTouches: missionId != null ? countNeighborTouches(grid, cellDims, pos, size, missionId) : 0,
+            wallTouches: countWallTouches(cellDims, pos, size),
+            neighborTouches: countNeighborTouches(grid, cellDims, pos, size),
+            layerFill: layerUsage ? layerUsage.get(d) || 0 : 0,
+          };
+
+          if (!best || isBetterPosition(candidate, best)) best = candidate;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// Essaie de poser une caisse directement au-dessus (axe vertical réel Z)
+// d'une caisse déjà placée passée en argument, alignée sur son coin — pour
+// grouper les caisses d'une même ligne de cargaison plutôt que les disperser
+// dans la soute. Ne fonctionne que si l'empreinte de la nouvelle caisse tient
+// dans celle de la caisse existante ET que la règle d'empilement le permet
+// (voir canStackOn — deux caisses de 4 SCU ou plus de la même ligne ne
+// peuvent PAS se poser l'une sur l'autre, même issues du même contrat) : une
+// caisse plus large, ou trop grosse pour la règle d'empilement, continue de
+// passer par la recherche générale (voir findBestPosition).
+function tryStackOnExisting(existingBoxes, box, dropoffStop, missionId) {
+  for (const other of existingBoxes) {
+    const m = other.placement.module;
+    const basePos = other.placement.position;
+    const baseSize = other.placement.size;
+    const pos = [basePos[0], basePos[1], basePos[2] + baseSize[2]];
+    for (const size of boxOrientations(box)) {
+      if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
+      if (canPlace(m.grid, m.cellDims, pos, size) && hasValidSupport(m.grid, pos, size, box.scu)) {
+        markPlaced(m.grid, pos, size, { dropoffStop, scu: box.scu, missionId });
+        if (m.layerUsage) bumpLayerUsage(m.layerUsage, m.depthAxis, pos, size, 1);
+        return { module: m, position: pos, size };
+      }
+    }
+  }
+  return null;
 }
 
 // Réserve à chaque contrat (mission) sa/ses propre(s) zone(s) contiguë(s) en
@@ -525,16 +535,43 @@ function assignMissionZones(boxes, modules) {
   return zonesByMission;
 }
 
+// Cherche, parmi une liste de modules candidats (déjà triés dans l'ordre de
+// préférence par l'appelant), la meilleure position pour une caisse — une
+// position totalement sûre dans le PREMIER module candidat qui en offre une
+// (les modules étant déjà triés par préférence, pas la peine de comparer les
+// positions sûres entre elles), sinon la position la moins mauvaise
+// (conflit le moins sévère) tous modules candidats confondus, jamais figée
+// sur le premier module testé pour ce deuxième cas.
+function placeInBestModule(candidateModules, box, dropoffStop, dropoffFrac, allowedDepthsForModule, missionId) {
+  let worstCaseBest = null;
+  for (const m of candidateModules) {
+    const allowedDepths = allowedDepthsForModule ? allowedDepthsForModule(m) : null;
+    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac, allowedDepths, missionId);
+    if (!result) continue;
+    if (result.severity === Infinity) {
+      markPlaced(m.grid, result.position, result.size, { dropoffStop, scu: box.scu, missionId });
+      bumpLayerUsage(m.layerUsage, m.depthAxis, result.position, result.size, 1);
+      return { module: m, position: result.position, size: result.size };
+    }
+    if (!worstCaseBest || result.severity > worstCaseBest.severity) worstCaseBest = { module: m, ...result };
+  }
+  if (worstCaseBest) {
+    markPlaced(worstCaseBest.module.grid, worstCaseBest.position, worstCaseBest.size, { dropoffStop, scu: box.scu, missionId });
+    bumpLayerUsage(worstCaseBest.module.layerUsage, worstCaseBest.module.depthAxis, worstCaseBest.position, worstCaseBest.size, 1);
+    return { module: worstCaseBest.module, position: worstCaseBest.position, size: worstCaseBest.size };
+  }
+  return null;
+}
+
 // =========================================================================
 // Rangement tenant compte de l'ordre réel du trajet (voir js/app.js pour la
 // construction de pickupStop/dropoffStop à partir du trajet optimisé) :
-// chaque caisse n'est posée qu'au moment où elle est réellement récupérée
-// (rangement libre, comme un joueur le ferait vraiment — toutes orientations
-// testées, premier emplacement disponible) et retirée au moment de sa
-// livraison, ce qui libère la place pour une récupération plus tardive.
-// Un conflit est détecté après coup si, au moment de sortir une caisse,
-// une autre caisse encore présente se trouve entre elle et l'accès du
-// module — il faudra alors la déplacer temporairement pour l'atteindre.
+// chaque caisse n'est posée qu'au moment où elle est réellement récupérée et
+// retirée au moment de sa livraison, ce qui libère la place pour une
+// récupération plus tardive. Un conflit est détecté après coup si, au
+// moment de sortir une caisse, une autre caisse encore présente se trouve
+// entre elle et l'accès du module — il faudra alors la déplacer
+// temporairement pour l'atteindre.
 // =========================================================================
 function simulateRoutePacking(cargoEntries, holds, stepCount) {
   const modules = holds.map((h) => {
@@ -547,12 +584,11 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
       usedCells: 0,
       // Caisses actuellement à bord dans ce module précis ({ position, size,
       // dropoffStop }) : sert à juger si une nouvelle position est sûre
-      // (voir isSafePosition), pas seulement via la grille d'occupation.
+      // (voir worstConflictDropoff), pas seulement via la grille d'occupation.
       activeBoxes: [],
       // Occupation actuelle de chaque plan de profondeur (Map profondeur ->
-      // nombre de crans occupés à cette profondeur, mis à jour au fil des
-      // arrêts) : préfère le plan le moins rempli pour se répartir sur toute
-      // la longueur du module (voir tryPlaceInModule).
+      // nombre de crans occupés à cette profondeur) : terme secondaire de la
+      // fonction de score (voir findBestPosition).
       layerUsage: new Map(),
     };
   });
@@ -575,9 +611,12 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
       });
     });
   });
-  // Les plus grosses caisses d'abord à égalité de récupération : reste une
-  // heuristique de remplissage raisonnable une fois l'ordre du trajet fixé.
-  boxes.sort((a, b) => a.pickupStop - b.pickupStop || b.box.scu - a.box.scu);
+  // À égalité de récupération, les caisses qui repartent le plus tard
+  // d'abord (dernières livrées = chargées en premier, pour avoir le premier
+  // choix de position — les caisses qui repartent tôt s'insèrent ensuite près
+  // de l'accès), puis les plus grosses avant les petites (pour ne pas
+  // fragmenter l'espace avec du petit avant que le gros n'ait pu se placer).
+  boxes.sort((a, b) => a.pickupStop - b.pickupStop || b.dropoffStop - a.dropoffStop || b.box.scu - a.box.scu);
 
   // Une zone dédiée par contrat, calculée une fois pour toutes AVANT le
   // rangement (voir assignMissionZones) : le trajet entier est déjà connu, ce
@@ -587,11 +626,9 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
   // empiriquement (données réelles utilisateur) qu'avec MOINS de modules que
   // de contrats actifs (ex. le Raft, une seule grille, pour 10 contrats), les
   // forcer quand même dans des zones étroites fait plus de mal que de bien —
-  // 24 conflits avec zonage contre 20 sans, sur le même trajet réel — car un
-  // contrat confiné à 1-2 crans de profondeur se retrouve à se bloquer
+  // un contrat confiné à 1-2 crans de profondeur se retrouve à se bloquer
   // LUI-MÊME (ses propres caisses n'ont plus la place de s'étaler dans le
-  // temps), alors que la recherche libre (préférence de profondeur par date
-  // de livraison + sécurité bidirectionnelle) s'en sort mieux sans cette
+  // temps), alors que la recherche libre s'en sort mieux sans cette
   // contrainte artificielle. Le zonage reste un net gain quand chaque contrat
   // PEUT raisonnablement avoir sa propre soute (Hull B : 16 modules pour 10
   // contrats, 1 seul conflit résiduel après zonage).
@@ -643,8 +680,11 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         // garde les caisses d'un même contrat groupées (ex. une caisse de
         // 2 SCU posée sur celle de 4 SCU du même contrat) plutôt que
         // dispersées dans la soute, comme un joueur le ferait naturellement.
+        const dropoffFrac = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
+        const missionId = b.entry.mission && b.entry.mission.id;
+
         const sameEntryActive = boxes.filter((other) => other !== b && other.active && other.entry === b.entry);
-        let placed = tryStackOnExisting(sameEntryActive, b.box, b.dropoffStop);
+        let placed = tryStackOnExisting(sameEntryActive, b.box, b.dropoffStop, missionId);
 
         // Sinon, essaie la/les zone(s) réservée(s) au contrat de cette caisse
         // (voir assignMissionZones, calculé une fois pour tout le trajet) :
@@ -652,47 +692,29 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         // profondeur au sein d'un module partagé — avant même de regarder
         // ailleurs sur le vaisseau.
         if (!placed) {
-          const dropoffFracForZone = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
-          const missionIdForZone = b.entry.mission && b.entry.mission.id;
-          const zones = missionIdForZone != null ? zonesByMission.get(missionIdForZone) || [] : [];
-          for (const zone of zones) {
-            if (zone.module.hold.maxContainerSize && b.box.scu > zone.module.hold.maxContainerSize) continue;
-            const allowedDepths = new Set();
-            for (let d = zone.depthStart; d < zone.depthEnd; d++) allowedDepths.add(d);
-            const result = trySafePlacement(
-              zone.module.grid,
-              zone.module.cellDims,
-              b.box,
-              zone.module.depthAxis,
-              b.dropoffStop,
-              zone.module.activeBoxes,
-              zone.module.layerUsage,
-              dropoffFracForZone,
-              allowedDepths
-            );
-            if (result) {
-              placed = { module: zone.module, position: result.position, size: result.size };
-              break;
-            }
-          }
+          const zones = (missionId != null ? zonesByMission.get(missionId) : null) || [];
+          const zoneModules = zones
+            .filter((z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize))
+            .map((z) => z.module);
+          const allowedDepthsByModule = new Map();
+          zones.forEach((z) => {
+            const s = allowedDepthsByModule.get(z.module) || new Set();
+            for (let d = z.depthStart; d < z.depthEnd; d++) s.add(d);
+            allowedDepthsByModule.set(z.module, s);
+          });
+          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, dropoffFrac, (m) => allowedDepthsByModule.get(m), missionId);
         }
 
-        // Sinon (zone réservée pleine ou contrat sans zone), modules les moins remplis d'abord (recalculé à chaque
-        // caisse, pas une fois par arrêt : plusieurs caisses peuvent être
-        // récupérées au même arrêt) : sans ça, tout se tasserait dans le
-        // premier module de la liste par empilement en profondeur, quitte à
-        // créer des conflits évitables alors que d'autres modules du
-        // vaisseau sont encore vides.
+        // Sinon (zone réservée pleine ou contrat sans zone), modules les
+        // moins remplis d'abord (recalculé à chaque caisse, pas une fois par
+        // arrêt : plusieurs caisses peuvent être récupérées au même arrêt) :
+        // sans ça, tout se tasserait dans le premier module de la liste,
+        // quitte à créer des conflits évitables alors que d'autres modules du
+        // vaisseau sont encore vides. Un module vide ou déjà occupé
+        // uniquement par le MÊME contrat est "compatible" — préféré à un
+        // module qui contient déjà la cargaison d'un autre contrat, pour
+        // garder chaque contrat groupé plutôt que mélangé avec d'autres.
         if (!placed) {
-          const dropoffFrac = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
-          const missionId = b.entry.mission && b.entry.mission.id;
-          // Un module vide ou déjà occupé uniquement par le MÊME contrat est
-          // "compatible" — préféré à un module qui contient déjà la
-          // cargaison d'un autre contrat, pour garder chaque contrat groupé
-          // dans ses propres soutes plutôt que mélangé avec d'autres (plus
-          // facile à suivre pour le joueur, et ça évite qu'une caisse d'un
-          // contrat se retrouve coincée par une caisse d'un autre contrat qui
-          // reste à bord plus longtemps, comme observé sur le Hull B).
           const isCompatible = (m) => m.activeBoxes.length === 0 || m.activeBoxes.every((a) => a.missionId === missionId);
           const byFreeSpace = modules
             .slice()
@@ -703,36 +725,9 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
               if (ac !== bc) return ac - bc;
               return a.usedCells - b2.usedCells;
             });
-
-          // Passe 1 : une place SÛRE dans N'IMPORTE LEQUEL des modules du
-          // vaisseau (le moins rempli d'abord) — avant de se rabattre sur un
-          // conflit forcé, on vérifie que TOUT le vaisseau n'a vraiment aucune
-          // place sûre, pas seulement le premier module testé.
-          for (const m of byFreeSpace) {
-            const result = trySafePlacement(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac);
-            if (result) {
-              placed = { module: m, position: result.position, size: result.size };
-              break;
-            }
-          }
-
-          // Passe 2 : aucun module n'a de place sûre pour cette caisse ->
-          // compare le pire conflit de CHAQUE module (sans rien commiter) et
-          // ne retient que le moins mauvais de tout le vaisseau, plutôt que le
-          // premier trouvé dans le module le moins rempli.
-          if (!placed) {
-            let best = null;
-            for (const m of byFreeSpace) {
-              const candidate = tryWorstCasePlacement(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac);
-              if (candidate && (!best || candidate.severity > best.severity)) best = { module: m, ...candidate };
-            }
-            if (best) {
-              markPlaced(best.module.grid, best.position, best.size, { dropoffStop: b.dropoffStop });
-              bumpLayerUsage(best.module.layerUsage, best.module.depthAxis, best.position, best.size, 1);
-              placed = { module: best.module, position: best.position, size: best.size };
-            }
-          }
+          placed = placeInBestModule(byFreeSpace, b.box, b.dropoffStop, dropoffFrac, null, missionId);
         }
+
         if (!placed) {
           unplaced.push({ box: b.box, entry: b.entry });
           return;
