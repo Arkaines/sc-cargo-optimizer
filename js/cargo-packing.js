@@ -247,7 +247,7 @@ function computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac) {
 // une position sûre est trouvée, renvoie null sinon sans aucun effet de bord
 // — permet au niveau au-dessus d'essayer un autre module sans avoir à
 // annuler quoi que ce soit.
-function trySafePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac) {
+function trySafePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac, allowedDepths) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -263,8 +263,12 @@ function trySafePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   // corresponde à l'ordre réel de sortie et ne force jamais un blocage
   // évitable. À proximité égale, préfère le plan le moins rempli (occupation
   // RÉELLE, pas juste "déjà touché une fois") pour se répartir sur toute la
-  // longueur du module plutôt que de se tasser dans un coin.
-  const depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
+  // longueur du module plutôt que de se tasser dans un coin. allowedDepths,
+  // si fourni, restreint la recherche à la zone réservée au contrat de cette
+  // caisse (voir assignMissionZones) — une caisse d'un autre contrat ne doit
+  // pas venir s'y intercaler.
+  let depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
+  if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
@@ -296,7 +300,7 @@ function trySafePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBox
 // possibles de CE module et renvoie celle dont le pire conflit part le plus
 // tard — SANS commiter, pour que le niveau au-dessus puisse comparer avec les
 // autres modules du vaisseau avant de choisir où placer réellement la caisse.
-function tryWorstCasePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac) {
+function tryWorstCasePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac, allowedDepths) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -304,7 +308,8 @@ function tryWorstCasePlacement(grid, cellDims, box, depthAxis, dropoffStop, acti
   const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
 
   const range = (size) => Array.from({ length: size }, (_, i) => i);
-  const depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
+  let depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
+  if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
@@ -381,6 +386,98 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
   return true;
 }
 
+// Réserve à chaque contrat (mission) sa/ses propre(s) zone(s) contiguë(s) en
+// profondeur AVANT même de commencer à ranger quoi que ce soit : le trajet
+// entier est déjà connu (quantités, tailles, dates de récup/livraison de
+// TOUTES les marchandises), ce n'est pas un vrai flux en ligne — exactement
+// comme un joueur qui, en préparant son chargement, réserve une grille par
+// contrat quand ça rentre, ou scinde une grille en deux zones s'il y a plus
+// de contrats que de grilles. Sans ça, deux contrats différents peuvent finir
+// mélangés dans le même module simplement parce qu'ils sont arrivés dans cet
+// ordre, avec le risque qu'une caisse d'un contrat qui reste longtemps bloque
+// l'accès à une caisse d'un autre contrat qui part plus tôt (observé sur le
+// Hull B : contrat A et contrat B mélangés dans la même soute).
+// Renvoie une Map missionId -> [{ module, depthStart, depthEnd }, ...] (une
+// zone par tranche de profondeur réservée ; plusieurs zones si le contrat ne
+// tient pas dans un seul module).
+function assignMissionZones(cargoEntries, modules) {
+  const missionNeed = new Map();
+  cargoEntries.forEach((e) => {
+    const missionId = e.mission && e.mission.id;
+    if (missionId == null) return; // pas de contrat identifiable : pas de zone dédiée, recherche libre à l'exécution.
+    const cur = missionNeed.get(missionId) || { mission: e.mission, totalScu: 0 };
+    cur.totalScu += Number(e.quantity) || 0;
+    missionNeed.set(missionId, cur);
+  });
+
+  const moduleState = modules.map((m) => ({
+    module: m,
+    layerCapacity: (m.cellDims[0] * m.cellDims[1] * m.cellDims[2]) / m.cellDims[m.depthAxis],
+    nextFreeDepth: 0,
+    maxDepth: m.cellDims[m.depthAxis],
+  }));
+
+  // Les plus gros contrats d'abord : leur donne la première chance de tenir
+  // entiers dans un seul module plutôt que d'être scindés inutilement.
+  const missionsSorted = [...missionNeed.values()].sort((a, b) => b.totalScu - a.totalScu);
+  const zonesByMission = new Map();
+
+  missionsSorted.forEach(({ mission, totalScu }) => {
+    let remaining = totalScu;
+    const zones = [];
+    while (remaining > 0.0001) {
+      const openModules = moduleState.filter((ms) => ms.nextFreeDepth < ms.maxDepth);
+      if (!openModules.length) break; // Plus de place nulle part : le repli sur la recherche libre (voir simulateRoutePacking) prendra le relais à l'exécution.
+
+      const freeCapOf = (ms) => (ms.maxDepth - ms.nextFreeDepth) * ms.layerCapacity;
+      const isFresh = (ms) => ms.nextFreeDepth === 0;
+
+      // Un module ENTIÈREMENT LIBRE qui peut tout contenir d'un coup, en
+      // préférant celui où ça rentre le plus juste (garde les gros modules
+      // libres pour les gros contrats encore à traiter) — priorité absolue
+      // sur un module déjà partagé avec un autre contrat, même si ce dernier
+      // "rentrerait mieux" : mélanger deux contrats dans la même soute est ce
+      // qu'on cherche justement à éviter, pas juste minimiser la place perdue.
+      let bestFit = null;
+      openModules.forEach((ms) => {
+        if (!isFresh(ms)) return;
+        const freeCap = freeCapOf(ms);
+        if (freeCap >= remaining && (!bestFit || freeCap < bestFit.freeCap)) bestFit = { ms, freeCap };
+      });
+      // Aucun module libre ne suffit à tout contenir : un module déjà
+      // partagé qui, lui, peut tout contenir d'un coup (mélange accepté
+      // seulement faute de mieux).
+      if (!bestFit) {
+        openModules.forEach((ms) => {
+          if (isFresh(ms)) return;
+          const freeCap = freeCapOf(ms);
+          if (freeCap >= remaining && (!bestFit || freeCap < bestFit.freeCap)) bestFit = { ms, freeCap };
+        });
+      }
+      // Personne ne peut tout prendre d'un coup : prend le plus grand espace
+      // libre restant (libre en priorité), pour limiter le nombre de
+      // morceaux du contrat.
+      const ms =
+        bestFit?.ms ||
+        openModules.reduce((best, cur) => {
+          const curFresh = isFresh(cur) ? 1 : 0;
+          const bestFresh = isFresh(best) ? 1 : 0;
+          if (curFresh !== bestFresh) return curFresh > bestFresh ? cur : best;
+          return freeCapOf(cur) > freeCapOf(best) ? cur : best;
+        });
+
+      const freeDepths = ms.maxDepth - ms.nextFreeDepth;
+      const neededDepths = Math.min(freeDepths, Math.ceil(remaining / ms.layerCapacity));
+      zones.push({ module: ms.module, depthStart: ms.nextFreeDepth, depthEnd: ms.nextFreeDepth + neededDepths });
+      remaining -= neededDepths * ms.layerCapacity;
+      ms.nextFreeDepth += neededDepths;
+    }
+    zonesByMission.set(mission.id, zones);
+  });
+
+  return zonesByMission;
+}
+
 // =========================================================================
 // Rangement tenant compte de l'ordre réel du trajet (voir js/app.js pour la
 // construction de pickupStop/dropoffStop à partir du trajet optimisé) :
@@ -413,6 +510,15 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
     };
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
+
+  // Une zone dédiée par contrat, calculée une fois pour toutes AVANT le
+  // rangement (voir assignMissionZones) : le trajet entier est déjà connu, ce
+  // n'est pas la peine d'attendre d'être coincé pour découvrir qu'un contrat
+  // aurait dû avoir sa propre soute.
+  const zonesByMission = assignMissionZones(
+    cargoEntries.filter((e) => e.pickupStop != null && e.dropoffStop != null),
+    modules
+  );
 
   const boxes = [];
   cargoEntries.forEach((entry) => {
@@ -481,7 +587,38 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         const sameEntryActive = boxes.filter((other) => other !== b && other.active && other.entry === b.entry);
         let placed = tryStackOnExisting(sameEntryActive, b.box, b.dropoffStop);
 
-        // Sinon, modules les moins remplis d'abord (recalculé à chaque
+        // Sinon, essaie la/les zone(s) réservée(s) au contrat de cette caisse
+        // (voir assignMissionZones, calculé une fois pour tout le trajet) :
+        // une grille dédiée par contrat quand ça rentre, sinon une zone en
+        // profondeur au sein d'un module partagé — avant même de regarder
+        // ailleurs sur le vaisseau.
+        if (!placed) {
+          const dropoffFracForZone = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
+          const missionIdForZone = b.entry.mission && b.entry.mission.id;
+          const zones = missionIdForZone != null ? zonesByMission.get(missionIdForZone) || [] : [];
+          for (const zone of zones) {
+            if (zone.module.hold.maxContainerSize && b.box.scu > zone.module.hold.maxContainerSize) continue;
+            const allowedDepths = new Set();
+            for (let d = zone.depthStart; d < zone.depthEnd; d++) allowedDepths.add(d);
+            const result = trySafePlacement(
+              zone.module.grid,
+              zone.module.cellDims,
+              b.box,
+              zone.module.depthAxis,
+              b.dropoffStop,
+              zone.module.activeBoxes,
+              zone.module.layerUsage,
+              dropoffFracForZone,
+              allowedDepths
+            );
+            if (result) {
+              placed = { module: zone.module, position: result.position, size: result.size };
+              break;
+            }
+          }
+        }
+
+        // Sinon (zone réservée pleine ou contrat sans zone), modules les moins remplis d'abord (recalculé à chaque
         // caisse, pas une fois par arrêt : plusieurs caisses peuvent être
         // récupérées au même arrêt) : sans ça, tout se tasserait dans le
         // premier module de la liste par empilement en profondeur, quitte à
@@ -489,10 +626,24 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         // vaisseau sont encore vides.
         if (!placed) {
           const dropoffFrac = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
+          const missionId = b.entry.mission && b.entry.mission.id;
+          // Un module vide ou déjà occupé uniquement par le MÊME contrat est
+          // "compatible" — préféré à un module qui contient déjà la
+          // cargaison d'un autre contrat, pour garder chaque contrat groupé
+          // dans ses propres soutes plutôt que mélangé avec d'autres (plus
+          // facile à suivre pour le joueur, et ça évite qu'une caisse d'un
+          // contrat se retrouve coincée par une caisse d'un autre contrat qui
+          // reste à bord plus longtemps, comme observé sur le Hull B).
+          const isCompatible = (m) => m.activeBoxes.length === 0 || m.activeBoxes.every((a) => a.missionId === missionId);
           const byFreeSpace = modules
             .slice()
-            .sort((a, b2) => a.usedCells - b2.usedCells)
-            .filter((m) => !(m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize));
+            .filter((m) => !(m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize))
+            .sort((a, b2) => {
+              const ac = isCompatible(a) ? 0 : 1;
+              const bc = isCompatible(b2) ? 0 : 1;
+              if (ac !== bc) return ac - bc;
+              return a.usedCells - b2.usedCells;
+            });
 
           // Passe 1 : une place SÛRE dans N'IMPORTE LEQUEL des modules du
           // vaisseau (le moins rempli d'abord) — avant de se rabattre sur un
@@ -530,7 +681,12 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         b.placement = placed;
         b.active = true;
         placed.module.usedCells += placed.size[0] * placed.size[1] * placed.size[2];
-        placed.activeEntry = { position: placed.position, size: placed.size, dropoffStop: b.dropoffStop };
+        placed.activeEntry = {
+          position: placed.position,
+          size: placed.size,
+          dropoffStop: b.dropoffStop,
+          missionId: b.entry.mission && b.entry.mission.id,
+        };
         placed.module.activeBoxes.push(placed.activeEntry);
       });
 
