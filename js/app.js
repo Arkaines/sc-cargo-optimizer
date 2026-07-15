@@ -2039,6 +2039,13 @@ const LAGRANGE_PLANET_ABBR = {
 
 function reorderFrenchLagrangeStation(rawText) {
   const cleaned = rawText.trim();
+  // Le code d'abréviation est parfois déjà présent devant (ex : "HUR-L1
+  // Station Green Glade" au lieu du catalogue "HUR-L1 Green Glade
+  // Station") : seul "Station" est du mauvais côté du nom, pas besoin de
+  // reconstruire l'abréviation à partir du nom de planète dans ce cas.
+  const withCode = /^([A-Za-z]{3}-l\d)\s+station\s+(.+)$/i.exec(cleaned);
+  if (withCode) return `${withCode[1]} ${withCode[2].trim()} Station`;
+
   // Tolère un artefact OCR (crochet, puce...) entre "au" et "point" : le nom
   // du lieu tient parfois sur deux lignes en jeu, coupées juste à cet
   // endroit, et un symbole de la ligne suivante peut se retrouver capté ici.
