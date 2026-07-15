@@ -2212,6 +2212,29 @@ function reorderFrenchLagrangeStation(rawText) {
   return `${abbr}-L${m[2]} ${m[1].trim()} Station`;
 }
 
+// Certaines stations en orbite (pas à un point de Lagrange) sont décrites en
+// français par "(La )Station <Nom> en orbite de <Planète>" (ex : "La Station
+// Seraphin en orbite de Crusader" pour le catalogue "Seraphim Station") —
+// même gabarit "Station" en préfixe que ci-dessus, mais sans code
+// d'abréviation à reconstruire : on retire juste la description de l'orbite
+// et on réordonne. La correspondance floue (fuzzyLocationMatch, appelée par
+// looseLocationMatch) rattrape ensuite les petites erreurs de l'OCR sur le
+// nom lui-même (ex : "Seraphin" au lieu de "Seraphim").
+function reorderFrenchOrbitalStation(rawText) {
+  const cleaned = rawText.trim();
+  const re = /^(?:la\s+)?station\s+(.+?)\s*en\s*[^\p{L}\s]*\s*orbite\s+de\s+.+$/iu;
+  let m = re.exec(cleaned);
+  if (!m) {
+    // Un glyphe isolé (icône d'interface mal lue par l'OCR, ex : "I", "|")
+    // traîne parfois en tête de ligne à cause du recadrage — on retente en
+    // le retirant, mais seulement s'il s'agit bien d'un unique caractère
+    // suivi d'un espace (pour ne jamais couper un vrai mot court comme "la").
+    m = re.exec(cleaned.replace(/^\S\s+/, ""));
+  }
+  if (!m) return null;
+  return `${m[1].trim()} Station`;
+}
+
 // Le nom de lieu lu par l'OCR ne correspond pas toujours exactement à un
 // lieu de la base (variante de nom, casse, mot manquant) : on tente une
 // correspondance exacte, puis approximative, puis floue (distance d'édition).
@@ -2242,6 +2265,7 @@ function looseLocationMatch(rawText) {
   const candidates = [
     ...(reorderFrenchLocationDescriptor(cleaned) || []),
     ...(reorderFrenchLagrangeStation(cleaned) ? [reorderFrenchLagrangeStation(cleaned)] : []),
+    ...(reorderFrenchOrbitalStation(cleaned) ? [reorderFrenchOrbitalStation(cleaned)] : []),
   ];
   for (const reordered of candidates) {
     const reorderedLower = reordered.toLowerCase();
