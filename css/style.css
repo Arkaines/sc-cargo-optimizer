@@ -244,6 +244,17 @@ header p.hint {
   gap: 1.5rem;
 }
 
+.site-footer {
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.site-footer a {
+  color: var(--muted);
+}
+
 aside#side-panel {
   width: 300px;
   flex: none;

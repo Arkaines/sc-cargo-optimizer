@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — Cargo Route Optimizer</title>
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<link rel="stylesheet" href="css/style.css?v=20260715" />
+<script>
+  (function () {
+    var saved = localStorage.getItem("sc-cargo-optimizer-theme");
+    var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+  .legal-page { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem 4rem; line-height: 1.6; }
+  .legal-page h2 { margin-top: 2rem; }
+  .legal-page ul { padding-left: 1.5rem; }
+  .legal-page a.back-link { display: inline-block; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+<p class="fan-disclaimer">
+  This is an unofficial Star Citizen fan site, not affiliated with the Cloud Imperium group of companies. All content
+  on this site not created by its host or users belongs to its respective owners. Official site:
+  <a href="https://robertsspaceindustries.com" target="_blank" rel="noopener">robertsspaceindustries.com</a>
+</p>
+<div class="legal-page">
+  <a class="back-link" href="index.html">← Back to the tool</a>
+  <p><a href="privacy.html">🇫🇷 Lire cette page en français</a></p>
+
+  <h1>Privacy Policy</h1>
+  <p class="hint">Last updated: July 15, 2026</p>
+
+  <p>
+    This page explains what data the Cargo Route Optimizer (the "site", the "tool") collects, why, and how it's used.
+    This is a free, open-source fan project with no commercial purpose — this policy honestly reflects what the code
+    does, not generic boilerplate.
+  </p>
+
+  <h2>Data controller</h2>
+  <p>
+    The tool is developed and maintained by <strong>Arkaines</strong> (project author), sole controller of the data
+    described below. Contact: see the "Contact" section at the bottom of this page.
+  </p>
+
+  <h2>1. What's stored locally (always)</h2>
+  <p>
+    Without logging in with Discord, the tool works entirely in your browser: your missions, custom locations, manual
+    distances, selected ship, and reputation calibrations are saved only in your browser's local storage
+    (<code>localStorage</code>), on your own device. Nothing is sent to a server. You can erase everything at any time
+    via the "Reset all data" button in the tool.
+  </p>
+
+  <h2>2. What's collected if you log in with Discord</h2>
+  <p>
+    Logging in with Discord is entirely optional and is only used to sync your game data (missions, locations,
+    distances, reputation, ship) across multiple devices. It goes through Discord (identity provider) and then
+    <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> (database hosting). By logging in, the
+    following data is processed:
+  </p>
+  <ul>
+    <li>Your Discord user ID, username, and avatar (provided by Discord via authentication), to show you as logged in and to link your cloud data to your account.</li>
+    <li>The same game data listed above (missions, custom locations, distances, ship, reputation calibrations), copied to a Supabase database to enable cross-device sync.</li>
+  </ul>
+  <p>
+    No other Discord information is requested or stored (no access to your servers, channels, messages, or contacts).
+    This data is never sold, shared with third parties for advertising purposes, or used for profiling.
+  </p>
+  <p>
+    <strong>Legal basis (GDPR):</strong> processing of local data relies on performing the requested service (making
+    the tool work). Processing of data related to Discord login (identity + cloud sync) relies on your
+    <strong>consent</strong>, given by clicking "Log in with Discord" — you can withdraw it at any time by logging out
+    and requesting deletion of your cloud data (see "Your rights" below).
+  </p>
+
+  <h2>3. Third-party services used</h2>
+  <ul>
+    <li><strong>Discord</strong> — authentication only (OAuth), for the optional login. US-based company. See <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's Privacy Policy</a>.</li>
+    <li><strong>Supabase</strong> — database hosting for the optional cloud backup. The project used by this tool is hosted in the European Union. See <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Supabase's Privacy Policy</a>.</li>
+    <li><strong>UEX Corp API</strong> and <strong>Star Citizen Wiki API</strong> — public game data (locations, commodities, missions), accessed read-only; no personal data is sent to them.</li>
+    <li><strong>Tesseract.js</strong> (text recognition) — runs entirely in your browser. Screenshots you import are never sent to a server, including ours.</li>
+    <li><strong>Cloudflare Web Analytics</strong> — anonymous audience measurement (page views, referrers), with no cookies or identifier that would track you across sites. Global network (US and other countries). See <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare's Privacy Policy</a>.</li>
+  </ul>
+  <p>No advertising and no advertising-tracking or profiling tools are used on this site.</p>
+
+  <h2>3b. Data transfers outside the EU</h2>
+  <p>
+    Synced game data (missions, locations, etc.) stays hosted in the EU (Supabase). However, Discord (authentication)
+    and Cloudflare (audience measurement) are US-based and may process some data (e.g. your Discord ID, the IP address
+    used to load the page) outside the EU, under their own compliance safeguards (standard contractual clauses or
+    equivalent). See their respective policies linked above for details.
+  </p>
+
+  <h2>4. Data retention and deletion</h2>
+  <p>
+    Local data stays on your device until you erase it (reset button, or clearing your browser's local storage). Cloud
+    data (if you logged in) is kept as long as your account exists; you can request its complete deletion at any time
+    (see "Contact" below).
+  </p>
+
+  <h2>5. Your rights (GDPR)</h2>
+  <p>If you reside in the European Union (or a country with equivalent legislation), you have the following rights over your data:</p>
+  <ul>
+    <li><strong>Access</strong>: know what data about you is stored.</li>
+    <li><strong>Rectification</strong>: correct inaccurate data.</li>
+    <li><strong>Erasure</strong>: request deletion of your cloud data (local data, you erase yourself at any time).</li>
+    <li><strong>Restriction</strong> and <strong>objection</strong> to processing, in the cases provided by the GDPR.</li>
+    <li><strong>Portability</strong>: receive your cloud data in a usable format.</li>
+    <li><strong>Complaint</strong>: lodge a complaint with the <a href="https://www.cnil.fr" target="_blank" rel="noopener">CNIL</a> (French data protection authority) or the equivalent authority in your country of residence.</li>
+  </ul>
+  <p>To exercise these rights, see "Contact" below.</p>
+
+  <h2>6. Children</h2>
+  <p>This tool is not intended for individuals below the minimum age required by Discord's terms to create an account, nor, for Discord login, for individuals below the digital age of consent applicable in their country of residence.</p>
+
+  <h2>7. Transparency</h2>
+  <p>
+    This tool's source code is fully public and open source (MIT license):
+    <a href="https://github.com/Arkaines/sc-cargo-optimizer" target="_blank" rel="noopener">github.com/Arkaines/sc-cargo-optimizer</a>.
+    You can verify exactly what data is read, stored, or sent.
+  </p>
+
+  <h2>8. Changes</h2>
+  <p>This page may be updated as the tool's features evolve. The last-updated date is shown at the top of the page.</p>
+
+  <h2>9. Contact</h2>
+  <p>
+    To exercise your rights or for any question about this policy, open an
+    <a href="https://github.com/Arkaines/sc-cargo-optimizer/issues" target="_blank" rel="noopener">issue on GitHub</a>.
+    Since this repository is public, don't include sensitive information there: just mention the last digits of your
+    Discord user ID (visible in your Discord settings) so your request can be identified, without exposing more than
+    necessary in public.
+  </p>
+</div>
+</body>
+</html>
