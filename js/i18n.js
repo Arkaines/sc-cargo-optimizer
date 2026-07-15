@@ -170,10 +170,19 @@ const TRANSLATIONS = {
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
+    startLocationCustomLabel: "Ou saisir un autre lieu de départ",
+    startLocationCustomPlaceholder: "Ex : lieu où tu te trouves déjà",
     optimizeBtn: "Optimiser la route",
     selectMissionError: "Sélectionne au moins une mission.",
     noValidOrderError:
-      "Impossible de trouver un ordre valide : vérifie que le point de départ choisi n'est pas un dépôt sans récupération préalable.",
+      "Impossible de trouver un ordre valide. Si un point de départ est choisi, vérifie qu'il n'est pas un dépôt sans récupération préalable ; sinon, deux missions imposent probablement un ordre de visite contradictoire entre certains lieux (un même trajet ne peut pas visiter deux lieux dans les deux ordres) — essaie de désélectionner une mission à la fois pour repérer laquelle.",
+    noValidOrderCycleError:
+      "Impossible de trouver un ordre valide : une mission demande de récupérer à {a} avant de déposer à {b}, tandis qu'une autre demande l'inverse. Un même trajet ne peut pas visiter ces deux lieux dans les deux ordres — désélectionne l'une des missions concernées entre {a} et {b}, ou active \"{allowRevisitsBtn}\" ci-dessous.",
+    allowRevisitsLabel: "Autoriser à revisiter un lieu si nécessaire (trajet non garanti optimal)",
+    allowRevisitsBtn: "Autoriser les revisites",
+    allowRevisitsHint: "Si activé, un lieu peut être visité plusieurs fois pour débloquer un trajet autrement impossible — le résultat n'est alors plus garanti optimal.",
+    revisitedResultWarning:
+      "⚠ Trajet de secours : au moins un lieu est visité plusieurs fois pour satisfaire des missions imposant un ordre contradictoire. Ce trajet n'est PAS optimisé (simple parcours au plus proche, pas de recherche du meilleur ordre) — désactive \"{allowRevisitsBtn}\" et désélectionne une mission pour un calcul optimal.",
     approximateResultNote: "{count} lieux distincts : résultat approché (heuristique), pas garanti optimal à 100%.",
     routeTotal: "Distance totale estimée : {total} Gm — {stops} arrêt(s)",
     maxLoadOverload:
@@ -192,7 +201,8 @@ const TRANSLATIONS = {
       '{count} lieux intégrés par défaut (données UEX Corp). Utilise "Tout synchroniser" pour les rafraîchir.',
 
     resetAllBtn: "Réinitialiser toutes les données",
-    confirmResetAll: "Supprimer toutes les missions, lieux personnalisés et distances enregistrées ? Si tu es connecté, ça effacera aussi la sauvegarde cloud.",
+    confirmResetAll:
+      "⚠ Action irréversible : ceci va TOUT supprimer sans exception — missions actives, historique des missions terminées, calibrage de réputation, lieux personnalisés et distances enregistrées. Si tu es connecté, la sauvegarde cloud sera aussi effacée définitivement. Continuer ?",
   },
 
   en: {
@@ -356,10 +366,19 @@ const TRANSLATIONS = {
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",
+    startLocationCustomLabel: "Or type another starting location",
+    startLocationCustomPlaceholder: "E.g.: wherever you already are",
     optimizeBtn: "Optimize route",
     selectMissionError: "Select at least one mission.",
     noValidOrderError:
-      "Could not find a valid order: check that the chosen starting point isn't a dropoff without a prior pickup.",
+      "Could not find a valid order. If a starting point is chosen, check that it isn't a dropoff without a prior pickup; otherwise, two missions likely require a contradictory visit order between some locations (a single route can't visit two locations in both orders) — try deselecting missions one at a time to find which one.",
+    noValidOrderCycleError:
+      "Could not find a valid order: one mission requires picking up at {a} before dropping off at {b}, while another requires the opposite. A single route can't visit these two locations in both orders — deselect one of the conflicting missions between {a} and {b}, or enable \"{allowRevisitsBtn}\" below.",
+    allowRevisitsLabel: "Allow revisiting a location if needed (route not guaranteed optimal)",
+    allowRevisitsBtn: "Allow revisits",
+    allowRevisitsHint: "When enabled, a location can be visited more than once to unblock an otherwise impossible route — the result is then no longer guaranteed optimal.",
+    revisitedResultWarning:
+      "⚠ Fallback route: at least one location is visited more than once to satisfy missions requiring a contradictory order. This route is NOT optimized (simple nearest-neighbor pass, no search for the best order) — disable \"{allowRevisitsBtn}\" and deselect a mission for an optimal calculation.",
     approximateResultNote: "{count} distinct locations: approximate result (heuristic), not guaranteed 100% optimal.",
     routeTotal: "Estimated total distance: {total} Gm — {stops} stop(s)",
     maxLoadOverload: "Maximum load along the route: {load} / {scu} SCU — exceeds capacity by {over} SCU at some point!",
@@ -375,7 +394,8 @@ const TRANSLATIONS = {
     uexLocationsDefault: '{count} locations built in by default (UEX Corp data). Use "Sync everything" to refresh them.',
 
     resetAllBtn: "Reset all data",
-    confirmResetAll: "Delete all missions, custom locations and saved distances? If you're logged in, this will also erase the cloud backup.",
+    confirmResetAll:
+      "⚠ Irreversible action: this will delete EVERYTHING with no exception — active missions, completed mission history, reputation calibration, custom locations and saved distances. If you're logged in, the cloud backup will also be permanently erased. Continue?",
   },
 };
 

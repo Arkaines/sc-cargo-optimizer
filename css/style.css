@@ -850,6 +850,21 @@ tbody tr:nth-child(even) {
   min-width: 220px;
 }
 
+/* Même format (padding/taille/police) que les autres boutons, hérité de la
+   règle "button" générale — seule la couleur change pour un bouton-bascule
+   plutôt qu'une action (comme .btn-elevator-hs). */
+.btn-toggle-revisits {
+  margin-left: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+}
+
+.btn-toggle-revisits.active {
+  background: var(--warning);
+  color: var(--bg);
+}
+
 .route-total {
   font-size: 1.05rem;
   font-weight: 700;

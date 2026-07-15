@@ -621,7 +621,122 @@ function roundScu(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function optimizeRoute(missions, startId, brokenLocationIds) {
+// Repère un cycle direct entre deux lieux (A doit être visité avant B pour
+// une mission, B avant A pour une autre) : la contradiction la plus simple
+// et la plus fréquente rendant un trajet impossible. Ne détecte que les
+// cycles à deux lieux (le cas courant) — un cycle plus long (A avant B avant
+// C avant A) reste signalé par le message générique.
+function findDirectConstraintCycle(constraints, locIds) {
+  const seen = new Set(constraints.map(([a, b]) => `${a}>${b}`));
+  for (const [a, b] of constraints) {
+    if (!seen.has(`${b}>${a}`)) continue;
+    const locA = getLocationById(locIds[a]);
+    const locB = getLocationById(locIds[b]);
+    if (locA && locB) return { a: locA, b: locB };
+  }
+  return null;
+}
+
+// Repli utilisé uniquement quand le calcul strict (chaque lieu visité une
+// seule fois) échoue ET que le joueur a explicitement coché "autoriser à
+// revisiter un lieu" : parcours glouton "plus proche voisin" parmi les
+// actions encore à faire (ramassages/dépôts), qui peut donc repasser par un
+// même lieu si c'est nécessaire pour satisfaire des missions imposant un
+// ordre contradictoire. Volontairement simple (pas de recherche
+// d'optimalité) : c'est un filet de secours pour débloquer un trajet
+// autrement impossible, pas un second algorithme d'optimisation — d'où le
+// marquage systématique en résultat non garanti optimal.
+function solveRouteWithRevisits(missions, startId, broken) {
+  const isUsable = (item) => !broken.has(item.pickupId) && !broken.has(item.dropoffId);
+
+  const entries = [];
+  missions.forEach((m) => {
+    (m.cargoItems || []).forEach((item, index) => {
+      if (!isUsable(item)) return;
+      if (!item.pickupId || !item.dropoffId || item.pickupId === item.dropoffId) return;
+      entries.push({ mission: m, item, index, pickedUp: false, droppedOff: false });
+    });
+  });
+  if (!entries.length) return { error: t("selectMissionError") };
+
+  let current = startId || entries[0].item.pickupId;
+  const steps = [];
+  let total = 0;
+
+  function currentStep(legDistance) {
+    if (steps.length && steps[steps.length - 1].locId === current) return steps[steps.length - 1];
+    const step = { locId: current, actions: [], legDistance: steps.length ? legDistance : 0 };
+    steps.push(step);
+    return step;
+  }
+
+  function addAction(type, mission, item, index) {
+    const step = currentStep(0);
+    let action = step.actions.find((a) => a.type === type && a.mission === mission);
+    if (!action) {
+      action = { type, mission, items: [] };
+      step.actions.push(action);
+    }
+    action.items.push({ ...item, index });
+  }
+
+  // Le lieu de départ choisi (même sans action) apparaît comme premier
+  // arrêt, comme dans le calcul strict.
+  if (startId) currentStep(0);
+
+  let guard = entries.length * 2;
+  while (entries.some((e) => !e.droppedOff) && guard-- > 0) {
+    const candidates = [];
+    entries.forEach((e) => {
+      if (!e.pickedUp) candidates.push({ locId: e.item.pickupId, type: "pickup", entry: e });
+      else if (!e.droppedOff) candidates.push({ locId: e.item.dropoffId, type: "dropoff", entry: e });
+    });
+
+    let best = null;
+    let bestDist = Infinity;
+    candidates.forEach((c) => {
+      const d = c.locId === current ? 0 : getDistance(current, c.locId);
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    });
+    if (!best) break;
+
+    total += bestDist;
+    current = best.locId;
+    currentStep(bestDist);
+    if (best.type === "pickup") {
+      best.entry.pickedUp = true;
+      addAction("pickup", best.entry.mission, best.entry.item, best.entry.index);
+    } else {
+      best.entry.droppedOff = true;
+      addAction("dropoff", best.entry.mission, best.entry.item, best.entry.index);
+    }
+  }
+
+  let load = 0;
+  let maxLoad = 0;
+  steps.forEach((step) => {
+    step.actions.forEach((a) => {
+      const sum = a.items.reduce((s, item) => s + (Number(item.quantity) || 0), 0);
+      load += a.type === "pickup" ? sum : -sum;
+    });
+    step.cargoLoad = roundScu(load);
+    if (step.cargoLoad > maxLoad) maxLoad = step.cargoLoad;
+  });
+
+  return {
+    steps,
+    total: roundScu(total),
+    approximate: true,
+    revisited: true,
+    stopCount: steps.length,
+    maxCargoLoad: maxLoad,
+  };
+}
+
+function optimizeRoute(missions, startId, brokenLocationIds, allowRevisits) {
   if (missions.length === 0) return { error: t("selectMissionError") };
 
   // Un ascenseur de fret HS rend son lieu inutilisable pour le ramassage
@@ -631,6 +746,11 @@ function optimizeRoute(missions, startId, brokenLocationIds) {
   const isUsable = (item) => !broken.has(item.pickupId) && !broken.has(item.dropoffId);
 
   const locIds = computeUniqueLocationIds(missions, broken);
+  // Le lieu de départ choisi n'est pas forcément un lieu de ramassage/dépôt
+  // d'une mission en cours (ex : le joueur part d'une station où il se
+  // trouve déjà) : on l'ajoute comme arrêt supplémentaire sans action, pour
+  // que son trajet jusqu'au premier vrai arrêt compte dans le calcul.
+  if (startId && !locIds.includes(startId)) locIds.unshift(startId);
   const n = locIds.length;
   const idxOf = {};
   locIds.forEach((id, i) => (idxOf[id] = i));
@@ -667,6 +787,22 @@ function optimizeRoute(missions, startId, brokenLocationIds) {
   }
 
   if (!order) {
+    // Si le joueur a explicitement coché "autoriser à revisiter un lieu",
+    // on retombe sur le parcours glouton (voir solveRouteWithRevisits) qui
+    // peut repasser par un même lieu pour débloquer la situation, plutôt
+    // que de simplement échouer.
+    if (allowRevisits) return solveRouteWithRevisits(missions, startId, broken);
+
+    // Cause la plus fréquente d'un trajet impossible : deux missions
+    // imposent l'ordre inverse l'une de l'autre entre les deux mêmes lieux
+    // (A avant B pour l'une, B avant A pour l'autre) — un cycle direct,
+    // bien plus parlant à nommer que le message générique de repli.
+    const cycle = findDirectConstraintCycle(constraints, locIds);
+    if (cycle) {
+      return {
+        error: t("noValidOrderCycleError", { a: cycle.a.name, b: cycle.b.name, allowRevisitsBtn: t("allowRevisitsBtn") }),
+      };
+    }
     return { error: t("noValidOrderError") };
   }
 
@@ -1678,7 +1814,12 @@ function renderRouteResult(result) {
     return;
   }
 
-  if (result.approximate) {
+  if (result.revisited) {
+    const p = document.createElement("p");
+    p.className = "hint warning-text";
+    p.textContent = t("revisitedResultWarning", { allowRevisitsBtn: t("allowRevisitsBtn") });
+    container.appendChild(p);
+  } else if (result.approximate) {
     const p = document.createElement("p");
     p.className = "hint";
     p.textContent = t("approximateResultNote", { count: result.stopCount });
@@ -1829,10 +1970,24 @@ function renderRouteResult(result) {
   triggerFadeIn(container);
 }
 
+// Le champ de saisie libre (n'importe quel lieu connu, même s'il n'est le
+// ramassage/dépôt d'aucune mission en cours) prend le pas sur le menu
+// déroulant quand il est rempli et reconnu ; sinon on retombe sur le menu
+// (donc sur "Libre" si les deux sont vides).
+function resolveStartLocationId() {
+  const customText = document.getElementById("start-location-custom").value.trim();
+  if (customText) {
+    const loc = findLocationByLabel(customText);
+    if (loc) return loc.id;
+  }
+  return document.getElementById("start-location").value || null;
+}
+
 function runOptimize() {
-  const startId = document.getElementById("start-location").value || null;
+  const startId = resolveStartLocationId();
   const included = activeMissions().filter((m) => m.included);
-  const result = optimizeRoute(included, startId, brokenElevatorLocationIds);
+  const allowRevisits = document.getElementById("allow-revisits-btn").classList.contains("active");
+  const result = optimizeRoute(included, startId, brokenElevatorLocationIds, allowRevisits);
   renderRouteResult(result);
 }
 
@@ -2046,10 +2201,11 @@ function reorderFrenchLagrangeStation(rawText) {
   const withCode = /^([A-Za-z]{3}-l\d)\s+station\s+(.+)$/i.exec(cleaned);
   if (withCode) return `${withCode[1]} ${withCode[2].trim()} Station`;
 
-  // Tolère un artefact OCR (crochet, puce...) entre "au" et "point" : le nom
-  // du lieu tient parfois sur deux lignes en jeu, coupées juste à cet
-  // endroit, et un symbole de la ligne suivante peut se retrouver capté ici.
-  const m = /^station\s+(.+?)\s+au\s*[^\p{L}\s]*\s*point\s+de\s+lagrange\s+l(\d)\s+d[e']\s*(.+)$/iu.exec(cleaned);
+  // Tolère un artefact OCR (crochet, puce...) entre "au" et "point", ainsi
+  // qu'un espace manquant avant "au" (ex : "Faithful Dreamau point de..." —
+  // le dernier mot du nom se retrouve collé à "au" sans espace) : le nom du
+  // lieu tient parfois sur deux lignes en jeu, coupées juste à cet endroit.
+  const m = /^station\s+(.+?)\s*au\s*[^\p{L}\s]*\s*point\s+de\s+lagrange\s+l(\d)\s+d[e']\s*(.+)$/iu.exec(cleaned);
   if (!m) return null;
   const abbr = LAGRANGE_PLANET_ABBR[m[3].trim().toLowerCase().replace(/[^a-z]/g, "")];
   if (!abbr) return null;
@@ -2706,6 +2862,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("optimize-btn").addEventListener("click", runOptimize);
+
+  const allowRevisitsBtn = document.getElementById("allow-revisits-btn");
+  allowRevisitsBtn.title = t("allowRevisitsHint");
+  allowRevisitsBtn.addEventListener("click", () => {
+    allowRevisitsBtn.classList.toggle("active");
+  });
 
   document.getElementById("reset-all").addEventListener("click", () => {
     if (confirm(t("confirmResetAll"))) {

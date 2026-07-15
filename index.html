@@ -190,7 +190,18 @@
           <select id="start-location"></select>
         </div>
         <div>
+          <label for="start-location-custom" data-i18n="startLocationCustomLabel"></label>
+          <input
+            type="text"
+            id="start-location-custom"
+            list="locations-datalist"
+            data-i18n-placeholder="startLocationCustomPlaceholder"
+            autocomplete="off"
+          />
+        </div>
+        <div>
           <button type="button" id="optimize-btn" class="btn-primary" data-i18n="optimizeBtn"></button>
+          <button type="button" id="allow-revisits-btn" class="btn-toggle-revisits" data-i18n="allowRevisitsBtn"></button>
         </div>
       </div>
       <div id="broken-elevators" class="broken-elevators-list"></div>
