@@ -318,21 +318,22 @@ function isBetterPosition(a, b) {
 // module (les deux rotations à plat, tous les plans de profondeur autorisés,
 // toutes les positions latérales) et renvoie la meilleure au sens de
 // isBetterPosition — pas la première trouvée dans un ordre de balayage
-// arbitraire. allowedDepths, si fourni, restreint la recherche à la zone
-// réservée au contrat de cette caisse (voir assignMissionZones). missionId
-// sert au niveau 4 (regroupement du contrat, voir isBetterPosition). idealDepth
-// est une profondeur ABSOLUE déjà calculée par l'appelant (voir
-// simulateRoutePacking) — PAS une fraction du module entier : dans une zone
-// dédiée à un contrat, ce qui compte est le RANG relatif de cette caisse
-// parmi les SIENNES (celles du même contrat), pas sa date de livraison
-// rapportée à la longueur du trajet entier. Une fraction globale, une fois
-// bornée dans une zone étroite, peut faire tomber deux caisses d'un même
-// contrat sur la MÊME profondeur idéale alors que la zone a largement la
-// place de les séparer selon leur ordre réel de sortie — observé : une
-// caisse bloquant une autre caisse de SA PROPRE mission (Hydrogen bloqué par
-// Hydrogen de la même mission M4) alors que rien d'un autre contrat n'était
-// en cause.
-function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, idealDepth, allowedDepths, missionId) {
+// arbitraire. restriction, si fourni ({ axis, allowed: Set }), restreint la
+// recherche sur UN axe donné à la zone réservée au contrat de cette caisse
+// (voir assignMissionZones — la zone restreint désormais l'axe de VOIE, pas
+// forcément l'axe de profondeur). missionId sert au niveau 4 (regroupement
+// du contrat, voir isBetterPosition). idealDepth est une profondeur ABSOLUE
+// déjà calculée par l'appelant (voir simulateRoutePacking) — PAS une
+// fraction du module entier : dans une zone dédiée à un contrat, ce qui
+// compte est le RANG relatif de cette caisse parmi les SIENNES (celles du
+// même contrat), pas sa date de livraison rapportée à la longueur du trajet
+// entier. Une fraction globale, une fois bornée dans une zone étroite, peut
+// faire tomber deux caisses d'un même contrat sur la MÊME profondeur idéale
+// alors que la zone a largement la place de les séparer selon leur ordre
+// réel de sortie — observé : une caisse bloquant une autre caisse de SA
+// PROPRE mission (Hydrogen bloqué par Hydrogen de la même mission M4) alors
+// que rien d'un autre contrat n'était en cause.
+function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, idealDepth, restriction, missionId) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -340,10 +341,14 @@ function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
 
   const range = (size) => Array.from({ length: size }, (_, i) => i);
-  let depths = range(cellDims[depthAxis]);
-  if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
-  const outers = range(cellDims[outerPlaneAxis]);
-  const inners = range(cellDims[innerPlaneAxis]);
+  const restrictions = restriction ? (Array.isArray(restriction) ? restriction : [restriction]) : [];
+  const restrict = (axis, values) => {
+    const r = restrictions.find((r) => r.axis === axis);
+    return r ? values.filter((v) => r.allowed.has(v)) : values;
+  };
+  const depths = restrict(depthAxis, range(cellDims[depthAxis]));
+  const outers = restrict(outerPlaneAxis, range(cellDims[outerPlaneAxis]));
+  const inners = restrict(innerPlaneAxis, range(cellDims[innerPlaneAxis]));
 
   let best = null;
   for (const d of depths) {
@@ -404,21 +409,34 @@ function tryStackOnExisting(existingBoxes, box, dropoffStop, missionId) {
   return null;
 }
 
-// Réserve à chaque contrat (mission) sa/ses propre(s) zone(s) contiguë(s) en
-// profondeur AVANT même de commencer à ranger quoi que ce soit : le trajet
-// entier est déjà connu (quantités, tailles, dates de récup/livraison de
-// TOUTES les marchandises), ce n'est pas un vrai flux en ligne — exactement
-// comme un joueur qui, en préparant son chargement, réserve une grille par
-// contrat quand ça rentre, ou scinde une grille en deux zones s'il y a plus
-// de contrats que de grilles. Sans ça, deux contrats différents peuvent finir
-// mélangés dans le même module simplement parce qu'ils sont arrivés dans cet
-// ordre, avec le risque qu'une caisse d'un contrat qui reste longtemps bloque
-// l'accès à une caisse d'un autre contrat qui part plus tôt (observé sur le
-// Hull B : contrat A et contrat B mélangés dans la même soute).
-// Renvoie une Map missionId -> [{ module, depthStart, depthEnd }, ...] (une
-// zone par tranche de profondeur réservée ; plusieurs zones si le contrat ne
-// tient pas dans un seul module). Prend les caisses déjà décomposées (pas les
-// lignes de cargaison brutes) pour connaître la vraie empreinte de chacune.
+// Réserve à chaque contrat (mission) sa/ses propre(s) zone(s) AVANT même de
+// commencer à ranger quoi que ce soit : le trajet entier est déjà connu
+// (quantités, tailles, dates de récup/livraison de TOUTES les marchandises),
+// ce n'est pas un vrai flux en ligne — exactement comme un joueur qui, en
+// préparant son chargement, réserve une grille par contrat quand ça rentre,
+// ou scinde une grille en plusieurs zones s'il y a plus de contrats que de
+// grilles. Sans ça, deux contrats différents peuvent finir mélangés dans le
+// même module simplement parce qu'ils sont arrivés dans cet ordre, avec le
+// risque qu'une caisse d'un contrat qui reste longtemps bloque l'accès à une
+// caisse d'un autre contrat qui part plus tôt (observé sur le Hull B).
+//
+// Découpe chaque module en VOIES le long de l'axe latéral le plus large
+// (laneAxis), PAS le long de l'axe de profondeur — chaque voie garde TOUTE
+// la profondeur du module disponible, seule sa largeur est réduite à ce
+// dont le contrat a besoin. Découper plutôt par tranches de profondeur (une
+// version précédente) coûtait un cran de profondeur ENTIER par contrat
+// (toute la largeur du module, souvent bien plus que nécessaire) : sur le
+// Raft (12 crans de profondeur, 16 crans de large), 10 contrats à caser
+// épuisaient les 12 crans de profondeur avant d'avoir consommé le dixième de
+// la capacité réelle du vaisseau (192 SCU). Découper par largeur au contraire
+// laisse à CHAQUE contrat toute la profondeur pour bien étaler ses propres
+// caisses selon leur ordre de sortie (voir missionBoxRank), tout en tenant
+// bien plus de contrats à la fois dans un seul module.
+// Renvoie une Map missionId -> [{ module, laneAxis, laneStart, laneEnd }, ...]
+// (une zone par tranche de largeur réservée ; plusieurs zones si le contrat
+// ne tient pas dans un seul module). Prend les caisses déjà décomposées (pas
+// les lignes de cargaison brutes) pour connaître la vraie empreinte de
+// chacune.
 function assignMissionZones(boxes, modules) {
   const missionNeed = new Map();
   boxes.forEach((b) => {
@@ -427,31 +445,48 @@ function assignMissionZones(boxes, modules) {
     const cur = missionNeed.get(missionId) || { mission: b.entry.mission, totalScu: 0, minFootprintNeeded: 1 };
     cur.totalScu += b.box.scu;
     // Une caisse ne peut pivoter qu'à plat (voir boxOrientations) : sa PLUS
-    // PETITE dimension d'empreinte est le minimum de crans de profondeur
-    // qu'il lui faut d'un coup, quelle que soit l'orientation choisie. Une
-    // caisse de 4 SCU ou plus a toujours une empreinte d'au moins 2×2 : la
-    // zone du contrat doit faire au moins cette profondeur, sans quoi
+    // PETITE dimension d'empreinte est le minimum de crans qu'il lui faut
+    // d'un coup sur l'axe de voie, quelle que soit l'orientation choisie.
+    // Une caisse de 4 SCU ou plus a toujours une empreinte d'au moins 2×2 :
+    // la voie du contrat doit faire au moins cette largeur, sans quoi
     // aucune de ses caisses de cette taille ne pourra jamais y tenir.
     const minFootprint = Math.min(b.box.footprint[0], b.box.footprint[1]);
     if (minFootprint > cur.minFootprintNeeded) cur.minFootprintNeeded = minFootprint;
     missionNeed.set(missionId, cur);
   });
 
-  // loEdge/hiEdge : bornes encore libres de chaque module, DES DEUX CÔTÉS
-  // (pas juste un pointeur qui avance depuis l'accès) — un premier contrat
-  // dans un module prend le côté "accès" (lo), le suivant le côté "fond"
+  // loEdge/hiEdge : bornes encore libres de chaque module SUR L'AXE DE VOIE,
+  // DES DEUX CÔTÉS (pas juste un pointeur qui avance depuis un bord) — un
+  // premier contrat dans un module prend un côté (lo), le suivant l'autre
   // (hi), en alternance, comme un joueur qui met un contrat à gauche, un à
-  // droite, et finit par le milieu s'il en reste un troisième à caser dans la
-  // même soute : ça garde le maximum d'écart entre deux contrats différents
-  // plutôt que de les coller dès que la place vient à manquer.
-  const moduleState = modules.map((m) => ({
-    module: m,
-    layerCapacity: (m.cellDims[0] * m.cellDims[1] * m.cellDims[2]) / m.cellDims[m.depthAxis],
-    loEdge: 0,
-    hiEdge: m.cellDims[m.depthAxis],
-    maxDepth: m.cellDims[m.depthAxis],
-    nextSide: "lo",
-  }));
+  // droite, et finit par le milieu s'il en reste un troisième à caser dans
+  // la même soute.
+  //
+  // (Découper aussi le DEUXIÈME axe latéral en rangées indépendantes pour
+  // doubler la capacité a été tenté et abandonné : sur un module avec
+  // seulement 2 crans sur cet axe — le cas courant, Raft/Hull B — une rangée
+  // ne ferait qu'1 cran de large, dans laquelle AUCUNE caisse de 4 SCU ou
+  // plus ne peut jamais tenir, quelle que soit son orientation, puisque son
+  // empreinte fait toujours au moins 2×2 : plutôt qu'un vrai gain de
+  // capacité, ça aurait simplement rendu la moitié des rangées inutilisables
+  // pour la majorité des contrats.)
+  const moduleState = modules.map((m) => {
+    const planeAxes = [0, 1, 2].filter((i) => i !== m.depthAxis);
+    // L'axe latéral le plus large sert de voie (plus de granularité pour
+    // partager la largeur entre plusieurs contrats) ; l'autre axe latéral et
+    // la profondeur restent entièrement disponibles dans chaque voie.
+    const laneAxis = m.cellDims[planeAxes[0]] >= m.cellDims[planeAxes[1]] ? planeAxes[0] : planeAxes[1];
+    const otherAxis = planeAxes.find((a) => a !== laneAxis);
+    return {
+      module: m,
+      laneAxis,
+      laneCapacity: m.cellDims[m.depthAxis] * m.cellDims[otherAxis],
+      loEdge: 0,
+      hiEdge: m.cellDims[laneAxis],
+      maxLane: m.cellDims[laneAxis],
+      nextSide: "lo",
+    };
+  });
 
   // Les plus gros contrats d'abord : leur donne la première chance de tenir
   // entiers dans un seul module plutôt que d'être scindés inutilement.
@@ -463,18 +498,15 @@ function assignMissionZones(boxes, modules) {
     const zones = [];
     while (remaining > 0.0001) {
       // N'exige PAS ici que le module ait la place idéale (minFootprintNeeded) :
-      // avec plus de contrats que de crans disponibles (ex. le Raft, un seul
-      // module), l'exiger aurait pour effet pervers de refuser purement et
-      // simplement une zone aux contrats traités en dernier plutôt que de
-      // leur donner au moins QUELQUE CHOSE — mieux vaut une zone un peu trop
-      // fine pour la plus grosse caisse du contrat (qui débordera un peu)
-      // qu'aucune zone du tout (qui livre TOUT le contrat à la recherche
-      // libre, avec le risque de contaminer les zones des autres).
+      // avec plus de contrats que de voies disponibles, l'exiger aurait pour
+      // effet pervers de refuser purement et simplement une zone aux
+      // contrats traités en dernier plutôt que de leur donner au moins
+      // QUELQUE CHOSE.
       const openModules = moduleState.filter((ms) => ms.hiEdge - ms.loEdge > 0);
       if (!openModules.length) break; // Plus de place nulle part : le repli sur la recherche libre (voir simulateRoutePacking) prendra le relais à l'exécution.
 
-      const freeCapOf = (ms) => (ms.hiEdge - ms.loEdge) * ms.layerCapacity;
-      const isFresh = (ms) => ms.loEdge === 0 && ms.hiEdge === ms.maxDepth;
+      const freeCapOf = (ms) => (ms.hiEdge - ms.loEdge) * ms.laneCapacity;
+      const isFresh = (ms) => ms.loEdge === 0 && ms.hiEdge === ms.maxLane;
 
       // Un module ENTIÈREMENT LIBRE qui peut tout contenir d'un coup, en
       // préférant celui où ça rentre le plus juste (garde les gros modules
@@ -510,32 +542,23 @@ function assignMissionZones(boxes, modules) {
           return freeCapOf(cur) > freeCapOf(best) ? cur : best;
         });
 
-      const freeDepths = ms.hiEdge - ms.loEdge;
-      const neededDepths = Math.min(freeDepths, Math.max(minFootprintNeeded, Math.ceil(remaining / ms.layerCapacity)));
+      const freeLanes = ms.hiEdge - ms.loEdge;
+      const neededLanes = Math.min(freeLanes, Math.max(minFootprintNeeded, Math.ceil(remaining / ms.laneCapacity)));
       const side = ms.nextSide;
       ms.nextSide = side === "lo" ? "hi" : "lo"; // alterne pour le PROCHAIN contrat qui arriverait dans ce même module.
 
-      // Pas de marge explicite entre deux zones ici : on ne sait pas encore,
-      // à ce stade, combien d'autres contrats devront encore partager ce
-      // même module — en réserver une systématiquement a déjà fait manquer
-      // des crans à des contrats plus petits traités ensuite (observé sur le
-      // Raft : 10 contrats sur 12 crans, la marge à elle seule en a englouti
-      // 5, laissant 4 contrats sans zone du tout). S'il reste vraiment de la
-      // place une fois tous les contrats casés, elle apparaît naturellement
-      // au milieu (entre le dernier contrat côté accès et le dernier côté
-      // fond) sans qu'il soit besoin de la réserver à l'avance.
-      let depthStart, depthEnd;
+      let laneStart, laneEnd;
       if (side === "lo") {
-        depthStart = ms.loEdge;
-        depthEnd = ms.loEdge + neededDepths;
-        ms.loEdge = depthEnd;
+        laneStart = ms.loEdge;
+        laneEnd = ms.loEdge + neededLanes;
+        ms.loEdge = laneEnd;
       } else {
-        depthEnd = ms.hiEdge;
-        depthStart = ms.hiEdge - neededDepths;
-        ms.hiEdge = depthStart;
+        laneEnd = ms.hiEdge;
+        laneStart = ms.hiEdge - neededLanes;
+        ms.hiEdge = laneStart;
       }
-      zones.push({ module: ms.module, depthStart, depthEnd });
-      remaining -= neededDepths * ms.layerCapacity;
+      zones.push({ module: ms.module, laneAxis: ms.laneAxis, laneStart, laneEnd });
+      remaining -= neededLanes * ms.laneCapacity;
     }
     zonesByMission.set(mission.id, zones);
   });
@@ -553,12 +576,12 @@ function assignMissionZones(boxes, modules) {
 // calcule la profondeur idéale ABSOLUE pour CE module précis (peut varier
 // d'un module à l'autre selon leurs dimensions respectives, ou selon la zone
 // du contrat dans ce module précis — voir simulateRoutePacking).
-function placeInBestModule(candidateModules, box, dropoffStop, idealDepthForModule, allowedDepthsForModule, missionId) {
+function placeInBestModule(candidateModules, box, dropoffStop, idealDepthForModule, restrictionForModule, missionId) {
   let worstCaseBest = null;
   for (const m of candidateModules) {
-    const allowedDepths = allowedDepthsForModule ? allowedDepthsForModule(m) : null;
+    const restriction = restrictionForModule ? restrictionForModule(m) : null;
     const idealDepth = idealDepthForModule ? idealDepthForModule(m) : null;
-    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, idealDepth, allowedDepths, missionId);
+    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, idealDepth, restriction, missionId);
     if (!result) continue;
     if (result.severity === Infinity) {
       markPlaced(m.grid, result.position, result.size, { dropoffStop, scu: box.scu, missionId });
@@ -633,21 +656,14 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
   // Une zone dédiée par contrat, calculée une fois pour toutes AVANT le
   // rangement (voir assignMissionZones) : le trajet entier est déjà connu, ce
   // n'est pas la peine d'attendre d'être coincé pour découvrir qu'un contrat
-  // aurait dû avoir sa propre soute. MAIS seulement s'il y a structurellement
-  // assez de modules pour espérer donner à chaque contrat le sien : vérifié
-  // empiriquement (données réelles utilisateur) qu'avec MOINS de modules que
-  // de contrats actifs (ex. le Raft, une seule grille, pour 10 contrats), les
-  // forcer quand même dans des zones étroites fait plus de mal que de bien —
-  // un contrat confiné à 1-2 crans de profondeur se retrouve à se bloquer
-  // LUI-MÊME (ses propres caisses n'ont plus la place de s'étaler dans le
-  // temps), alors que la recherche libre s'en sort mieux sans cette
-  // contrainte artificielle. Le zonage reste un net gain quand chaque contrat
-  // PEUT raisonnablement avoir sa propre soute (Hull B : 16 modules pour 10
-  // contrats, 1 seul conflit résiduel après zonage).
-  const distinctMissionCount = new Set(
-    boxes.map((b) => b.entry.mission && b.entry.mission.id).filter((id) => id != null)
-  ).size;
-  const zonesByMission = modules.length >= distinctMissionCount ? assignMissionZones(boxes, modules) : new Map();
+  // aurait dû avoir sa propre soute. Découpe désormais par LARGEUR (voies),
+  // pas par tranches de profondeur : chaque contrat garde toute la
+  // profondeur du module pour étaler ses propres caisses, donc un seul
+  // module peut désormais accueillir bien plus de contrats à la fois qu'avec
+  // l'ancien découpage par profondeur (qui coûtait un cran de profondeur
+  // ENTIER par contrat) — plus besoin de désactiver le zonage dès qu'il y a
+  // plus de contrats que de modules.
+  const zonesByMission = assignMissionZones(boxes, modules);
 
   // Rang de chaque caisse PARMI CELLES DE SON PROPRE CONTRAT, triées par date
   // de livraison (0 = part la première, 1 = part la dernière) — sert à cibler
@@ -730,25 +746,28 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
           const zoneModules = zones
             .filter((z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize))
             .map((z) => z.module);
-          const allowedDepthsByModule = new Map();
           const zoneByModule = new Map();
-          zones.forEach((z) => {
-            const s = allowedDepthsByModule.get(z.module) || new Set();
-            for (let d = z.depthStart; d < z.depthEnd; d++) s.add(d);
-            allowedDepthsByModule.set(z.module, s);
-            zoneByModule.set(z.module, z);
-          });
-          // Profondeur idéale = rang de CETTE caisse parmi celles du MÊME
-          // contrat, rapporté à la profondeur de SA zone (pas la fraction du
-          // trajet entier bornée après coup — voir missionBoxRank plus haut).
-          const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
-          const idealDepthForModule = (m) => {
+          zones.forEach((z) => zoneByModule.set(z.module, z));
+          // La zone restreint désormais l'axe de VOIE (largeur), pas la
+          // profondeur (voir assignMissionZones) : toute la profondeur du
+          // module reste disponible pour ce contrat.
+          const restrictionForModule = (m) => {
             const zone = zoneByModule.get(m);
             if (!zone) return null;
-            const zoneMaxIdx = zone.depthEnd - zone.depthStart - 1;
-            return zone.depthStart + (zoneMaxIdx > 0 ? rankFrac * zoneMaxIdx : 0);
+            const allowed = new Set();
+            for (let v = zone.laneStart; v < zone.laneEnd; v++) allowed.add(v);
+            return { axis: zone.laneAxis, allowed };
           };
-          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, idealDepthForModule, (m) => allowedDepthsByModule.get(m), missionId);
+          // Profondeur idéale = rang de CETTE caisse parmi celles du MÊME
+          // contrat, rapporté à TOUTE la profondeur du module (disponible en
+          // entier dans sa voie — pas la fraction du trajet entier, voir
+          // missionBoxRank plus haut).
+          const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
+          const idealDepthForModule = (m) => {
+            const maxDepthIdx = m.cellDims[m.depthAxis] - 1;
+            return maxDepthIdx > 0 ? rankFrac * maxDepthIdx : 0;
+          };
+          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, idealDepthForModule, restrictionForModule, missionId);
         }
 
         // Sinon (zone réservée pleine ou contrat sans zone), modules les
