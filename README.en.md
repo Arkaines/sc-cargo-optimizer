@@ -22,6 +22,7 @@ No install, no build: it's a static HTML/JS page, opened directly in the browser
 - **Estimated reputation per mission**: every mission (new, saved, or in history) shows the reputation it likely grants, based on a mission/reward catalog sourced from [Star Citizen Wiki](https://api.star-citizen.wiki).
 - **Reputation tab**: estimated progress toward the next tier for each hauling company (legal or not), using the game's real thresholds. Since the game never shows the exact reputation number, a manual calibration (tier observed in-game + fine-tune slider, lockable) lets you recalibrate the estimate to match reality; missions completed afterwards keep adding on top automatically.
 - **Optional Discord login** with cloud backup (Supabase): get your missions, history and reputation calibrations back on another device. The app remains 100% usable without logging in (data stays local-only in that case).
+- **Cargo optimization tab**: packs the commodities from included missions into the selected ship's real cargo holds (dimensions and capacities sourced from [FleetYards.net](https://fleetyards.net/tools/cargo-grids/)) and shows the result in an interactive 3D view (mouse-drag rotation), so you know what goes where and don't lose track during the run.
 - **Bilingual FR/EN** and **light/dark theme**, with remembered preference.
 
 ## Usage
@@ -92,6 +93,9 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 | `js/ocr.js` | Field extraction from Tesseract-recognized text (title, giver, commodities, locations, reward) |
 | `js/uex.js` | UEX Corp API calls |
 | `js/scwiki.js` | Star Citizen Wiki community API calls |
+| `js/fleetyards.js` | FleetYards.net public API calls (per-ship cargo hold dimensions/capacities) |
+| `js/cargo-packing.js` | Decomposes commodities into standard boxes and computes their placement in the ship's holds (no overlap) |
+| `js/cargo-viewer.js` | Interactive 3D view (Three.js) of the computed placement |
 | `js/cloud.js` | Optional Discord login and cloud sync (Supabase) |
 | `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Default data, generated from UEX Corp (refreshable via "Sync all") |
 | `data/location-aliases.js`, `data/commodity-aliases.js` | Aliases for locations/commodities whose in-game displayed name (French client) differs from the UEX name (English), built up as discrepancies are found |
@@ -103,7 +107,7 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 
 ## Data sources
 
-Game data (locations, distances, commodities, companies, ships) comes from the public [UEX Corp](https://uexcorp.space/) API. Mission and reputation data (catalog by title/giver, per-company tiers) comes from the community [Star Citizen Wiki](https://api.star-citizen.wiki) API, which also serves as a fallback for locations missing from UEX.
+Game data (locations, distances, commodities, companies, ships) comes from the public [UEX Corp](https://uexcorp.space/) API. Mission and reputation data (catalog by title/giver, per-company tiers) comes from the community [Star Citizen Wiki](https://api.star-citizen.wiki) API, which also serves as a fallback for locations missing from UEX. Cargo hold dimensions and capacities (Cargo optimization tab) come from the public [FleetYards.net](https://fleetyards.net/tools/cargo-grids/) API.
 
 The displayed reputation remains an **estimate**: the game never exposes the exact number, only a tier and a valueless progress bar — hence the option to manually calibrate the Reputation tab.
 

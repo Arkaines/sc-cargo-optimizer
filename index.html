@@ -102,6 +102,7 @@
       <button type="button" class="tab-btn active" data-tab="new-mission-tab" data-i18n="newMissionTab"></button>
       <button type="button" class="tab-btn" data-tab="missions-tab" data-i18n="missionsTab"></button>
       <button type="button" class="tab-btn" data-tab="optimize-tab" data-i18n="optimizeTab"></button>
+      <button type="button" class="tab-btn" data-tab="cargo-tab" data-i18n="cargoTab"></button>
       <button type="button" class="tab-btn" data-tab="history-tab" data-i18n="historyTab"></button>
       <button type="button" class="tab-btn" data-tab="companies-tab" data-i18n="companiesTab"></button>
     </div>
@@ -211,6 +212,16 @@
       <div id="route-result" style="margin-top:1rem;"></div>
     </div>
 
+    <div class="tab-panel" id="cargo-tab" style="display:none;">
+      <p class="hint" data-i18n="cargoTabHint"></p>
+      <div>
+        <button type="button" id="pack-cargo-btn" class="btn-primary" data-i18n="packCargoBtn"></button>
+      </div>
+      <p id="cargo-pack-status" class="hint" style="margin-top:0.5rem;"></p>
+      <div id="cargo-viewer-3d"></div>
+      <div id="cargo-pack-legend"></div>
+    </div>
+
     <div class="tab-panel" id="history-tab" style="display:none;">
     <div class="table-scroll">
       <table>
@@ -266,9 +277,20 @@
 <script src="data/faction-reputation-ladders.js?v=20260715"></script>
 <script src="js/uex.js?v=20260715"></script>
 <script src="js/scwiki.js?v=20260715"></script>
+<script src="js/fleetyards.js?v=20260715"></script>
+<script src="js/cargo-packing.js?v=20260715"></script>
 <script src="js/ocr.js?v=20260715"></script>
 <script src="js/cloud.js?v=20260715"></script>
 <script src="js/app.js?v=20260715"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="js/cargo-viewer.js?v=20260715"></script>
 <footer class="site-footer">
   <a href="terms.html">Conditions d'utilisation</a>
   <span aria-hidden="true">·</span>

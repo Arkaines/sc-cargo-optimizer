@@ -842,6 +842,48 @@ tbody tr:nth-child(even) {
   font-weight: 600;
 }
 
+#cargo-viewer-3d {
+  width: 100%;
+  height: 420px;
+  margin-top: 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#cargo-viewer-3d canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#cargo-pack-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.cargo-module-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  background: var(--input-bg);
+}
+
+.cargo-module-card h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  color: var(--accent-cyan);
+}
+
+.cargo-module-card ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
 .route-culprits {
   display: flex;
   flex-direction: column;

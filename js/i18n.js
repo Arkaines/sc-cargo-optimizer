@@ -36,6 +36,7 @@ const TRANSLATIONS = {
     syncingDistances: "Synchronisation des distances...",
     syncingDistancesProgress: "Synchronisation des distances... {done}/{total}",
     syncingScwiki: "Synchronisation des lieux (Star Citizen Wiki)...",
+    syncingFleetyards: "Synchronisation des soutes de cargo (FleetYards.net)...",
     syncSummary:
       "{locs} lieux, {commodities} marchandises, {companies} entreprises, {ships} vaisseaux à jour — {fetched} distance(s) manquante(s) récupérée(s) via UEX — {scwiki} lieux de secours (Star Citizen Wiki) à jour.",
     syncFailed: "Échec de la synchronisation UEX : {msg}",
@@ -153,6 +154,19 @@ const TRANSLATIONS = {
 
     distancesTab: "Distances entre lieux utilisés",
     optimizeTab: "Optimisation de la route",
+    cargoTab: "Optimisation du cargo",
+    cargoTabHint:
+      "Range les marchandises des missions incluses dans les vraies soutes du vaisseau sélectionné (données FleetYards.net), pour savoir où mettre quoi et t'y retrouver pendant le trajet.",
+    packCargoBtn: "Calculer le rangement",
+    cargoPackNoShip: "Sélectionne un vaisseau (menu de gauche) pour calculer le rangement.",
+    cargoPackNoData:
+      "Pas de données de soute pour ce vaisseau — synchronise via \"Tout synchroniser\" (menu de gauche), ou ce vaisseau n'est pas encore couvert par FleetYards.net.",
+    cargoPackNoCargo: "Aucune marchandise à ranger (inclus au moins une mission).",
+    cargoPackSummary: "{placed} caisses rangées sur {total} — {unplaced} n'ont trouvé de place nulle part.",
+    cargoPackAllPlaced: "{placed} caisses rangées, tout rentre !",
+    cargoUnplacedWarning:
+      "⚠ Certaines marchandises ne rentrent pas dans les soutes disponibles : {list}. Désélectionne une mission ou choisis un vaisseau plus grand.",
+    cargoModuleLabel: "{name} ({capacity} SCU, {maxSize} SCU max/caisse)",
     distanceFilterPlaceholder: "Filtrer par nom de lieu...",
     needTwoLocations: "Ajoute au moins deux lieux différents via tes missions pour renseigner des distances.",
     fillMissingDistancesBtn: "Remplir les distances manquantes via UEX",
@@ -236,6 +250,7 @@ const TRANSLATIONS = {
     syncingDistances: "Syncing distances...",
     syncingDistancesProgress: "Syncing distances... {done}/{total}",
     syncingScwiki: "Syncing fallback locations (Star Citizen Wiki)...",
+    syncingFleetyards: "Syncing cargo holds (FleetYards.net)...",
     syncSummary:
       "{locs} locations, {commodities} commodities, {companies} companies, {ships} ships up to date — {fetched} missing distance(s) fetched via UEX — {scwiki} fallback locations (Star Citizen Wiki) up to date.",
     syncFailed: "UEX sync failed: {msg}",
@@ -353,6 +368,19 @@ const TRANSLATIONS = {
 
     distancesTab: "Distances between used locations",
     optimizeTab: "Route optimization",
+    cargoTab: "Cargo optimization",
+    cargoTabHint:
+      "Arranges the cargo from included missions into the selected ship's real cargo holds (FleetYards.net data), so you know what goes where and don't get lost during the run.",
+    packCargoBtn: "Compute the arrangement",
+    cargoPackNoShip: "Select a ship (left menu) to compute the arrangement.",
+    cargoPackNoData:
+      "No cargo hold data for this ship — sync via \"Sync everything\" (left menu), or this ship isn't covered by FleetYards.net yet.",
+    cargoPackNoCargo: "No cargo to arrange (include at least one mission).",
+    cargoPackSummary: "{placed} crates arranged out of {total} — {unplaced} found no room anywhere.",
+    cargoPackAllPlaced: "{placed} crates arranged, everything fits!",
+    cargoUnplacedWarning:
+      "⚠ Some cargo doesn't fit in the available holds: {list}. Deselect a mission or pick a bigger ship.",
+    cargoModuleLabel: "{name} ({capacity} SCU, {maxSize} SCU max/crate)",
     distanceFilterPlaceholder: "Filter by location name...",
     needTwoLocations: "Add at least two different locations via your missions to set distances.",
     fillMissingDistancesBtn: "Fill missing distances via UEX",

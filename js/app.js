@@ -22,6 +22,8 @@ function defaultState() {
     scwikiLocations: [],
     scwikiSyncedAt: null,
     reputationOverrides: {},
+    fleetyardsCargoHolds: {},
+    fleetyardsSyncedAt: null,
   };
 }
 
@@ -105,6 +107,8 @@ function loadState() {
       scwikiLocations: parsed.scwikiLocations || [],
       scwikiSyncedAt: parsed.scwikiSyncedAt || null,
       reputationOverrides: parsed.reputationOverrides || {},
+      fleetyardsCargoHolds: parsed.fleetyardsCargoHolds || {},
+      fleetyardsSyncedAt: parsed.fleetyardsSyncedAt || null,
     };
   } catch (e) {
     return defaultState();
@@ -2009,6 +2013,115 @@ function runOptimize() {
   renderRouteResult(result);
 }
 
+// Rassemble une entrée à ranger par ligne de cargaison usable des missions
+// incluses (cochées), avec assez de contexte (mission, commodité) pour
+// l'étiquette affichée dans la légende du rangement.
+function gatherCargoEntriesForPacking() {
+  const entries = [];
+  activeMissions()
+    .filter((m) => m.included)
+    .forEach((m) => {
+      (m.cargoItems || []).forEach((item) => {
+        const qty = Number(item.quantity) || 0;
+        if (qty <= 0) return;
+        entries.push({
+          quantity: qty,
+          commodity: item.commodity || "?",
+          mission: m,
+          pickupId: item.pickupId,
+          dropoffId: item.dropoffId,
+        });
+      });
+    });
+  return entries;
+}
+
+// Calcule et affiche le rangement des marchandises des missions incluses
+// dans les vraies soutes du vaisseau sélectionné (données FleetYards.net,
+// voir js/fleetyards.js et js/cargo-packing.js) : légende texte (toujours
+// affichée) + vue 3D interactive (voir js/cargo-viewer.js) quand disponible.
+function runCargoPacking() {
+  const status = document.getElementById("cargo-pack-status");
+  const legend = document.getElementById("cargo-pack-legend");
+  legend.innerHTML = "";
+  status.className = "hint";
+
+  const ship = getSelectedShip();
+  if (!ship) {
+    status.textContent = t("cargoPackNoShip");
+    if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    return;
+  }
+
+  const holds = typeof getShipCargoHolds === "function" ? getShipCargoHolds(ship.name) : null;
+  if (!holds || !holds.length) {
+    status.textContent = t("cargoPackNoData");
+    if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    return;
+  }
+
+  const entries = gatherCargoEntriesForPacking();
+  if (!entries.length) {
+    status.textContent = t("cargoPackNoCargo");
+    if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    return;
+  }
+
+  const result = packCargoIntoHolds(entries, holds);
+  const placedCount = result.placements.length;
+  const totalCount = placedCount + result.unplaced.length;
+
+  if (result.unplaced.length) {
+    const names = Array.from(new Set(result.unplaced.map((u) => u.entry.commodity))).join(", ");
+    status.className = "hint warning-text";
+    status.textContent =
+      t("cargoPackSummary", { placed: placedCount, total: totalCount, unplaced: result.unplaced.length }) +
+      " " +
+      t("cargoUnplacedWarning", { list: names });
+  } else {
+    status.textContent = t("cargoPackAllPlaced", { placed: placedCount });
+  }
+
+  // Légende texte : un bloc par module, listant les caisses qui y sont
+  // rangées (commodité, taille, mission) — reste lisible même sans la vue
+  // 3D (accessibilité, ou navigateur sans WebGL).
+  const byModule = new Map();
+  result.placements.forEach((p) => {
+    if (!byModule.has(p.module.name)) byModule.set(p.module.name, []);
+    byModule.get(p.module.name).push(p);
+  });
+
+  holds.forEach((hold) => {
+    const items = byModule.get(hold.name) || [];
+    const card = document.createElement("div");
+    card.className = "cargo-module-card";
+    const title = document.createElement("h3");
+    title.textContent = t("cargoModuleLabel", {
+      name: hold.name,
+      capacity: hold.capacity,
+      maxSize: hold.maxContainerSize || "?",
+    });
+    card.appendChild(title);
+    if (items.length) {
+      const ul = document.createElement("ul");
+      items.forEach((p) => {
+        const li = document.createElement("li");
+        li.textContent = `${p.box.scu} SCU — ${p.entry.commodity} (${p.entry.mission.name || "?"})`;
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    } else {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent = "—";
+      card.appendChild(empty);
+    }
+    legend.appendChild(card);
+  });
+
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, result.placements);
+}
+
 function renderUexStatus() {
   const status = document.getElementById("uex-status");
   if (state.uexLocations.length) {
@@ -2911,6 +3024,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("optimize-btn").addEventListener("click", runOptimize);
+  document.getElementById("pack-cargo-btn").addEventListener("click", runCargoPacking);
 
   const allowRevisitsBtn = document.getElementById("allow-revisits-btn");
   allowRevisitsBtn.title = t("allowRevisitsHint");
@@ -2960,6 +3074,10 @@ document.addEventListener("DOMContentLoaded", () => {
       backfillCustomLocationPlanetHints();
       saveState();
       renderDistanceEditor();
+
+      btn.textContent = t("syncingFleetyards");
+      await syncFleetyardsCargoHolds();
+      renderShipCapacity();
 
       status.textContent = t("syncSummary", {
         locs: state.uexLocations.length,

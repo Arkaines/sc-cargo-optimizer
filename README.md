@@ -22,6 +22,7 @@ Aucune installation, aucun build : c'est une page HTML/JS statique, à ouvrir di
 - **Réputation estimée par mission** : chaque mission (nouvelle, enregistrée ou dans l'historique) affiche la réputation qu'elle rapporte probablement, d'après un catalogue de missions/récompenses issu du [Star Citizen Wiki](https://api.star-citizen.wiki).
 - **Onglet Réputation** : progression estimée vers le prochain palier pour chaque entreprise de transport (légale ou non), avec les vrais seuils du jeu. Le jeu n'affichant jamais le nombre exact de réputation, un calibrage manuel (palier constaté en jeu + curseur fin, verrouillable) permet de recaler l'estimation sur la réalité ; les missions terminées ensuite continuent de s'additionner par-dessus automatiquement.
 - **Connexion Discord optionnelle** avec sauvegarde cloud (Supabase) : retrouve tes missions, ton historique et tes calibrages de réputation sur un autre appareil. L'appli reste 100% utilisable sans se connecter (données en local uniquement dans ce cas).
+- **Onglet Optimisation du cargo** : range les marchandises des missions incluses dans les vraies soutes du vaisseau sélectionné (dimensions et capacités issues de [FleetYards.net](https://fleetyards.net/tools/cargo-grids/)) et affiche le résultat dans une vue 3D interactive (rotation à la souris), pour savoir où mettre quoi et ne pas se perdre pendant le trajet.
 - **Bilingue FR/EN** et **thème clair/sombre**, avec préférence mémorisée.
 
 ## Utilisation
@@ -92,6 +93,9 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 | `js/ocr.js` | Extraction de champs depuis le texte reconnu par Tesseract (titre, donneur, marchandises, lieux, récompense) |
 | `js/uex.js` | Appels à l'API UEX Corp |
 | `js/scwiki.js` | Appels à l'API communautaire Star Citizen Wiki |
+| `js/fleetyards.js` | Appels à l'API publique de FleetYards.net (dimensions/capacités des soutes de cargo par vaisseau) |
+| `js/cargo-packing.js` | Décompose les marchandises en caisses standard et calcule leur rangement dans les soutes du vaisseau (sans recouvrement) |
+| `js/cargo-viewer.js` | Vue 3D interactive (Three.js) du rangement calculé |
 | `js/cloud.js` | Connexion Discord et synchronisation cloud optionnelle (Supabase) |
 | `data/locations.js`, `data/distances.js`, `data/commodities.js`, `data/companies.js`, `data/ships.js` | Données par défaut, générées depuis UEX Corp (rafraîchissables via "Tout synchroniser") |
 | `data/location-aliases.js`, `data/commodity-aliases.js` | Alias de lieux/marchandises dont le nom affiché en jeu (client français) diffère du nom UEX (anglais), constitués au fil des écarts rencontrés |
@@ -103,7 +107,7 @@ docker run -d -p 8080:80 --name sc-cargo-optimizer sc-cargo-optimizer
 
 ## Source des données
 
-Les données de jeu (lieux, distances, marchandises, entreprises, vaisseaux) proviennent de l'API publique de [UEX Corp](https://uexcorp.space/). Les données de missions et de réputation (catalogue par titre/donneur, paliers par entreprise) proviennent de l'API communautaire [Star Citizen Wiki](https://api.star-citizen.wiki), qui sert aussi de secours pour les lieux absents d'UEX.
+Les données de jeu (lieux, distances, marchandises, entreprises, vaisseaux) proviennent de l'API publique de [UEX Corp](https://uexcorp.space/). Les données de missions et de réputation (catalogue par titre/donneur, paliers par entreprise) proviennent de l'API communautaire [Star Citizen Wiki](https://api.star-citizen.wiki), qui sert aussi de secours pour les lieux absents d'UEX. Les dimensions et capacités des soutes de cargo (onglet Optimisation du cargo) proviennent de l'API publique de [FleetYards.net](https://fleetyards.net/tools/cargo-grids/).
 
 La réputation affichée reste une **estimation** : le jeu n'expose jamais le nombre exact, seulement un palier et une barre de progression sans valeur — d'où la possibilité de calibrer manuellement l'onglet Réputation.
 
