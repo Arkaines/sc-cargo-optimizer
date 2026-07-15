@@ -115,35 +115,34 @@ function axisPermutations([a, b, c]) {
 }
 
 // Essaie de placer une caisse dans un module, en testant toutes les
-// orientations possibles au premier emplacement libre trouvé (balayage
-// x/y/z) — pas une recherche du meilleur agencement possible, juste un
-// rangement réaliste et sans recouvrement, comme un joueur caserait
-// effectivement ses caisses.
-// Balaye chaque axe de 0 à sa taille, sauf l'axe de profondeur (depthAxis)
-// qui est balayé à l'envers (du fond vers l'accès) : la première caisse
-// chargée trouve ainsi la place la plus profonde libre, et chaque caisse
-// suivante se pose plus près de l'accès que les précédentes sur la même
-// colonne — exactement l'empilement réaliste (dernier chargé, premier
-// accessible) qu'un joueur ferait pour ne pas se bloquer lui-même.
+// orientations possibles au premier emplacement libre trouvé — pas une
+// recherche du meilleur agencement possible, juste un rangement réaliste et
+// sans recouvrement, comme un joueur caserait effectivement ses caisses.
+// L'axe de profondeur (depthAxis) est la boucle la plus externe, balayée à
+// l'envers (du fond vers l'accès) : chaque plan de profondeur est rempli en
+// entier (réparti sur les deux autres axes) avant de passer au plan
+// suivant, plus proche de l'accès. Sans ça (profondeur en boucle interne),
+// tout finirait entassé contre un seul côté du module au lieu de se
+// répartir sur toute sa largeur.
 function tryPlaceInModule(grid, cellDims, boxCells, depthAxis) {
   const orientations = axisPermutations(boxCells);
-  const rangeFor = (axisIndex) => {
-    const size = cellDims[axisIndex];
-    const arr = [];
-    for (let i = 0; i < size; i++) arr.push(i);
-    if (axisIndex === depthAxis) arr.reverse();
-    return arr;
-  };
-  const xs = rangeFor(0);
-  const ys = rangeFor(1);
-  const zs = rangeFor(2);
-  for (const x of xs) {
-    for (const y of ys) {
-      for (const z of zs) {
+  const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
+  const range = (size) => Array.from({ length: size }, (_, i) => i);
+  const depths = range(cellDims[depthAxis]).reverse();
+  const as = range(cellDims[planeAxes[0]]);
+  const bs = range(cellDims[planeAxes[1]]);
+
+  for (const d of depths) {
+    for (const a of as) {
+      for (const b of bs) {
+        const pos = [0, 0, 0];
+        pos[depthAxis] = d;
+        pos[planeAxes[0]] = a;
+        pos[planeAxes[1]] = b;
         for (const size of orientations) {
-          if (canPlace(grid, cellDims, [x, y, z], size)) {
-            markPlaced(grid, [x, y, z], size, true);
-            return { position: [x, y, z], size };
+          if (canPlace(grid, cellDims, pos, size)) {
+            markPlaced(grid, pos, size, true);
+            return { position: pos, size };
           }
         }
       }
@@ -195,7 +194,7 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
 function simulateRoutePacking(cargoEntries, holds, stepCount) {
   const modules = holds.map((h) => {
     const cellDims = cellsFromDimensions(h.dimensions);
-    return { hold: h, cellDims, grid: createOccupancyGrid(cellDims), depthAxis: depthAxisIndex(cellDims) };
+    return { hold: h, cellDims, grid: createOccupancyGrid(cellDims), depthAxis: depthAxisIndex(cellDims), usedCells: 0 };
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
 
@@ -248,14 +247,23 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
           conflicts.push({ box: b.box, entry: b.entry, blockedBy: blockers.map((x) => x.entry), atStep: step });
         }
         markPlaced(m.grid, b.placement.position, b.placement.size, false);
+        m.usedCells -= b.placement.size[0] * b.placement.size[1] * b.placement.size[2];
         b.active = false;
       });
 
     boxes
       .filter((b) => b.pickupStop === step)
       .forEach((b) => {
+        // Modules les moins remplis d'abord (recalculé à chaque caisse, pas
+        // une fois par arrêt : plusieurs caisses peuvent être récupérées au
+        // même arrêt) : sans ça, tout se tasserait dans le premier module de
+        // la liste par empilement en profondeur, quitte à créer des conflits
+        // évitables alors que d'autres modules du vaisseau sont encore
+        // vides — un joueur répartirait naturellement sa cargaison entre les
+        // soutes plutôt que d'en bourrer une seule.
+        const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
         let placed = null;
-        for (const m of modules) {
+        for (const m of byFreeSpace) {
           if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
           const result = tryPlaceInModule(m.grid, m.cellDims, b.box.cells, m.depthAxis);
           if (result) {
@@ -269,6 +277,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         }
         b.placement = placed;
         b.active = true;
+        placed.module.usedCells += placed.size[0] * placed.size[1] * placed.size[2];
       });
 
     loadAtStep[step] = boxes.filter((b) => b.active).reduce((sum, b) => sum + b.box.scu, 0);
