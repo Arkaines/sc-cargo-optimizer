@@ -189,6 +189,30 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis) {
   return null;
 }
 
+// Essaie de poser une caisse directement au-dessus (axe vertical réel Z)
+// d'une caisse déjà placée passée en argument, alignée sur son coin — pour
+// grouper les caisses d'une même ligne de cargaison plutôt que les disperser
+// dans la soute. Ne fonctionne que si l'empreinte de la nouvelle caisse
+// tient dans celle de la caisse existante (un support plein est requis, voir
+// hasSupport) : une caisse plus large que celle du dessous continue de
+// passer par la recherche générale (voir tryPlaceInModule).
+function tryStackOnExisting(existingBoxes, box) {
+  for (const other of existingBoxes) {
+    const m = other.placement.module;
+    const basePos = other.placement.position;
+    const baseSize = other.placement.size;
+    const pos = [basePos[0], basePos[1], basePos[2] + baseSize[2]];
+    for (const size of boxOrientations(box)) {
+      if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
+      if (canPlace(m.grid, m.cellDims, pos, size) && hasSupport(m.grid, pos, size)) {
+        markPlaced(m.grid, pos, size, true);
+        return { module: m, position: pos, size };
+      }
+    }
+  }
+  return null;
+}
+
 // Choisit l'axe le plus long d'un module comme axe de profondeur (accès
 // depuis une extrémité, coordonnée 0 = côté accès) : hypothèse raisonnable en
 // l'absence de donnée réelle de porte/orientation (même limite déjà assumée
@@ -292,21 +316,29 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
     boxes
       .filter((b) => b.pickupStop === step)
       .forEach((b) => {
-        // Modules les moins remplis d'abord (recalculé à chaque caisse, pas
-        // une fois par arrêt : plusieurs caisses peuvent être récupérées au
-        // même arrêt) : sans ça, tout se tasserait dans le premier module de
-        // la liste par empilement en profondeur, quitte à créer des conflits
-        // évitables alors que d'autres modules du vaisseau sont encore
-        // vides — un joueur répartirait naturellement sa cargaison entre les
-        // soutes plutôt que d'en bourrer une seule.
-        const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
-        let placed = null;
-        for (const m of byFreeSpace) {
-          if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
-          const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis);
-          if (result) {
-            placed = { module: m, position: result.position, size: result.size };
-            break;
+        // Essaie d'abord d'empiler directement sur une caisse déjà posée de
+        // la MÊME ligne de cargaison (même mission/marchandise/contrat) :
+        // garde les caisses d'un même contrat groupées (ex. une caisse de
+        // 2 SCU posée sur celle de 4 SCU du même contrat) plutôt que
+        // dispersées dans la soute, comme un joueur le ferait naturellement.
+        const sameEntryActive = boxes.filter((other) => other !== b && other.active && other.entry === b.entry);
+        let placed = tryStackOnExisting(sameEntryActive, b.box);
+
+        // Sinon, modules les moins remplis d'abord (recalculé à chaque
+        // caisse, pas une fois par arrêt : plusieurs caisses peuvent être
+        // récupérées au même arrêt) : sans ça, tout se tasserait dans le
+        // premier module de la liste par empilement en profondeur, quitte à
+        // créer des conflits évitables alors que d'autres modules du
+        // vaisseau sont encore vides.
+        if (!placed) {
+          const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
+          for (const m of byFreeSpace) {
+            if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
+            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis);
+            if (result) {
+              placed = { module: m, position: result.position, size: result.size };
+              break;
+            }
           }
         }
         if (!placed) {
