@@ -145,6 +145,20 @@ function boxOrientations(box) {
   ];
 }
 
+// Ajuste l'occupation de chaque plan de profondeur couvert par une caisse
+// (une caisse peut s'étendre sur plusieurs plans si sa dimension sur cet
+// axe dépasse 1 cran) — delta positif à la pose, négatif au retrait. Sert à
+// préférer le plan le moins rempli plutôt que le premier "jamais touché"
+// (voir tryPlaceInModule).
+function bumpLayerUsage(layerUsage, depthAxis, pos, size, delta) {
+  const start = pos[depthAxis];
+  const span = size[depthAxis];
+  const footprintArea = (size[0] * size[1] * size[2]) / span;
+  for (let d = start; d < start + span; d++) {
+    layerUsage.set(d, (layerUsage.get(d) || 0) + delta * footprintArea);
+  }
+}
+
 // Une position n'est sûre que si elle n'entre en conflit avec AUCUNE caisse
 // active du module, dans AUCUN des deux sens : ni bloquée par une caisse
 // déjà là plus proche de l'accès qui part avant elle (voir isBlocking), ni
@@ -196,7 +210,7 @@ function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
 // 3. N'importe quelle position valide géométriquement, en dernier recours :
 //    on garde celle dont le pire conflit part le plus tard (la moins
 //    mauvaise), plutôt que la première trouvée dans l'ordre de balayage.
-function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes) {
+function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -204,7 +218,25 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
 
   const range = (size) => Array.from({ length: size }, (_, i) => i);
-  const depths = range(cellDims[depthAxis]).reverse();
+  const allDepths = range(cellDims[depthAxis]).reverse();
+  // Ordre de préférence des plans de profondeur : d'abord par proximité avec
+  // la profondeur "idéale" pour cette caisse d'après sa date de livraison
+  // (dropoffFrac, 0 = part tout de suite, 1 = part en dernier) — une caisse
+  // qui part tôt doit rester près de l'accès (profondeur faible) et une
+  // caisse qui reste longtemps peut aller au fond, pour que l'ordre spatial
+  // corresponde à l'ordre réel de sortie et ne force jamais un blocage
+  // évitable. À proximité égale, préfère le plan le moins rempli (occupation
+  // RÉELLE, pas juste "déjà touché une fois") pour se répartir sur toute la
+  // longueur du module plutôt que de se tasser dans un coin.
+  const maxDepthIdx = cellDims[depthAxis] - 1;
+  const idealDepth = dropoffFrac != null ? dropoffFrac * maxDepthIdx : null;
+  const depths = allDepths.slice().sort((a, b) => {
+    if (idealDepth != null) {
+      const diff = Math.abs(a - idealDepth) - Math.abs(b - idealDepth);
+      if (diff !== 0) return diff;
+    }
+    return (layerUsage ? (layerUsage.get(a) || 0) - (layerUsage.get(b) || 0) : 0);
+  });
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
@@ -222,6 +254,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
             if (!canPlace(grid, cellDims, pos, size) || !hasSupport(grid, pos, size)) continue;
             if (!isSafePosition(depthAxis, activeBoxes, pos, size, dropoffStop)) continue;
             markPlaced(grid, pos, size, { dropoffStop });
+            if (layerUsage) bumpLayerUsage(layerUsage, depthAxis, pos, size, 1);
             return { position: pos, size };
           }
         }
@@ -250,6 +283,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   }
   if (best) {
     markPlaced(grid, best.position, best.size, { dropoffStop });
+    if (layerUsage) bumpLayerUsage(layerUsage, depthAxis, best.position, best.size, 1);
     return { position: best.position, size: best.size };
   }
   return null;
@@ -272,6 +306,7 @@ function tryStackOnExisting(existingBoxes, box, dropoffStop) {
       if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
       if (canPlace(m.grid, m.cellDims, pos, size) && hasSupport(m.grid, pos, size)) {
         markPlaced(m.grid, pos, size, { dropoffStop });
+        if (m.layerUsage) bumpLayerUsage(m.layerUsage, m.depthAxis, pos, size, 1);
         return { module: m, position: pos, size };
       }
     }
@@ -332,6 +367,11 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
       // dropoffStop }) : sert à juger si une nouvelle position est sûre
       // (voir isSafePosition), pas seulement via la grille d'occupation.
       activeBoxes: [],
+      // Occupation actuelle de chaque plan de profondeur (Map profondeur ->
+      // nombre de crans occupés à cette profondeur, mis à jour au fil des
+      // arrêts) : préfère le plan le moins rempli pour se répartir sur toute
+      // la longueur du module (voir tryPlaceInModule).
+      layerUsage: new Map(),
     };
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
@@ -386,6 +426,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         }
         markPlaced(m.grid, b.placement.position, b.placement.size, null);
         m.usedCells -= b.placement.size[0] * b.placement.size[1] * b.placement.size[2];
+        bumpLayerUsage(m.layerUsage, m.depthAxis, b.placement.position, b.placement.size, -1);
         const activeIdx = m.activeBoxes.indexOf(b.placement.activeEntry);
         if (activeIdx !== -1) m.activeBoxes.splice(activeIdx, 1);
         b.active = false;
@@ -412,7 +453,8 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
           const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
           for (const m of byFreeSpace) {
             if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
-            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes);
+            const dropoffFrac = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
+            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac);
             if (result) {
               placed = { module: m, position: result.position, size: result.size };
               break;
