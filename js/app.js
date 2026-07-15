@@ -2082,107 +2082,122 @@ function gatherCargoEntriesForPacking(stopIndex) {
   return entries;
 }
 
-// Affiche le plan de chargement arrêt par arrêt (récupérations puis
-// livraisons de chaque étape du trajet), avec le module/couloir concerné et
-// un avertissement inline quand une livraison n'est pas accessible sans
-// déplacer une autre caisse récupérée après elle (voir
-// js/cargo-packing.js:simulateRoutePacking) — reste lisible même sans la vue
-// 3D (accessibilité, ou navigateur sans WebGL).
-function renderCargoPackingLegend(routeResult, result) {
-  const legend = document.getElementById("cargo-pack-legend");
-  legend.innerHTML = "";
+// État du dernier rangement calculé (voir runCargoPacking), pour naviguer
+// d'un arrêt à l'autre (voir cargo-step-prev/next) sans tout recalculer :
+// la vue 3D et le plan texte affichent toujours le même arrêt, dans une
+// seule fenêtre plutôt que deux blocs déconnectés (instantané figé +
+// longue liste séparée).
+let cargoPackState = null;
+
+// Pastille de couleur assortie à la caisse dans la vue 3D (voir
+// js/cargo-viewer.js:missionColorCss) : sans ça, rien ne relie visuellement
+// une couleur à sa mission pour le joueur.
+function addCargoColorSwatch(li, missionId) {
+  const swatch = document.createElement("span");
+  swatch.className = "cargo-color-swatch";
+  swatch.style.background = typeof missionColorCss === "function" ? missionColorCss(missionId) : "#888";
+  li.appendChild(swatch);
+}
+
+// Affiche l'arrêt courant (cargoPackState.stepIndex) : titre + plan texte de
+// ce seul arrêt (récupérations/livraisons, avec un avertissement inline en
+// cas de conflit — voir js/cargo-packing.js:simulateRoutePacking) et la vue
+// 3D correspondante (seules les caisses effectivement à bord à cet instant),
+// pour que le texte et le rendu 3D restent toujours synchronisés sur le même
+// moment du trajet.
+function renderCargoStepView() {
+  const nav = document.getElementById("cargo-step-nav");
+  const titleEl = document.getElementById("cargo-step-title");
+  const actionsEl = document.getElementById("cargo-step-actions");
+  const prevBtn = document.getElementById("cargo-step-prev");
+  const nextBtn = document.getElementById("cargo-step-next");
+
+  if (!cargoPackState) {
+    nav.style.display = "none";
+    return;
+  }
+  nav.style.display = "flex";
+
+  const { holds, routeResult, result, stepIndex } = cargoPackState;
+  const step = routeResult.steps[stepIndex];
+  const loc = getLocationById(step.locId);
+  titleEl.textContent = t("cargoStepLabelWithTotal", {
+    index: stepIndex + 1,
+    total: routeResult.steps.length,
+    location: loc ? locationLabel(loc) : "?",
+  });
 
   const conflictByBox = new Map();
   result.conflicts.forEach((c) => conflictByBox.set(c.box, c));
 
-  routeResult.steps.forEach((step, stepIdx) => {
-    const pickups = result.placements.filter((p) => p.pickupStop === stepIdx);
-    const dropoffs = result.placements.filter((p) => p.dropoffStop === stepIdx);
-    if (!pickups.length && !dropoffs.length) return;
+  actionsEl.innerHTML = "";
+  const pickups = result.placements.filter((p) => p.pickupStop === stepIndex);
+  const dropoffs = result.placements.filter((p) => p.dropoffStop === stepIndex);
 
-    const card = document.createElement("div");
-    card.className = "cargo-module-card";
-    const title = document.createElement("h3");
-    const loc = getLocationById(step.locId);
-    title.textContent = t("cargoStepLabel", { index: stepIdx + 1, location: loc ? locationLabel(loc) : "?" });
-    card.appendChild(title);
-
-    // Pastille de couleur assortie à la caisse dans la vue 3D (voir
-    // js/cargo-viewer.js:missionColorCss) : sans ça, rien ne relie
-    // visuellement une couleur à sa mission pour le joueur.
-    function addColorSwatch(li, missionId) {
-      const swatch = document.createElement("span");
-      swatch.className = "cargo-color-swatch";
-      swatch.style.background = typeof missionColorCss === "function" ? missionColorCss(missionId) : "#888";
-      li.appendChild(swatch);
-    }
-
-    const ul = document.createElement("ul");
-    pickups.forEach((p) => {
-      const li = document.createElement("li");
-      addColorSwatch(li, p.entry.mission.id);
-      li.appendChild(
-        document.createTextNode(
-          t("cargoStepPickupLine", {
-            scu: p.box.scu,
-            commodity: p.entry.commodity,
-            mission: p.entry.mission.name || "?",
-            module: p.module.name,
-          })
-        )
-      );
-      ul.appendChild(li);
-    });
-    dropoffs.forEach((p) => {
-      const li = document.createElement("li");
-      addColorSwatch(li, p.entry.mission.id);
-      let text = t("cargoStepDropoffLine", {
-        scu: p.box.scu,
-        commodity: p.entry.commodity,
-        mission: p.entry.mission.name || "?",
-        module: p.module.name,
-      });
-      const conflict = conflictByBox.get(p.box);
-      if (conflict) {
-        li.classList.add("warning-text");
-        const blockers = conflict.blockedBy.map((e) => `${e.commodity} (${e.mission.name || "?"})`).join(", ");
-        text += " " + t("cargoConflictNote", { blockers: blockers || "?" });
-      }
-      li.appendChild(document.createTextNode(text));
-      ul.appendChild(li);
-    });
-    card.appendChild(ul);
-    legend.appendChild(card);
+  pickups.forEach((p) => {
+    const li = document.createElement("li");
+    addCargoColorSwatch(li, p.entry.mission.id);
+    li.appendChild(
+      document.createTextNode(
+        t("cargoStepPickupLine", {
+          scu: p.box.scu,
+          commodity: p.entry.commodity,
+          mission: p.entry.mission.name || "?",
+          module: p.module.name,
+        })
+      )
+    );
+    actionsEl.appendChild(li);
   });
-
-  if (result.unplaced.length) {
-    const names = Array.from(new Set(result.unplaced.map((u) => u.entry.commodity))).join(", ");
-    const warn = document.createElement("p");
-    warn.className = "hint warning-text";
-    warn.textContent = t("cargoUnplacedWarning", { list: names });
-    legend.appendChild(warn);
+  dropoffs.forEach((p) => {
+    const li = document.createElement("li");
+    addCargoColorSwatch(li, p.entry.mission.id);
+    let text = t("cargoStepDropoffLine", {
+      scu: p.box.scu,
+      commodity: p.entry.commodity,
+      mission: p.entry.mission.name || "?",
+      module: p.module.name,
+    });
+    const conflict = conflictByBox.get(p.box);
+    if (conflict) {
+      li.classList.add("warning-text");
+      const blockers = conflict.blockedBy.map((e) => `${e.commodity} (${e.mission.name || "?"})`).join(", ");
+      text += " " + t("cargoConflictNote", { blockers: blockers || "?" });
+    }
+    li.appendChild(document.createTextNode(text));
+    actionsEl.appendChild(li);
+  });
+  if (!pickups.length && !dropoffs.length) {
+    const li = document.createElement("li");
+    li.className = "hint";
+    li.textContent = t("cargoStepNothing");
+    actionsEl.appendChild(li);
   }
+
+  prevBtn.disabled = stepIndex <= 0;
+  nextBtn.disabled = stepIndex >= routeResult.steps.length - 1;
+
+  const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop > stepIndex);
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present);
 }
 
 // Calcule et affiche le rangement des marchandises des missions incluses
 // dans les vraies soutes du vaisseau sélectionné (données FleetYards.net,
 // voir js/fleetyards.js), en respectant l'ordre réel de récupération/
-// livraison du dernier trajet optimisé (voir js/cargo-packing.js) : plan
-// texte arrêt par arrêt (toujours affiché) + vue 3D interactive (voir
-// js/cargo-viewer.js) au moment du trajet où la charge est la plus
-// importante, quand disponible.
+// livraison du dernier trajet optimisé (voir js/cargo-packing.js) : une
+// seule fenêtre naviguable arrêt par arrêt (voir renderCargoStepView),
+// démarrant sur l'arrêt où la charge est la plus importante (le plus
+// représentatif du trajet).
 function runCargoPacking() {
   const status = document.getElementById("cargo-pack-status");
-  const legend = document.getElementById("cargo-pack-legend");
-  const caption = document.getElementById("cargo-viewer-caption");
-  legend.innerHTML = "";
-  caption.textContent = "";
   status.className = "hint";
+  cargoPackState = null;
 
   const ship = getSelectedShip();
   if (!ship) {
     status.textContent = t("cargoPackNoShip");
     if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    renderCargoStepView();
     return;
   }
 
@@ -2190,12 +2205,14 @@ function runCargoPacking() {
   if (!holds || !holds.length) {
     status.textContent = t("cargoPackNoData");
     if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    renderCargoStepView();
     return;
   }
 
   if (!lastRouteResult) {
     status.textContent = t("cargoPackNoRoute");
     if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    renderCargoStepView();
     return;
   }
 
@@ -2205,6 +2222,7 @@ function runCargoPacking() {
   if (!entries.length) {
     status.textContent = t("cargoPackNoCargo");
     if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    renderCargoStepView();
     return;
   }
 
@@ -2222,21 +2240,8 @@ function runCargoPacking() {
     status.textContent = t("cargoPackAllPlaced", { placed: placedCount });
   }
 
-  renderCargoPackingLegend(lastRouteResult, result);
-
-  // La vue 3D ne peut montrer qu'un seul instant à la fois : celui où la
-  // charge est la plus importante est le plus représentatif (et le plus
-  // contraignant) du trajet complet.
-  const peakStep = lastRouteResult.steps[result.peakStepIndex];
-  const peakLoc = peakStep ? getLocationById(peakStep.locId) : null;
-  caption.textContent = t("cargoViewerCaption", {
-    index: result.peakStepIndex + 1,
-    location: peakLoc ? locationLabel(peakLoc) : "?",
-  });
-  const peakPlacements = result.placements.filter(
-    (p) => p.pickupStop <= result.peakStepIndex && p.dropoffStop > result.peakStepIndex
-  );
-  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, peakPlacements);
+  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: result.peakStepIndex };
+  renderCargoStepView();
 }
 
 function renderUexStatus() {
@@ -3152,6 +3157,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("optimize-btn").addEventListener("click", runOptimize);
   document.getElementById("pack-cargo-btn").addEventListener("click", runCargoPacking);
+  document.getElementById("cargo-step-prev").addEventListener("click", () => {
+    if (!cargoPackState || cargoPackState.stepIndex <= 0) return;
+    cargoPackState.stepIndex -= 1;
+    renderCargoStepView();
+  });
+  document.getElementById("cargo-step-next").addEventListener("click", () => {
+    if (!cargoPackState || cargoPackState.stepIndex >= cargoPackState.routeResult.steps.length - 1) return;
+    cargoPackState.stepIndex += 1;
+    renderCargoStepView();
+  });
 
   const allowRevisitsBtn = document.getElementById("allow-revisits-btn");
   allowRevisitsBtn.title = t("allowRevisitsHint");

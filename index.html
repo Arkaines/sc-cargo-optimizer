@@ -218,15 +218,24 @@
         <button type="button" id="pack-cargo-btn" class="btn-primary" data-i18n="packCargoBtn"></button>
       </div>
       <p id="cargo-pack-status" class="hint" style="margin-top:0.5rem;"></p>
-      <p id="cargo-viewer-caption" class="hint"></p>
-      <div id="cargo-viewer-3d"></div>
-      <div class="cargo-viewer-controls">
-        <button type="button" class="btn-secondary btn-view-sm" data-view="front" data-i18n="viewFrontBtn"></button>
-        <button type="button" class="btn-secondary btn-view-sm" data-view="rear" data-i18n="viewRearBtn"></button>
-        <button type="button" class="btn-secondary btn-view-sm" data-view="left" data-i18n="viewLeftBtn"></button>
-        <button type="button" class="btn-secondary btn-view-sm" data-view="right" data-i18n="viewRightBtn"></button>
+
+      <div class="cargo-viewer-panel">
+        <div id="cargo-viewer-3d"></div>
+        <div class="cargo-viewer-controls">
+          <button type="button" class="btn-secondary btn-view-sm" data-view="front" data-i18n="viewFrontBtn"></button>
+          <button type="button" class="btn-secondary btn-view-sm" data-view="rear" data-i18n="viewRearBtn"></button>
+          <button type="button" class="btn-secondary btn-view-sm" data-view="left" data-i18n="viewLeftBtn"></button>
+          <button type="button" class="btn-secondary btn-view-sm" data-view="right" data-i18n="viewRightBtn"></button>
+        </div>
+        <div id="cargo-step-nav" class="cargo-step-nav" style="display:none;">
+          <button type="button" id="cargo-step-prev" class="btn-secondary btn-step-nav" aria-label="Précédent">‹</button>
+          <div class="cargo-step-info">
+            <h3 id="cargo-step-title"></h3>
+            <ul id="cargo-step-actions"></ul>
+          </div>
+          <button type="button" id="cargo-step-next" class="btn-secondary btn-step-nav" aria-label="Suivant">›</button>
+        </div>
       </div>
-      <div id="cargo-pack-legend"></div>
     </div>
 
     <div class="tab-panel" id="history-tab" style="display:none;">

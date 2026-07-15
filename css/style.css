@@ -842,13 +842,19 @@ tbody tr:nth-child(even) {
   font-weight: 600;
 }
 
-#cargo-viewer-3d {
-  width: 100%;
-  height: 420px;
+/* Un seul panneau regroupant la vue 3D, ses contrôles et le navigateur
+   d'étapes, façon fenêtre unique plutôt que des blocs séparés. */
+.cargo-viewer-panel {
   margin-top: 0.75rem;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
+  background: var(--input-bg);
   overflow: hidden;
+}
+
+#cargo-viewer-3d {
+  width: 100%;
+  height: 420px;
 }
 
 #cargo-viewer-3d canvas {
@@ -860,7 +866,8 @@ tbody tr:nth-child(even) {
 .cargo-viewer-controls {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .btn-view-sm {
@@ -868,27 +875,37 @@ tbody tr:nth-child(even) {
   font-size: 0.8rem;
 }
 
-#cargo-pack-legend {
+.cargo-step-nav {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.75rem;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
 }
 
-.cargo-module-card {
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  background: var(--input-bg);
+.btn-step-nav {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
-.cargo-module-card h4 {
+.btn-step-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cargo-step-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cargo-step-info h3 {
   margin: 0 0 0.35rem;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--accent-cyan);
 }
 
-.cargo-module-card ul {
+.cargo-step-info ul {
   margin: 0;
   padding-left: 1.1rem;
   font-size: 0.85rem;
