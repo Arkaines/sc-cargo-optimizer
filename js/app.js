@@ -125,6 +125,10 @@ let editingMissionId = null;
 // dans le formulaire "Nouvelle mission" (pas de champ de formulaire dédié :
 // portée jusqu'à la soumission via cette variable, comme editingMissionId).
 let pendingOcrMaxCargoBoxSize = null;
+// Dernier trajet optimisé calculé avec succès (voir runOptimize), réutilisé
+// par l'onglet Optimisation du cargo pour ranger les marchandises dans
+// l'ordre réel de récupération/livraison plutôt qu'en vrac.
+let lastRouteResult = null;
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2019,20 +2023,50 @@ function runOptimize() {
   const included = activeMissions().filter((m) => m.included);
   const allowRevisits = document.getElementById("allow-revisits-btn").classList.contains("active");
   const result = optimizeRoute(included, startId, brokenElevatorLocationIds, allowRevisits);
+  // Gardé de côté pour l'onglet Optimisation du cargo (voir
+  // buildCargoItemStopIndex) : le rangement a besoin de savoir à quel arrêt
+  // chaque marchandise est récupérée/livrée, pas juste sa quantité totale.
+  lastRouteResult = result.error ? null : result;
   renderRouteResult(result);
 }
 
+// Repère, pour chaque ligne de cargaison de chaque mission, l'index de
+// l'arrêt (dans le dernier trajet optimisé calculé) où elle est récupérée et
+// celui où elle est livrée — nécessaire pour que le rangement du cargo (voir
+// js/cargo-packing.js:simulateRoutePacking) sache dans quel ordre charger et
+// décharger, au lieu de tout tasser ensemble sans notion de temps. Clé par
+// mission+index de ligne plutôt que par lieu seul : un même lieu peut
+// apparaître à plusieurs arrêts si les revisites sont autorisées.
+function buildCargoItemStopIndex(routeResult) {
+  const stopIndex = new Map();
+  routeResult.steps.forEach((step, stepIdx) => {
+    step.actions.forEach((action) => {
+      action.items.forEach((item) => {
+        const key = `${action.mission.id}:${item.index}`;
+        const entry = stopIndex.get(key) || {};
+        if (action.type === "pickup") entry.pickupStop = stepIdx;
+        else entry.dropoffStop = stepIdx;
+        stopIndex.set(key, entry);
+      });
+    });
+  });
+  return stopIndex;
+}
+
 // Rassemble une entrée à ranger par ligne de cargaison usable des missions
-// incluses (cochées), avec assez de contexte (mission, commodité) pour
-// l'étiquette affichée dans la légende du rangement.
-function gatherCargoEntriesForPacking() {
+// incluses (cochées), avec assez de contexte (mission, commodité) pour la
+// légende, et l'arrêt de récupération/livraison (voir buildCargoItemStopIndex)
+// pour que le rangement respecte l'ordre réel du trajet plutôt que de tout
+// tasser ensemble sans notion de temps.
+function gatherCargoEntriesForPacking(stopIndex) {
   const entries = [];
   activeMissions()
     .filter((m) => m.included)
     .forEach((m) => {
-      (m.cargoItems || []).forEach((item) => {
+      (m.cargoItems || []).forEach((item, index) => {
         const qty = Number(item.quantity) || 0;
         if (qty <= 0) return;
+        const stops = stopIndex.get(`${m.id}:${index}`) || {};
         entries.push({
           quantity: qty,
           commodity: item.commodity || "?",
@@ -2040,20 +2074,92 @@ function gatherCargoEntriesForPacking() {
           maxCargoBoxSize: m.maxCargoBoxSize || null,
           pickupId: item.pickupId,
           dropoffId: item.dropoffId,
+          pickupStop: stops.pickupStop ?? null,
+          dropoffStop: stops.dropoffStop ?? null,
         });
       });
     });
   return entries;
 }
 
+// Affiche le plan de chargement arrêt par arrêt (récupérations puis
+// livraisons de chaque étape du trajet), avec le module/couloir concerné et
+// un avertissement inline quand une livraison n'est pas accessible sans
+// déplacer une autre caisse récupérée après elle (voir
+// js/cargo-packing.js:simulateRoutePacking) — reste lisible même sans la vue
+// 3D (accessibilité, ou navigateur sans WebGL).
+function renderCargoPackingLegend(routeResult, result) {
+  const legend = document.getElementById("cargo-pack-legend");
+  legend.innerHTML = "";
+
+  const conflictByBox = new Map();
+  result.conflicts.forEach((c) => conflictByBox.set(c.box, c));
+
+  routeResult.steps.forEach((step, stepIdx) => {
+    const pickups = result.placements.filter((p) => p.pickupStop === stepIdx);
+    const dropoffs = result.placements.filter((p) => p.dropoffStop === stepIdx);
+    if (!pickups.length && !dropoffs.length) return;
+
+    const card = document.createElement("div");
+    card.className = "cargo-module-card";
+    const title = document.createElement("h3");
+    const loc = getLocationById(step.locId);
+    title.textContent = t("cargoStepLabel", { index: stepIdx + 1, location: loc ? locationLabel(loc) : "?" });
+    card.appendChild(title);
+
+    const ul = document.createElement("ul");
+    pickups.forEach((p) => {
+      const li = document.createElement("li");
+      li.textContent = t("cargoStepPickupLine", {
+        scu: p.box.scu,
+        commodity: p.entry.commodity,
+        mission: p.entry.mission.name || "?",
+        module: p.module.name,
+      });
+      ul.appendChild(li);
+    });
+    dropoffs.forEach((p) => {
+      const li = document.createElement("li");
+      li.textContent = t("cargoStepDropoffLine", {
+        scu: p.box.scu,
+        commodity: p.entry.commodity,
+        mission: p.entry.mission.name || "?",
+        module: p.module.name,
+      });
+      const conflict = conflictByBox.get(p.box);
+      if (conflict) {
+        li.classList.add("warning-text");
+        const blockers = conflict.blockedBy.map((e) => `${e.commodity} (${e.mission.name || "?"})`).join(", ");
+        li.textContent += " " + t("cargoConflictNote", { blockers: blockers || "?" });
+      }
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+    legend.appendChild(card);
+  });
+
+  if (result.unplaced.length) {
+    const names = Array.from(new Set(result.unplaced.map((u) => u.entry.commodity))).join(", ");
+    const warn = document.createElement("p");
+    warn.className = "hint warning-text";
+    warn.textContent = t("cargoUnplacedWarning", { list: names });
+    legend.appendChild(warn);
+  }
+}
+
 // Calcule et affiche le rangement des marchandises des missions incluses
 // dans les vraies soutes du vaisseau sélectionné (données FleetYards.net,
-// voir js/fleetyards.js et js/cargo-packing.js) : légende texte (toujours
-// affichée) + vue 3D interactive (voir js/cargo-viewer.js) quand disponible.
+// voir js/fleetyards.js), en respectant l'ordre réel de récupération/
+// livraison du dernier trajet optimisé (voir js/cargo-packing.js) : plan
+// texte arrêt par arrêt (toujours affiché) + vue 3D interactive (voir
+// js/cargo-viewer.js) au moment du trajet où la charge est la plus
+// importante, quand disponible.
 function runCargoPacking() {
   const status = document.getElementById("cargo-pack-status");
   const legend = document.getElementById("cargo-pack-legend");
+  const caption = document.getElementById("cargo-viewer-caption");
   legend.innerHTML = "";
+  caption.textContent = "";
   status.className = "hint";
 
   const ship = getSelectedShip();
@@ -2070,66 +2176,50 @@ function runCargoPacking() {
     return;
   }
 
-  const entries = gatherCargoEntriesForPacking();
+  if (!lastRouteResult) {
+    status.textContent = t("cargoPackNoRoute");
+    if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
+    return;
+  }
+
+  const stopIndex = buildCargoItemStopIndex(lastRouteResult);
+  const allEntries = gatherCargoEntriesForPacking(stopIndex);
+  const entries = allEntries.filter((e) => e.pickupStop != null && e.dropoffStop != null);
   if (!entries.length) {
     status.textContent = t("cargoPackNoCargo");
     if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
     return;
   }
 
-  const result = packCargoIntoHolds(entries, holds);
+  const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length);
   const placedCount = result.placements.length;
   const totalCount = placedCount + result.unplaced.length;
 
   if (result.unplaced.length) {
-    const names = Array.from(new Set(result.unplaced.map((u) => u.entry.commodity))).join(", ");
     status.className = "hint warning-text";
-    status.textContent =
-      t("cargoPackSummary", { placed: placedCount, total: totalCount, unplaced: result.unplaced.length }) +
-      " " +
-      t("cargoUnplacedWarning", { list: names });
+    status.textContent = t("cargoPackSummary", { placed: placedCount, total: totalCount, unplaced: result.unplaced.length });
+  } else if (result.conflicts.length) {
+    status.className = "hint warning-text";
+    status.textContent = t("cargoPackConflictSummary", { placed: placedCount, conflicts: result.conflicts.length });
   } else {
     status.textContent = t("cargoPackAllPlaced", { placed: placedCount });
   }
 
-  // Légende texte : un bloc par module, listant les caisses qui y sont
-  // rangées (commodité, taille, mission) — reste lisible même sans la vue
-  // 3D (accessibilité, ou navigateur sans WebGL).
-  const byModule = new Map();
-  result.placements.forEach((p) => {
-    if (!byModule.has(p.module.name)) byModule.set(p.module.name, []);
-    byModule.get(p.module.name).push(p);
-  });
+  renderCargoPackingLegend(lastRouteResult, result);
 
-  holds.forEach((hold) => {
-    const items = byModule.get(hold.name) || [];
-    const card = document.createElement("div");
-    card.className = "cargo-module-card";
-    const title = document.createElement("h3");
-    title.textContent = t("cargoModuleLabel", {
-      name: hold.name,
-      capacity: hold.capacity,
-      maxSize: hold.maxContainerSize || "?",
-    });
-    card.appendChild(title);
-    if (items.length) {
-      const ul = document.createElement("ul");
-      items.forEach((p) => {
-        const li = document.createElement("li");
-        li.textContent = `${p.box.scu} SCU — ${p.entry.commodity} (${p.entry.mission.name || "?"})`;
-        ul.appendChild(li);
-      });
-      card.appendChild(ul);
-    } else {
-      const empty = document.createElement("p");
-      empty.className = "hint";
-      empty.textContent = "—";
-      card.appendChild(empty);
-    }
-    legend.appendChild(card);
+  // La vue 3D ne peut montrer qu'un seul instant à la fois : celui où la
+  // charge est la plus importante est le plus représentatif (et le plus
+  // contraignant) du trajet complet.
+  const peakStep = lastRouteResult.steps[result.peakStepIndex];
+  const peakLoc = peakStep ? getLocationById(peakStep.locId) : null;
+  caption.textContent = t("cargoViewerCaption", {
+    index: result.peakStepIndex + 1,
+    location: peakLoc ? locationLabel(peakLoc) : "?",
   });
-
-  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, result.placements);
+  const peakPlacements = result.placements.filter(
+    (p) => p.pickupStop <= result.peakStepIndex && p.dropoffStop > result.peakStepIndex
+  );
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, peakPlacements);
 }
 
 function renderUexStatus() {

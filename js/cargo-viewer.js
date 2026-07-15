@@ -22,12 +22,38 @@ let camera = null;
 let controls = null;
 let animating = false;
 let contentGroup = null;
+// Volume englobant de la dernière scène rendue (repère Front/Rear/Left/Right
+// ci-dessous, purement relatif à cette vue — pas l'orientation réelle du
+// vaisseau, inconnue faute de donnée FleetYards à ce sujet) — utilisé pour
+// caler les étiquettes et les vues préréglées (voir setCargoViewerView).
+let sceneBounds = null;
 
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
 // que la même mission garde toujours la même couleur d'un rendu à l'autre.
 function colorForMission(missionId) {
   const hue = ((Number(missionId) || 0) * 47) % 360;
   return new THREE.Color(`hsl(${hue}, 65%, 55%)`);
+}
+
+// Étiquette de repère (Avant/Arrière/Gauche/Droite) affichée dans la scène :
+// un sprite (toujours face à la caméra) plutôt qu'un texte 3D, plus simple et
+// largement suffisant pour un simple repère d'orientation.
+function makeAxisLabel(text) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(18,20,26,0.75)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = "bold 34px sans-serif";
+  ctx.fillStyle = "#dae1e7";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
+  sprite.scale.set(4, 1, 1);
+  return sprite;
 }
 
 function ensureScene(container) {
@@ -92,10 +118,14 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   clearContent();
 
   let offsetX = 0;
+  let maxDy = 0;
+  let maxDz = 0;
   holds.forEach((hold) => {
     const dx = hold.dimensions.x;
     const dy = hold.dimensions.y;
     const dz = hold.dimensions.z;
+    maxDy = Math.max(maxDy, dy);
+    maxDz = Math.max(maxDz, dz);
 
     // Caisson filaire représentant les limites du module.
     const wireGeom = new THREE.BoxGeometry(dx, dy, dz);
@@ -131,12 +161,57 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
     offsetX += dx + MODULE_GAP;
   });
 
-  // Recentre la caméra/les contrôles sur l'ensemble des modules affichés.
   const totalWidth = offsetX - MODULE_GAP;
-  controls.target.set(totalWidth / 2, 2, 2);
-  camera.position.set(totalWidth / 2, Math.max(6, totalWidth * 0.4), Math.max(10, totalWidth * 0.7));
+  sceneBounds = { minX: 0, maxX: totalWidth, minY: 0, maxY: maxDy, minZ: 0, maxZ: maxDz };
+  const midX = totalWidth / 2;
+  const midY = maxDy / 2;
+  const midZ = maxDz / 2;
+
+  // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : un simple
+  // repère d'orientation pour ce rendu (pas l'avant/arrière réel du
+  // vaisseau, inconnu — voir le commentaire en tête de fichier).
+  const margin = Math.max(2, totalWidth * 0.15);
+  const front = makeAxisLabel(t("axisFront"));
+  front.position.set(midX, midY, maxDz + margin);
+  contentGroup.add(front);
+  const rear = makeAxisLabel(t("axisRear"));
+  rear.position.set(midX, midY, -margin);
+  contentGroup.add(rear);
+  const left = makeAxisLabel(t("axisLeft"));
+  left.position.set(-margin, midY, midZ);
+  contentGroup.add(left);
+  const right = makeAxisLabel(t("axisRight"));
+  right.position.set(totalWidth + margin, midY, midZ);
+  contentGroup.add(right);
+
+  // Recentre la caméra/les contrôles sur l'ensemble des modules affichés.
+  controls.target.set(midX, midY, midZ);
+  camera.position.set(midX, Math.max(6, totalWidth * 0.4), Math.max(10, totalWidth * 0.7));
   controls.update();
 };
+
+// Repositionne la caméra sur l'une des 4 vues préréglées (voir les boutons
+// "Vue avant/arrière/gauche/droite" du panneau), cadrée sur l'ensemble de la
+// scène actuellement affichée.
+function setCargoViewerView(view) {
+  if (!sceneBounds || !camera || !controls) return;
+  const { minX, maxX, minY, maxY, minZ, maxZ } = sceneBounds;
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+  const midZ = (minZ + maxZ) / 2;
+  const distance = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 6) * 1.6;
+  controls.target.set(midX, midY, midZ);
+  if (view === "front") camera.position.set(midX, midY, midZ + distance);
+  else if (view === "rear") camera.position.set(midX, midY, midZ - distance);
+  else if (view === "left") camera.position.set(midX - distance, midY, midZ);
+  else if (view === "right") camera.position.set(midX + distance, midY, midZ);
+  controls.update();
+}
+window.setCargoViewerView = setCargoViewerView;
+
+document.querySelectorAll(".btn-view-sm").forEach((btn) => {
+  btn.addEventListener("click", () => setCargoViewerView(btn.dataset.view));
+});
 
 window.clearCargoViewer3D = function clearCargoViewer3D() {
   clearContent();

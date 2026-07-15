@@ -58,130 +58,261 @@ function cellsFromDimensions(dimensions) {
   ];
 }
 
-function createOccupancyGrid(cellDims) {
-  const [dx, dy, dz] = cellDims;
-  const grid = [];
-  for (let x = 0; x < dx; x++) {
-    grid.push([]);
-    for (let y = 0; y < dy; y++) {
-      grid[x].push(new Array(dz).fill(false));
-    }
-  }
-  return grid;
+// =========================================================================
+// Rangement tenant compte de l'ordre réel du trajet (voir js/app.js pour la
+// construction de pickupStop/dropoffStop à partir du trajet optimisé) :
+// chaque caisse n'est posée qu'au moment où elle est réellement récupérée et
+// retirée au moment de sa livraison — une caisse à livrer tôt ne doit jamais
+// se retrouver coincée derrière une caisse récupérée après elle dans le même
+// couloir d'accès.
+// =========================================================================
+
+// Choisit l'axe le plus long d'un module comme axe de profondeur (accès
+// depuis une extrémité) : les deux autres axes forment le plan des couloirs.
+// Hypothèse raisonnable en l'absence de donnée réelle de porte/orientation
+// (même limite déjà assumée pour le rendu 3D, voir js/cargo-viewer.js).
+function depthAxisIndex(cellDims) {
+  let best = 0;
+  for (let i = 1; i < 3; i++) if (cellDims[i] > cellDims[best]) best = i;
+  return best;
 }
 
-function canPlace(grid, cellDims, pos, size) {
-  const [dx, dy, dz] = cellDims;
-  const [px, py, pz] = pos;
-  const [sx, sy, sz] = size;
-  if (px + sx > dx || py + sy > dy || pz + sz > dz) return false;
-  for (let x = px; x < px + sx; x++) {
-    for (let y = py; y < py + sy; y++) {
-      for (let z = pz; z < pz + sz; z++) {
-        if (grid[x][y][z]) return false;
-      }
+// Découpe le plan perpendiculaire à l'axe de profondeur en blocs de 2x2
+// crans (la plus grande empreinte au sol des caisses standard, voir
+// SCU_BOX_SIZES) : chaque bloc est un couloir d'accès indépendant, sur toute
+// la profondeur du module. Un couloir en bord de module peut être plus étroit
+// (1 cran) si la dimension du module n'est pas un multiple de 2 — sa place
+// disponible réelle (planeSize) en tient compte. Une caisse plus petite que
+// son couloir laisse un peu de place perdue plutôt que d'être combinée avec
+// une autre — simplification volontaire, pour ne pas gérer des couloirs
+// fusionnés/partagés entre plusieurs caisses de front.
+function buildModuleLanes(cellDims) {
+  const depthAxis = depthAxisIndex(cellDims);
+  const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
+  const depthSize = cellDims[depthAxis];
+  const sizeA = cellDims[planeAxes[0]];
+  const sizeB = cellDims[planeAxes[1]];
+  const lanes = [];
+  for (let a = 0; a < sizeA; a += 2) {
+    for (let b = 0; b < sizeB; b += 2) {
+      lanes.push({
+        depthAxis,
+        planeAxes,
+        planeOrigin: [a, b],
+        planeSize: [Math.min(2, sizeA - a), Math.min(2, sizeB - b)],
+        depthSize,
+        usedDepth: 0,
+        stack: [], // du plus profond (index 0, chargé en premier) au plus proche de l'accès (dernier, chargé en dernier)
+      });
     }
   }
-  return true;
+  return lanes;
 }
 
-function markPlaced(grid, pos, size) {
-  const [px, py, pz] = pos;
-  const [sx, sy, sz] = size;
-  for (let x = px; x < px + sx; x++) {
-    for (let y = py; y < py + sy; y++) {
-      for (let z = pz; z < pz + sz; z++) {
-        grid[x][y][z] = true;
-      }
-    }
-  }
+// Oriente la caisse pour le modèle en couloirs : la plus grande dimension le
+// long de la profondeur, les deux autres en travers (aucune caisse standard
+// ne dépasse une empreinte de 2x2 crans en travers).
+function orientForLanes(cells) {
+  const sorted = cells.slice().sort((a, b) => b - a);
+  return { depthExtent: sorted[0], planeExtent: [sorted[1], sorted[2]] };
 }
 
-// Les 6 permutations possibles des 3 axes d'une caisse (orientations
-// axis-aligned) : une caisse dont la plus grande face ne rentre pas dans le
-// sens "naturel" peut très bien rentrer une fois tournée sur un autre axe.
-function axisPermutations([a, b, c]) {
-  return [
-    [a, b, c],
-    [a, c, b],
-    [b, a, c],
-    [b, c, a],
-    [c, a, b],
-    [c, b, a],
-  ];
-}
-
-// Essaie de placer une caisse dans un module, en testant toutes les
-// orientations possibles au premier emplacement libre trouvé (balayage
-// x/y/z) — pas une recherche du meilleur agencement possible, juste un
-// rangement correct (jamais de recouvrement) et déterministe.
-function tryPlaceInModule(grid, cellDims, boxCells) {
-  const orientations = axisPermutations(boxCells);
-  const [dx, dy, dz] = cellDims;
-  for (let x = 0; x < dx; x++) {
-    for (let y = 0; y < dy; y++) {
-      for (let z = 0; z < dz; z++) {
-        for (const size of orientations) {
-          if (canPlace(grid, cellDims, [x, y, z], size)) {
-            markPlaced(grid, [x, y, z], size);
-            return { position: [x, y, z], size };
-          }
-        }
-      }
-    }
-  }
+// Vérifie qu'une empreinte tient dans un couloir (dans un sens ou dans
+// l'autre selon ses deux axes) et renvoie l'empreinte correctement orientée
+// pour ce couloir précis, ou null si elle ne tient dans aucun sens.
+function fitFootprintToLane(lane, planeExtent) {
+  const [p0, p1] = planeExtent;
+  const [w0, w1] = lane.planeSize;
+  if (p0 <= w0 && p1 <= w1) return [p0, p1];
+  if (p0 <= w1 && p1 <= w0) return [p1, p0];
   return null;
 }
 
-// Range une liste d'entrées de cargaison ({ quantity, ...métadonnées libres })
-// dans les modules réels de la soute d'un vaisseau (holds, voir
-// js/fleetyards.js:getShipCargoHolds). Renvoie { placements, unplaced } :
-// - placements : un tableau { module, position, size, box, entry } (un par
-//   caisse effectivement placée), position/size en crans de grille (1,25 m)
-//   relatifs à l'origine du module.
-// - unplaced : les caisses qui n'ont trouvé de place dans aucun module
-//   (soute trop petite, ou aucun module n'accepte cette taille de caisse).
-function packCargoIntoHolds(cargoEntries, holds) {
-  const modules = holds.map((h) => {
-    const cellDims = cellsFromDimensions(h.dimensions);
-    return { hold: h, cellDims, grid: createOccupancyGrid(cellDims) };
-  });
+// Cherche un couloir où poser la caisse sans bloquer un objet qui doit sortir
+// avant elle : parmi les couloirs ayant assez de place, celui dont l'objet du
+// dessus part le plus tôt tout en partant après (ou en même temps que) la
+// nouvelle caisse — algorithme de tri par paquets ("patience sorting"),
+// classique pour ce genre de contrainte d'empilement, qui minimise le nombre
+// de couloirs réellement nécessaires. Un couloir vide n'est utilisé qu'en
+// dernier recours, pour ne pas ouvrir de nouveaux couloirs inutilement.
+function findLaneForPush(lanes, depthExtent, planeExtent, dropoffStop) {
+  let best = null;
+  for (const lane of lanes) {
+    const fitted = fitFootprintToLane(lane, planeExtent);
+    if (!fitted) continue;
+    if (lane.depthSize - lane.usedDepth < depthExtent) continue;
+    const top = lane.stack[lane.stack.length - 1];
+    if (top && top.dropoffStop < dropoffStop) continue;
+    const priority = top ? top.dropoffStop : Infinity;
+    if (!best || priority < best.priority) best = { lane, fitted, priority };
+  }
+  return best ? { lane: best.lane, fitted: best.fitted } : null;
+}
 
+// Repli quand aucun couloir ne permet un accès garanti sans déplacement :
+// pose quand même la caisse (dans le couloir le plus dégagé) plutôt que
+// d'abandonner, mais l'appelant marque le résultat comme un conflit à
+// signaler (il faudra déplacer une autre caisse à l'arrêt concerné).
+function findLaneForcedPush(lanes, depthExtent, planeExtent) {
+  let best = null;
+  for (const lane of lanes) {
+    const fitted = fitFootprintToLane(lane, planeExtent);
+    if (!fitted) continue;
+    if (lane.depthSize - lane.usedDepth < depthExtent) continue;
+    if (!best || lane.usedDepth < best.lane.usedDepth) best = { lane, fitted };
+  }
+  return best;
+}
+
+// Retire une caisse de son couloir au moment de sa livraison. Si elle n'est
+// plus au sommet (une caisse récupérée après elle occupe encore le couloir),
+// c'est un vrai conflit physique : il faudra la déplacer temporairement pour
+// atteindre celle qu'on veut sortir. On la retire quand même de la
+// comptabilité (elle part réellement du vaisseau), mais le conflit est
+// remonté pour être affiché.
+function popFromLane(lane, item) {
+  const idx = lane.stack.indexOf(item);
+  if (idx === -1) return [];
+  const blocking = lane.stack.slice(idx + 1);
+  lane.stack.splice(idx, 1);
+  lane.usedDepth -= item.depthExtent;
+  return blocking;
+}
+
+// Simule le chargement/déchargement le long du trajet optimisé (voir
+// js/app.js:buildCargoItemStopIndex) : chaque caisse est posée à l'arrêt où
+// elle est réellement récupérée, dans un couloir qui ne bloquera personne
+// avant sa propre livraison, puis retirée à l'arrêt où elle est livrée. Les
+// livraisons d'un arrêt sont traitées avant les récupérations de ce même
+// arrêt, pour réutiliser la place tout juste libérée. Renvoie :
+// - placements : une entrée par caisse effectivement posée ({ module,
+//   position, size, box, entry, pickupStop, dropoffStop, conflict }),
+//   utilisable pour un instantané 3D à un arrêt donné (voir peakStepIndex).
+// - unplaced : caisses n'ayant trouvé de place dans aucun module.
+// - conflicts : livraisons où la caisse n'était plus accessible sans
+//   déplacer une autre caisse récupérée après elle dans le même couloir.
+// - peakStepIndex : l'arrêt où la charge totale est la plus importante,
+//   pour n'afficher qu'un seul instantané représentatif plutôt que toute la
+//   chronologie du trajet.
+function simulateRoutePacking(cargoEntries, holds, stepCount) {
+  const modules = holds.map((h) => ({
+    hold: h,
+    lanes: buildModuleLanes(cellsFromDimensions(h.dimensions)),
+  }));
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
 
-  // Les plus grosses caisses d'abord (premier ajustement décroissant) :
-  // heuristique simple et efficace pour le rangement en bacs. Le plafond de
-  // décomposition est le plus petit entre ce que le vaisseau accepte et la
-  // taille maximum annoncée par le contrat lui-même ("Taille maximum du
-  // cargo : X SCU", voir js/ocr.js) quand elle est connue — le jeu découpe
-  // réellement la cargaison à récupérer selon cette limite (ex : 7 SCU à
-  // récupérer avec un plafond de 4 SCU donne des caisses de 4 + 2 + 1), donc
-  // s'en tenir uniquement à la capacité du vaisseau produirait des caisses
-  // plus grosses que celles qu'on trouvera vraiment en jeu.
-  const allBoxes = [];
+  const boxes = [];
   cargoEntries.forEach((entry) => {
+    if (entry.pickupStop == null || entry.dropoffStop == null) return;
     const cap = entry.maxCargoBoxSize
       ? Math.min(entry.maxCargoBoxSize, shipMaxContainerSize)
       : shipMaxContainerSize;
-    decomposeIntoBoxes(entry.quantity, cap).forEach((box) => allBoxes.push({ box, entry }));
+    decomposeIntoBoxes(entry.quantity, cap).forEach((box) => {
+      boxes.push({ box, entry, pickupStop: entry.pickupStop, dropoffStop: entry.dropoffStop, placement: null });
+    });
   });
-  allBoxes.sort((a, b) => b.box.scu - a.box.scu);
+  // Les plus grosses caisses d'abord à égalité de récupération : reste une
+  // heuristique de remplissage raisonnable une fois l'ordre du trajet fixé.
+  boxes.sort((a, b) => a.pickupStop - b.pickupStop || b.box.scu - a.box.scu);
 
-  const placements = [];
   const unplaced = [];
-  allBoxes.forEach(({ box, entry }) => {
-    let placed = null;
-    for (const m of modules) {
-      if (m.hold.maxContainerSize && box.scu > m.hold.maxContainerSize) continue;
-      const result = tryPlaceInModule(m.grid, m.cellDims, box.cells);
-      if (result) {
-        placed = { module: m.hold, position: result.position, size: result.size, box, entry };
-        break;
-      }
-    }
-    if (placed) placements.push(placed);
-    else unplaced.push({ box, entry });
+  const conflicts = [];
+  const loadAtStep = new Array(stepCount).fill(0);
+
+  for (let step = 0; step < stepCount; step++) {
+    boxes
+      .filter((b) => b.dropoffStop === step && b.placement)
+      .forEach((b) => {
+        const blocking = popFromLane(b.placement.lane, b.placement);
+        if (blocking.length) {
+          conflicts.push({ box: b.box, entry: b.entry, blockedBy: blocking.map((x) => x.entry), atStep: step });
+        }
+      });
+
+    boxes
+      .filter((b) => b.pickupStop === step)
+      .forEach((b) => {
+        const { depthExtent, planeExtent } = orientForLanes(b.box.cells);
+        let placedModule = null;
+        let found = null;
+        for (const m of modules) {
+          if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
+          found = findLaneForPush(m.lanes, depthExtent, planeExtent, b.dropoffStop);
+          if (found) {
+            placedModule = m;
+            break;
+          }
+        }
+        let conflict = false;
+        if (!found) {
+          for (const m of modules) {
+            if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
+            found = findLaneForcedPush(m.lanes, depthExtent, planeExtent);
+            if (found) {
+              placedModule = m;
+              conflict = true;
+              break;
+            }
+          }
+        }
+        if (!found) {
+          unplaced.push({ box: b.box, entry: b.entry });
+          return;
+        }
+        const { lane, fitted } = found;
+        const item = {
+          depthExtent,
+          planeExtent: fitted,
+          depthStart: lane.usedDepth,
+          dropoffStop: b.dropoffStop,
+          entry: b.entry,
+          box: b.box,
+          lane,
+          hold: placedModule.hold,
+          conflict,
+        };
+        lane.stack.push(item);
+        lane.usedDepth += depthExtent;
+        b.placement = item;
+        // Le conflit ne se signale qu'une fois, au moment où il se fait
+        // vraiment sentir (au retrait, plus bas) — le marquer aussi ici
+        // ferait doublon pour la même paire caisse/blocage.
+      });
+
+    loadAtStep[step] = modules.reduce(
+      (sum, m) => sum + m.lanes.reduce((s2, lane) => s2 + lane.stack.reduce((s3, it) => s3 + it.box.scu, 0), 0),
+      0
+    );
+  }
+
+  let peakStepIndex = 0;
+  loadAtStep.forEach((v, i) => {
+    if (v > loadAtStep[peakStepIndex]) peakStepIndex = i;
   });
 
-  return { placements, unplaced };
+  const placements = boxes
+    .filter((b) => b.placement)
+    .map((b) => {
+      const { lane, depthExtent, planeExtent, depthStart, conflict, hold } = b.placement;
+      const position = [0, 0, 0];
+      const size = [1, 1, 1];
+      position[lane.depthAxis] = depthStart;
+      size[lane.depthAxis] = depthExtent;
+      position[lane.planeAxes[0]] = lane.planeOrigin[0];
+      position[lane.planeAxes[1]] = lane.planeOrigin[1];
+      size[lane.planeAxes[0]] = planeExtent[0];
+      size[lane.planeAxes[1]] = planeExtent[1];
+      return {
+        module: hold,
+        position,
+        size,
+        box: b.box,
+        entry: b.entry,
+        pickupStop: b.pickupStop,
+        dropoffStop: b.dropoffStop,
+        conflict,
+      };
+    });
+
+  return { placements, unplaced, conflicts, peakStepIndex };
 }
