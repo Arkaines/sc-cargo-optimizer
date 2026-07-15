@@ -86,7 +86,10 @@ function makeModuleWireframe(dx, dy, dz) {
 // Étiquette de repère (Avant/Arrière/Gauche/Droite) affichée dans la scène :
 // un plan posé à plat sur la base de la grille (comme un marquage au sol),
 // visible des deux faces puisque la caméra peut passer dessous en tournant.
-function makeAxisLabel(text) {
+// width est proportionnelle à la taille de la scène affichée (voir l'appel
+// dans renderCargoViewer3D) : une taille fixe écraserait un petit vaisseau
+// (ex. C8 Pisces, soute de moins de 3 m) sous des étiquettes énormes.
+function makeAxisLabel(text, width) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 64;
@@ -99,7 +102,7 @@ function makeAxisLabel(text) {
   ctx.textBaseline = "middle";
   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
-  const geom = new THREE.PlaneGeometry(4, 1);
+  const geom = new THREE.PlaneGeometry(width, width / 4);
   const mesh = new THREE.Mesh(
     geom,
     new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthTest: false })
@@ -233,17 +236,23 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   // en repère main droite avec l'axe Y vers le haut, faire face à +Z met la
   // droite du côté -X et la gauche du côté +X (règle de la main droite,
   // pas l'inverse) — d'où gauche posée du côté totalWidth+margin ci-dessous.
-  const margin = Math.max(2, totalWidth * 0.15);
-  const front = makeAxisLabel(t("axisFront"));
+  // Proportionnelles à la taille réelle de la scène affichée : une marge/
+  // taille fixe écraserait un petit vaisseau (soute de 2-3 m) sous des
+  // étiquettes démesurées, ou serait à peine visible pour un gros vaisseau
+  // à plusieurs modules.
+  const sceneScale = Math.max(totalWidth, maxDz, maxDy, 1);
+  const margin = sceneScale * 0.12;
+  const labelWidth = Math.max(0.6, sceneScale * 0.3);
+  const front = makeAxisLabel(t("axisFront"), labelWidth);
   front.position.set(midX, 0, maxDz + margin);
   contentGroup.add(front);
-  const rear = makeAxisLabel(t("axisRear"));
+  const rear = makeAxisLabel(t("axisRear"), labelWidth);
   rear.position.set(midX, 0, -margin);
   contentGroup.add(rear);
-  const left = makeAxisLabel(t("axisLeft"));
+  const left = makeAxisLabel(t("axisLeft"), labelWidth);
   left.position.set(totalWidth + margin, 0, midZ);
   contentGroup.add(left);
-  const right = makeAxisLabel(t("axisRight"));
+  const right = makeAxisLabel(t("axisRight"), labelWidth);
   right.position.set(-margin, 0, midZ);
   contentGroup.add(right);
 
