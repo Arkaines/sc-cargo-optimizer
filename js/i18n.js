@@ -24,6 +24,9 @@ const TRANSLATIONS = {
     noneOption: "-- Aucun --",
     shipCapacityPrefix: "Capacité : {scu} SCU",
     shipCapacityNone: "Sélectionne un vaisseau pour voir sa capacité.",
+    customCapacityLabel: "Capacité personnalisée (SCU)",
+    customCapacityPlaceholder: "Ex : capacité réelle constatée",
+    customCapacityHint: "Remplace la capacité officielle du vaisseau dans tous les calculs si renseignée (utile si tu arrives à charger plus que le chiffre officiel).",
 
     syncAllBtn: "Tout synchroniser (UEX Corp et Star Citizen API)",
     syncingLocations: "Synchronisation des lieux...",
@@ -221,6 +224,9 @@ const TRANSLATIONS = {
     noneOption: "-- None --",
     shipCapacityPrefix: "Capacity: {scu} SCU",
     shipCapacityNone: "Select a ship to see its capacity.",
+    customCapacityLabel: "Custom capacity (SCU)",
+    customCapacityPlaceholder: "E.g.: actual capacity observed",
+    customCapacityHint: "Overrides the ship's official capacity in all calculations when set (useful if you manage to load more than the official number).",
 
     syncAllBtn: "Sync everything (UEX Corp and Star Citizen API)",
     syncingLocations: "Syncing locations...",

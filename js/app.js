@@ -15,6 +15,7 @@ function defaultState() {
     uexLocations: [],
     uexSyncedAt: null,
     selectedShip: "",
+    customShipCapacity: null,
     uexCommodities: [],
     uexCompanies: [],
     uexShips: [],
@@ -97,6 +98,7 @@ function loadState() {
       uexLocations: parsed.uexLocations || [],
       uexSyncedAt: parsed.uexSyncedAt || null,
       selectedShip: parsed.selectedShip || "",
+      customShipCapacity: parsed.customShipCapacity || null,
       uexCommodities: parsed.uexCommodities || [],
       uexCompanies: parsed.uexCompanies || [],
       uexShips: parsed.uexShips || [],
@@ -849,9 +851,9 @@ function optimizeRoute(missions, startId, brokenLocationIds, allowRevisits) {
 // Repère les missions ramassées à l'arrêt précis où la capacité est dépassée
 // pour la première fois le long du trajet (celles qui font basculer la charge
 // au-dessus du maximum) — pas les autres missions déjà à bord avant ce point.
-function computeOverloadCulprits(result, ship) {
-  if (!ship) return [];
-  const overloadIndex = result.steps.findIndex((s) => s.cargoLoad > ship.scu);
+function computeOverloadCulprits(result, capacity) {
+  if (!capacity) return [];
+  const overloadIndex = result.steps.findIndex((s) => s.cargoLoad > capacity);
   if (overloadIndex === -1) return [];
   return result.steps[overloadIndex].actions
     .filter((a) => a.type === "pickup")
@@ -936,6 +938,18 @@ function getSelectedShip() {
   return allShips().find((s) => s.name === state.selectedShip) || null;
 }
 
+// Certains joueurs arrivent à charger davantage de SCU que la capacité
+// officielle du vaisseau (grilles de cargaison bien remplies, astuces de
+// chargement...) : une capacité personnalisée, si renseignée, remplace la
+// valeur du catalogue pour tous les calculs de surcharge — sans modifier le
+// catalogue lui-même (qui reste affiché tel quel dans le menu déroulant).
+function getEffectiveShipCapacity() {
+  const custom = Number(state.customShipCapacity);
+  if (custom > 0) return custom;
+  const ship = getSelectedShip();
+  return ship ? ship.scu : null;
+}
+
 function renderShipOptions() {
   const sel = document.getElementById("ship-select");
   const prev = state.selectedShip;
@@ -958,8 +972,11 @@ function renderShipOptions() {
 
 function renderShipCapacity() {
   const el = document.getElementById("ship-capacity");
-  const ship = getSelectedShip();
-  el.textContent = ship ? t("shipCapacityPrefix", { scu: ship.scu }) : t("shipCapacityNone");
+  const capacity = getEffectiveShipCapacity();
+  el.textContent = capacity ? t("shipCapacityPrefix", { scu: capacity }) : t("shipCapacityNone");
+
+  const customInput = document.getElementById("custom-ship-capacity");
+  if (document.activeElement !== customInput) customInput.value = state.customShipCapacity || "";
 }
 
 function renderStartLocationOptions() {
@@ -1186,7 +1203,7 @@ function renderMissionsTable() {
   const ship = getSelectedShip();
   capacityEl.className = "hint";
   capacityEl.textContent = ship
-    ? t("capacityWithShip", { cargo: totalCargo, shipName: ship.name, shipScu: ship.scu })
+    ? t("capacityWithShip", { cargo: totalCargo, shipName: ship.name, shipScu: getEffectiveShipCapacity() })
     : t("capacityNoShip", { cargo: totalCargo });
 }
 
@@ -1832,22 +1849,23 @@ function renderRouteResult(result) {
   container.appendChild(totalP);
 
   const ship = getSelectedShip();
+  const capacity = getEffectiveShipCapacity();
   const loadP = document.createElement("p");
   let over = false;
-  if (ship) {
-    over = result.maxCargoLoad > ship.scu;
+  if (capacity) {
+    over = result.maxCargoLoad > capacity;
     loadP.className = over ? "cargo-overload" : "cargo-ok";
     loadP.textContent = over
-      ? t("maxLoadOverload", { load: result.maxCargoLoad, scu: ship.scu, over: roundScu(result.maxCargoLoad - ship.scu) })
-      : t("maxLoadOk", { load: result.maxCargoLoad, scu: ship.scu });
+      ? t("maxLoadOverload", { load: result.maxCargoLoad, scu: capacity, over: roundScu(result.maxCargoLoad - capacity) })
+      : t("maxLoadOk", { load: result.maxCargoLoad, scu: capacity });
   } else {
     loadP.className = "hint";
     loadP.textContent = t("maxLoadNoShip", { load: result.maxCargoLoad });
   }
   container.appendChild(loadP);
 
-  if (ship && over) {
-    const culprits = computeOverloadCulprits(result, ship);
+  if (capacity && over) {
+    const culprits = computeOverloadCulprits(result, capacity);
     if (culprits.length) {
       const culpritLabel = document.createElement("p");
       culpritLabel.className = "hint warning-text";
@@ -1902,10 +1920,10 @@ function renderRouteResult(result) {
       infoWrap.appendChild(legSpan);
     }
     const loadSpan = document.createElement("span");
-    if (ship) {
-      const overHere = step.cargoLoad > ship.scu;
+    if (capacity) {
+      const overHere = step.cargoLoad > capacity;
       loadSpan.className = overHere ? "route-load route-load-overload" : "route-load";
-      loadSpan.textContent = t("onBoardWithShip", { load: step.cargoLoad, scu: ship.scu });
+      loadSpan.textContent = t("onBoardWithShip", { load: step.cargoLoad, scu: capacity });
     } else {
       loadSpan.className = "route-load";
       loadSpan.textContent = t("onBoardNoShip", { load: step.cargoLoad });
@@ -2754,6 +2772,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("ship-select").addEventListener("change", (e) => {
     state.selectedShip = e.target.value;
+    saveState();
+    renderShipCapacity();
+    renderMissionsTable();
+  });
+
+  document.getElementById("custom-ship-capacity").addEventListener("change", (e) => {
+    state.customShipCapacity = Number(e.target.value) || null;
     saveState();
     renderShipCapacity();
     renderMissionsTable();

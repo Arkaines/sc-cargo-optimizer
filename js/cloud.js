@@ -22,6 +22,7 @@ const CLOUD_SYNCED_KEYS = [
   "distances",
   "nextMissionId",
   "selectedShip",
+  "customShipCapacity",
   "reputationOverrides",
 ];
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
