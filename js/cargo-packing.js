@@ -320,8 +320,19 @@ function isBetterPosition(a, b) {
 // isBetterPosition — pas la première trouvée dans un ordre de balayage
 // arbitraire. allowedDepths, si fourni, restreint la recherche à la zone
 // réservée au contrat de cette caisse (voir assignMissionZones). missionId
-// sert au niveau 4 (regroupement du contrat, voir isBetterPosition).
-function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac, allowedDepths, missionId) {
+// sert au niveau 4 (regroupement du contrat, voir isBetterPosition). idealDepth
+// est une profondeur ABSOLUE déjà calculée par l'appelant (voir
+// simulateRoutePacking) — PAS une fraction du module entier : dans une zone
+// dédiée à un contrat, ce qui compte est le RANG relatif de cette caisse
+// parmi les SIENNES (celles du même contrat), pas sa date de livraison
+// rapportée à la longueur du trajet entier. Une fraction globale, une fois
+// bornée dans une zone étroite, peut faire tomber deux caisses d'un même
+// contrat sur la MÊME profondeur idéale alors que la zone a largement la
+// place de les séparer selon leur ordre réel de sortie — observé : une
+// caisse bloquant une autre caisse de SA PROPRE mission (Hydrogen bloqué par
+// Hydrogen de la même mission M4) alors que rien d'un autre contrat n'était
+// en cause.
+function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, idealDepth, allowedDepths, missionId) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -333,9 +344,6 @@ function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   if (allowedDepths) depths = depths.filter((d) => allowedDepths.has(d));
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
-
-  const maxDepthIdx = cellDims[depthAxis] - 1;
-  const idealDepth = dropoffFrac != null && maxDepthIdx > 0 ? dropoffFrac * maxDepthIdx : null;
 
   let best = null;
   for (const d of depths) {
@@ -541,12 +549,16 @@ function assignMissionZones(boxes, modules) {
 // (les modules étant déjà triés par préférence, pas la peine de comparer les
 // positions sûres entre elles), sinon la position la moins mauvaise
 // (conflit le moins sévère) tous modules candidats confondus, jamais figée
-// sur le premier module testé pour ce deuxième cas.
-function placeInBestModule(candidateModules, box, dropoffStop, dropoffFrac, allowedDepthsForModule, missionId) {
+// sur le premier module testé pour ce deuxième cas. idealDepthForModule(m)
+// calcule la profondeur idéale ABSOLUE pour CE module précis (peut varier
+// d'un module à l'autre selon leurs dimensions respectives, ou selon la zone
+// du contrat dans ce module précis — voir simulateRoutePacking).
+function placeInBestModule(candidateModules, box, dropoffStop, idealDepthForModule, allowedDepthsForModule, missionId) {
   let worstCaseBest = null;
   for (const m of candidateModules) {
     const allowedDepths = allowedDepthsForModule ? allowedDepthsForModule(m) : null;
-    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac, allowedDepths, missionId);
+    const idealDepth = idealDepthForModule ? idealDepthForModule(m) : null;
+    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, idealDepth, allowedDepths, missionId);
     if (!result) continue;
     if (result.severity === Infinity) {
       markPlaced(m.grid, result.position, result.size, { dropoffStop, scu: box.scu, missionId });
@@ -637,6 +649,28 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
   ).size;
   const zonesByMission = modules.length >= distinctMissionCount ? assignMissionZones(boxes, modules) : new Map();
 
+  // Rang de chaque caisse PARMI CELLES DE SON PROPRE CONTRAT, triées par date
+  // de livraison (0 = part la première, 1 = part la dernière) — sert à cibler
+  // une profondeur idéale À L'INTÉRIEUR de la zone réservée au contrat (voir
+  // plus bas), PAS une fraction de la longueur totale du trajet. Une fraction
+  // globale, une fois bornée dans une zone étroite, peut faire tomber deux
+  // caisses du MÊME contrat sur la même profondeur idéale alors que leur zone
+  // a largement la place de les séparer selon leur ordre réel de sortie —
+  // c'était la cause des conflits observés d'une caisse contre une autre
+  // caisse de SA PROPRE mission, sans qu'aucun autre contrat ne soit en cause.
+  const missionBoxRank = new Map();
+  const boxesByMission = new Map();
+  boxes.forEach((b) => {
+    const mid = b.entry.mission && b.entry.mission.id;
+    if (mid == null) return;
+    if (!boxesByMission.has(mid)) boxesByMission.set(mid, []);
+    boxesByMission.get(mid).push(b);
+  });
+  boxesByMission.forEach((list) => {
+    const sorted = list.slice().sort((a, b) => a.dropoffStop - b.dropoffStop || a.box.scu - b.box.scu);
+    sorted.forEach((b, i) => missionBoxRank.set(b, sorted.length > 1 ? i / (sorted.length - 1) : 0));
+  });
+
   const unplaced = [];
   const conflicts = [];
   const loadAtStep = new Array(stepCount).fill(0);
@@ -697,12 +731,24 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
             .filter((z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize))
             .map((z) => z.module);
           const allowedDepthsByModule = new Map();
+          const zoneByModule = new Map();
           zones.forEach((z) => {
             const s = allowedDepthsByModule.get(z.module) || new Set();
             for (let d = z.depthStart; d < z.depthEnd; d++) s.add(d);
             allowedDepthsByModule.set(z.module, s);
+            zoneByModule.set(z.module, z);
           });
-          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, dropoffFrac, (m) => allowedDepthsByModule.get(m), missionId);
+          // Profondeur idéale = rang de CETTE caisse parmi celles du MÊME
+          // contrat, rapporté à la profondeur de SA zone (pas la fraction du
+          // trajet entier bornée après coup — voir missionBoxRank plus haut).
+          const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
+          const idealDepthForModule = (m) => {
+            const zone = zoneByModule.get(m);
+            if (!zone) return null;
+            const zoneMaxIdx = zone.depthEnd - zone.depthStart - 1;
+            return zone.depthStart + (zoneMaxIdx > 0 ? rankFrac * zoneMaxIdx : 0);
+          };
+          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, idealDepthForModule, (m) => allowedDepthsByModule.get(m), missionId);
         }
 
         // Sinon (zone réservée pleine ou contrat sans zone), modules les
@@ -725,7 +771,11 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
               if (ac !== bc) return ac - bc;
               return a.usedCells - b2.usedCells;
             });
-          placed = placeInBestModule(byFreeSpace, b.box, b.dropoffStop, dropoffFrac, null, missionId);
+          const idealDepthForModule = (m) => {
+            const maxDepthIdx = m.cellDims[m.depthAxis] - 1;
+            return maxDepthIdx > 0 ? dropoffFrac * maxDepthIdx : 0;
+          };
+          placed = placeInBestModule(byFreeSpace, b.box, b.dropoffStop, idealDepthForModule, null, missionId);
         }
 
         if (!placed) {
