@@ -210,7 +210,36 @@ function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
 // 3. N'importe quelle position valide géométriquement, en dernier recours :
 //    on garde celle dont le pire conflit part le plus tard (la moins
 //    mauvaise), plutôt que la première trouvée dans l'ordre de balayage.
-function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac) {
+//
+// Scindé en deux fonctions (voir plus bas) plutôt qu'une seule qui gère les
+// trois passes d'un coup : le niveau au-dessus (simulateRoutePacking) doit
+// pouvoir essayer la passe "sûre" dans TOUS les modules du vaisseau avant de
+// se rabattre sur la passe 3 dans N'IMPORTE LEQUEL — sinon un module presque
+// plein mais encore "le moins rempli" force un conflit évitable alors qu'un
+// autre module, plus rempli au global mais avec un emplacement encore
+// totalement libre pour cette caisse précise, existe ailleurs sur le
+// vaisseau. C'était le bug : la caisse était forcée dans le premier module
+// testé dès qu'une position géométriquement valide existait, même conflictuelle,
+// sans jamais regarder si un autre module avait une place réellement libre.
+function computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac) {
+  const range = (size) => Array.from({ length: size }, (_, i) => i);
+  const allDepths = range(cellDims[depthAxis]).reverse();
+  const maxDepthIdx = cellDims[depthAxis] - 1;
+  const idealDepth = dropoffFrac != null ? dropoffFrac * maxDepthIdx : null;
+  return allDepths.slice().sort((a, b) => {
+    if (idealDepth != null) {
+      const diff = Math.abs(a - idealDepth) - Math.abs(b - idealDepth);
+      if (diff !== 0) return diff;
+    }
+    return layerUsage ? (layerUsage.get(a) || 0) - (layerUsage.get(b) || 0) : 0;
+  });
+}
+
+// Passes 1 et 2 (sol sûr, puis empilé sûr) : ne commite (markPlaced) que si
+// une position sûre est trouvée, renvoie null sinon sans aucun effet de bord
+// — permet au niveau au-dessus d'essayer un autre module sans avoir à
+// annuler quoi que ce soit.
+function trySafePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -218,7 +247,6 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
 
   const range = (size) => Array.from({ length: size }, (_, i) => i);
-  const allDepths = range(cellDims[depthAxis]).reverse();
   // Ordre de préférence des plans de profondeur : d'abord par proximité avec
   // la profondeur "idéale" pour cette caisse d'après sa date de livraison
   // (dropoffFrac, 0 = part tout de suite, 1 = part en dernier) — une caisse
@@ -228,15 +256,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
   // évitable. À proximité égale, préfère le plan le moins rempli (occupation
   // RÉELLE, pas juste "déjà touché une fois") pour se répartir sur toute la
   // longueur du module plutôt que de se tasser dans un coin.
-  const maxDepthIdx = cellDims[depthAxis] - 1;
-  const idealDepth = dropoffFrac != null ? dropoffFrac * maxDepthIdx : null;
-  const depths = allDepths.slice().sort((a, b) => {
-    if (idealDepth != null) {
-      const diff = Math.abs(a - idealDepth) - Math.abs(b - idealDepth);
-      if (diff !== 0) return diff;
-    }
-    return (layerUsage ? (layerUsage.get(a) || 0) - (layerUsage.get(b) || 0) : 0);
-  });
+  const depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
   const outers = range(cellDims[outerPlaneAxis]);
   const inners = range(cellDims[innerPlaneAxis]);
 
@@ -261,10 +281,25 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
       }
     }
   }
+  return null;
+}
 
-  // Dernier recours : passe en revue TOUTES les positions valides possibles
-  // (pas juste la première) pour garder celle dont le pire conflit part le
-  // plus tard.
+// Passe 3 (dernier recours) : passe en revue TOUTES les positions valides
+// possibles de CE module et renvoie celle dont le pire conflit part le plus
+// tard — SANS commiter, pour que le niveau au-dessus puisse comparer avec les
+// autres modules du vaisseau avant de choisir où placer réellement la caisse.
+function tryWorstCasePlacement(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, dropoffFrac) {
+  const orientations = boxOrientations(box);
+  const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
+  const zIsPlaneAxis = planeAxes.includes(2);
+  const outerPlaneAxis = zIsPlaneAxis ? 2 : planeAxes[0];
+  const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
+
+  const range = (size) => Array.from({ length: size }, (_, i) => i);
+  const depths = computeDepthOrder(cellDims, depthAxis, layerUsage, dropoffFrac);
+  const outers = range(cellDims[outerPlaneAxis]);
+  const inners = range(cellDims[innerPlaneAxis]);
+
   let best = null;
   for (const d of depths) {
     for (const o of outers) {
@@ -281,12 +316,7 @@ function tryPlaceInModule(grid, cellDims, box, depthAxis, dropoffStop, activeBox
       }
     }
   }
-  if (best) {
-    markPlaced(grid, best.position, best.size, { dropoffStop });
-    if (layerUsage) bumpLayerUsage(layerUsage, depthAxis, best.position, best.size, 1);
-    return { position: best.position, size: best.size };
-  }
-  return null;
+  return best;
 }
 
 // Essaie de poser une caisse directement au-dessus (axe vertical réel Z)
@@ -450,14 +480,38 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         // créer des conflits évitables alors que d'autres modules du
         // vaisseau sont encore vides.
         if (!placed) {
-          const byFreeSpace = modules.slice().sort((a, b2) => a.usedCells - b2.usedCells);
+          const dropoffFrac = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
+          const byFreeSpace = modules
+            .slice()
+            .sort((a, b2) => a.usedCells - b2.usedCells)
+            .filter((m) => !(m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize));
+
+          // Passe 1 : une place SÛRE dans N'IMPORTE LEQUEL des modules du
+          // vaisseau (le moins rempli d'abord) — avant de se rabattre sur un
+          // conflit forcé, on vérifie que TOUT le vaisseau n'a vraiment aucune
+          // place sûre, pas seulement le premier module testé.
           for (const m of byFreeSpace) {
-            if (m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize) continue;
-            const dropoffFrac = stepCount > 1 ? b.dropoffStop / (stepCount - 1) : 0;
-            const result = tryPlaceInModule(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac);
+            const result = trySafePlacement(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac);
             if (result) {
               placed = { module: m, position: result.position, size: result.size };
               break;
+            }
+          }
+
+          // Passe 2 : aucun module n'a de place sûre pour cette caisse ->
+          // compare le pire conflit de CHAQUE module (sans rien commiter) et
+          // ne retient que le moins mauvais de tout le vaisseau, plutôt que le
+          // premier trouvé dans le module le moins rempli.
+          if (!placed) {
+            let best = null;
+            for (const m of byFreeSpace) {
+              const candidate = tryWorstCasePlacement(m.grid, m.cellDims, b.box, m.depthAxis, b.dropoffStop, m.activeBoxes, m.layerUsage, dropoffFrac);
+              if (candidate && (!best || candidate.severity > best.severity)) best = { module: m, ...candidate };
+            }
+            if (best) {
+              markPlaced(best.module.grid, best.position, best.size, { dropoffStop: b.dropoffStop });
+              bumpLayerUsage(best.module.layerUsage, best.module.depthAxis, best.position, best.size, 1);
+              placed = { module: best.module, position: best.position, size: best.size };
             }
           }
         }
