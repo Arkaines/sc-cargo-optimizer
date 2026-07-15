@@ -35,6 +35,54 @@ function colorForMission(missionId) {
   return new THREE.Color(`hsl(${hue}, 65%, 55%)`);
 }
 
+// Grille de crans (1 SCU = 1,25 m) sur les 6 faces d'un module, façon
+// hologramme de grille de cargo du jeu (voir la référence FleetYards) :
+// plus lisible qu'un simple caisson filaire pour juger visuellement la
+// taille d'une caisse par rapport au module.
+function addFaceGridLines(positions, dx, dy, dz) {
+  const nx = Math.round(dx / UNIT);
+  const ny = Math.round(dy / UNIT);
+  const nz = Math.round(dz / UNIT);
+  [0, dz].forEach((z) => {
+    for (let i = 0; i <= nx; i++) positions.push(i * UNIT, 0, z, i * UNIT, dy, z);
+    for (let j = 0; j <= ny; j++) positions.push(0, j * UNIT, z, dx, j * UNIT, z);
+  });
+  [0, dy].forEach((y) => {
+    for (let i = 0; i <= nx; i++) positions.push(i * UNIT, y, 0, i * UNIT, y, dz);
+    for (let k = 0; k <= nz; k++) positions.push(0, y, k * UNIT, dx, y, k * UNIT);
+  });
+  [0, dx].forEach((x) => {
+    for (let j = 0; j <= ny; j++) positions.push(x, j * UNIT, 0, x, j * UNIT, dz);
+    for (let k = 0; k <= nz; k++) positions.push(x, 0, k * UNIT, x, dy, k * UNIT);
+  });
+}
+
+// Caisson d'un module : arêtes extérieures nettes + grille de crans plus
+// discrète sur les faces, regroupées pour être positionnées comme un seul
+// objet.
+function makeModuleWireframe(dx, dy, dz) {
+  const group = new THREE.Group();
+
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(dx, dy, dz)),
+    new THREE.LineBasicMaterial({ color: 0x4dbfdd })
+  );
+  edges.position.set(dx / 2, dy / 2, dz / 2);
+  group.add(edges);
+
+  const gridPositions = [];
+  addFaceGridLines(gridPositions, dx, dy, dz);
+  const gridGeom = new THREE.BufferGeometry();
+  gridGeom.setAttribute("position", new THREE.Float32BufferAttribute(gridPositions, 3));
+  const grid = new THREE.LineSegments(
+    gridGeom,
+    new THREE.LineBasicMaterial({ color: 0x4dbfdd, transparent: true, opacity: 0.25 })
+  );
+  group.add(grid);
+
+  return group;
+}
+
 // Étiquette de repère (Avant/Arrière/Gauche/Droite) affichée dans la scène :
 // un plan posé à plat sur la base de la grille (comme un marquage au sol),
 // visible des deux faces puisque la caméra peut passer dessous en tournant.
@@ -121,24 +169,32 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   ensureScene(container);
   clearContent();
 
+  // FleetYards détaille parfois la soute d'un vaisseau en plusieurs petits
+  // modules structurels annexes (échelle, passerelle, accès nez...) en plus
+  // des vraies baies de cargo — tous comptent pour le rangement, mais les
+  // afficher tous en rangée rend la vue illisible. On ne montre par défaut
+  // que les modules d'une taille comparable à la plus grande baie du
+  // vaisseau, plus ceux qui contiennent effectivement une caisse à cet
+  // instant précis du trajet.
+  const maxCapacity = Math.max(...holds.map((h) => h.capacity || 0), 1);
+  const displayHolds = holds.filter(
+    (h) => (h.capacity || 0) >= maxCapacity * 0.25 || placements.some((p) => p.module === h)
+  );
+
   let offsetX = 0;
   let maxDy = 0;
   let maxDz = 0;
-  holds.forEach((hold) => {
+  displayHolds.forEach((hold) => {
     const dx = hold.dimensions.x;
     const dy = hold.dimensions.y;
     const dz = hold.dimensions.z;
     maxDy = Math.max(maxDy, dy);
     maxDz = Math.max(maxDz, dz);
 
-    // Caisson filaire représentant les limites du module.
-    const wireGeom = new THREE.BoxGeometry(dx, dy, dz);
-    const wireMesh = new THREE.LineSegments(
-      new THREE.EdgesGeometry(wireGeom),
-      new THREE.LineBasicMaterial({ color: 0x4dbfdd })
-    );
-    wireMesh.position.set(offsetX + dx / 2, dy / 2, dz / 2);
-    contentGroup.add(wireMesh);
+    // Caisson du module : arêtes nettes + grille de crans sur les faces.
+    const wireframe = makeModuleWireframe(dx, dy, dz);
+    wireframe.position.set(offsetX, 0, 0);
+    contentGroup.add(wireframe);
 
     // Caisses rangées dans ce module.
     placements
