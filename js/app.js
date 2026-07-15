@@ -1977,6 +1977,68 @@ function fuzzyLocationMatch(cleaned) {
   return bestDist <= threshold ? best : null;
 }
 
+// Certains types de lieu génériques se traduisent en français avec le mot
+// descriptif placé en PRÉFIXE (ex : "Centre de travail Sakura Sun
+// Goldenrod", "Avant-poste de Recherche Rayari Anvik"), alors que le nom
+// anglais du catalogue (UEX ou Star Citizen Wiki) le place en SUFFIXE
+// ("Sakura Sun Goldenrod Workcenter", "Rayari Anvik Research Outpost") :
+// cet écart de structure n'est rattrapable ni par correspondance exacte/
+// substring, ni par distance d'édition (les lettres ne sont pas dans le
+// même ordre). Repéré au fil des captures d'écran plutôt que par un alias
+// figé, pour couvrir tout nom propre suivant ce même gabarit.
+const FRENCH_LOCATION_TYPE_PREFIXES = [
+  { prefix: "avant-poste de recherche", suffix: "Research Outpost" },
+  { prefix: "centre de travail", suffix: "Workcenter" },
+  { prefix: "dépôt logistique", suffix: "Logistics Depot" },
+  { prefix: "centre de distribution", suffix: "Distribution Centre" },
+  { prefix: "centre industriel de fabrication", suffix: "Industrial Manufacturing Facility" },
+];
+
+// Renvoie un ou deux réordonnancements candidats : certains lieux ont un
+// code alphanumérique final qui reste en dernière position dans les deux
+// langues (ex : "Centre de distribution Covalex S4DC05" -> "Covalex
+// Distribution Centre S4DC05", le code après le type plutôt qu'après
+// l'entreprise), d'autres non (ex : "Sakura Sun Goldenrod Workcenter").
+// Comme on ne sait pas laquelle des deux conventions s'applique, on
+// propose les deux et on laisse l'appelant tenter chacune.
+function reorderFrenchLocationDescriptor(rawText) {
+  const cleaned = rawText.trim();
+  const lower = cleaned.toLowerCase();
+  for (const { prefix, suffix } of FRENCH_LOCATION_TYPE_PREFIXES) {
+    if (!lower.startsWith(prefix)) continue;
+    const rest = cleaned.slice(prefix.length).trim();
+    if (!rest) continue;
+    const candidates = [`${rest} ${suffix}`];
+    const codeMatch = /^(.*\S)\s+([A-Za-z]*\d[A-Za-z0-9-]*)$/.exec(rest);
+    if (codeMatch) candidates.push(`${codeMatch[1]} ${suffix} ${codeMatch[2]}`);
+    return candidates;
+  }
+  return null;
+}
+
+// Les stations aux points de Lagrange sont nommées "<ABR>-L<N> <Nom>
+// Station" dans le catalogue (ex : "HUR-L5 High Course Station"), mais
+// certains écrans du jeu affichent une description complète plutôt que ce
+// nom compact : "Station <Nom> au point de Lagrange L<N> d'<Planète>". Le
+// code d'abréviation ne figure nulle part dans cette description (il faut
+// le reconstruire à partir du nom de la planète), donc aucune des
+// transformations ci-dessus ne peut le rattraper.
+const LAGRANGE_PLANET_ABBR = {
+  hurston: "HUR",
+  crusader: "CRU",
+  arccorp: "ARC",
+  microtech: "MIC",
+};
+
+function reorderFrenchLagrangeStation(rawText) {
+  const cleaned = rawText.trim();
+  const m = /^station\s+(.+?)\s+au\s+point\s+de\s+lagrange\s+l(\d)\s+d[e']\s*(.+)$/i.exec(cleaned);
+  if (!m) return null;
+  const abbr = LAGRANGE_PLANET_ABBR[m[3].trim().toLowerCase().replace(/[^a-z]/g, "")];
+  if (!abbr) return null;
+  return `${abbr}-L${m[2]} ${m[1].trim()} Station`;
+}
+
 // Le nom de lieu lu par l'OCR ne correspond pas toujours exactement à un
 // lieu de la base (variante de nom, casse, mot manquant) : on tente une
 // correspondance exacte, puis approximative, puis floue (distance d'édition).
@@ -1997,13 +2059,42 @@ function looseLocationMatch(rawText) {
   const lower = cleaned.toLowerCase();
   const byName = allLocations().find((loc) => loc.name.toLowerCase() === lower);
   if (byName) return byName;
-  const bySubstring = allLocations().find(
-    (loc) => loc.name.toLowerCase().includes(lower) || lower.includes(loc.name.toLowerCase())
-  );
+  const bySubstring = allLocations().find((loc) => substringMatchesReasonably(lower, loc.name.toLowerCase()));
   if (bySubstring) return bySubstring;
   const fuzzy = fuzzyLocationMatch(cleaned);
   if (fuzzy) return fuzzy;
-  return progressiveTrimMatch(cleaned);
+  const trimmed = progressiveTrimMatch(cleaned);
+  if (trimmed) return trimmed;
+
+  const candidates = [
+    ...(reorderFrenchLocationDescriptor(cleaned) || []),
+    ...(reorderFrenchLagrangeStation(cleaned) ? [reorderFrenchLagrangeStation(cleaned)] : []),
+  ];
+  for (const reordered of candidates) {
+    const reorderedLower = reordered.toLowerCase();
+    const byNameReordered = allLocations().find((loc) => loc.name.toLowerCase() === reorderedLower);
+    if (byNameReordered) return byNameReordered;
+    const bySubstringReordered = allLocations().find((loc) =>
+      substringMatchesReasonably(reorderedLower, loc.name.toLowerCase())
+    );
+    if (bySubstringReordered) return bySubstringReordered;
+    const fuzzyReordered = fuzzyLocationMatch(reordered);
+    if (fuzzyReordered) return fuzzyReordered;
+  }
+  return null;
+}
+
+// Une correspondance "substring" entre deux textes de longueurs très
+// différentes est presque toujours un faux positif (ex : le lieu générique
+// "microTech" — juste le nom de la planète — est trivialement inclus dans
+// n'importe quel texte contenant "microTech Logistics Depot ...") : on
+// n'accepte la correspondance substring que si les deux textes sont d'une
+// longueur assez proche.
+function substringMatchesReasonably(a, b) {
+  if (!a.includes(b) && !b.includes(a)) return false;
+  const shorter = Math.min(a.length, b.length);
+  const longer = Math.max(a.length, b.length);
+  return shorter >= longer * 0.5;
 }
 
 // Filet de sécurité pour les suffixes de position pas encore rencontrés
@@ -2256,22 +2347,44 @@ function scwikiLocationMatch(rawText) {
   const entries = allScwikiLocations();
   const exact = entries.find((e) => e.name.toLowerCase() === lower);
   if (exact) return exact;
-  const bySubstring = entries.find(
-    (e) => e.name.toLowerCase().includes(lower) || lower.includes(e.name.toLowerCase())
-  );
+  const bySubstring = entries.find((e) => substringMatchesReasonably(lower, e.name.toLowerCase()));
   if (bySubstring) return bySubstring;
-  let best = null;
-  let bestDist = Infinity;
-  entries.forEach((e) => {
-    const dist = levenshteinDistance(lower, e.name.toLowerCase());
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = e;
-    }
-  });
-  if (!best) return null;
-  const threshold = Math.max(3, Math.round(best.name.length * 0.15));
-  return bestDist <= threshold ? best : null;
+
+  function closestWithin(text) {
+    const needle = text.toLowerCase();
+    let best = null;
+    let bestDist = Infinity;
+    entries.forEach((e) => {
+      const dist = levenshteinDistance(needle, e.name.toLowerCase());
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = e;
+      }
+    });
+    if (!best) return null;
+    const threshold = Math.max(3, Math.round(best.name.length * 0.15));
+    return bestDist <= threshold ? best : null;
+  }
+
+  const fuzzy = closestWithin(cleaned);
+  if (fuzzy) return fuzzy;
+
+  // Même repli que looseLocationMatch : certains lieux (secours SC Wiki
+  // uniquement, ex : "Cry-Astro Processing Plant 34-12", "microTech
+  // Logistics Depot S4LD01") sont traduits avec le mot descriptif en
+  // préfixe plutôt qu'en suffixe.
+  const candidates = reorderFrenchLocationDescriptor(cleaned);
+  if (!candidates) return null;
+  for (const reordered of candidates) {
+    const reorderedLower = reordered.toLowerCase();
+    const bySubstringReordered = entries.find((e) =>
+      substringMatchesReasonably(reorderedLower, e.name.toLowerCase())
+    );
+    if (bySubstringReordered) return bySubstringReordered;
+    const fuzzyReordered = closestWithin(reordered);
+    if (fuzzyReordered) return fuzzyReordered;
+  }
+  return null;
 }
 
 // Traduit un nom de marchandise capté en français vers le nom UEX (anglais),
