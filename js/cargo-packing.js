@@ -92,6 +92,25 @@ function canPlace(grid, cellDims, pos, size) {
   return true;
 }
 
+// Une caisse ne peut jamais flotter : elle doit reposer au sol (z=0) ou avoir
+// toute son empreinte directement soutenue par d'autres caisses juste en
+// dessous (contact complet, pas de trou) — sans cette vérification, une
+// caisse de 4 SCU pourrait par exemple se retrouver posée pour moitié sur une
+// caisse de 2 SCU et pour moitié dans le vide, ce que le jeu ne permet pas.
+// z (index 2) est toujours l'axe vertical réel (voir cellsFromDimensions),
+// indépendamment de l'axe d'accès choisi pour ce module (depthAxis).
+function hasSupport(grid, pos, size) {
+  const [px, py, pz] = pos;
+  const [sx, sy] = size;
+  if (pz === 0) return true;
+  for (let x = px; x < px + sx; x++) {
+    for (let y = py; y < py + sy; y++) {
+      if (!grid[x][y][pz - 1]) return false;
+    }
+  }
+  return true;
+}
+
 // value = true pour occuper (récupération), false pour libérer (livraison,
 // voir simulateRoutePacking) — la place libérée par une livraison redevient
 // disponible pour une récupération plus tardive du même trajet.
@@ -126,29 +145,40 @@ function boxOrientations(box) {
 // à plat possibles (voir boxOrientations) au premier emplacement libre
 // trouvé — pas une recherche du meilleur agencement possible, juste un
 // rangement réaliste et sans recouvrement, comme un joueur caserait
-// effectivement ses caisses. L'axe de profondeur (depthAxis) est la boucle
-// la plus externe, balayée à l'envers (du fond vers l'accès) : chaque plan
-// de profondeur est rempli en entier (réparti sur les deux autres axes)
-// avant de passer au plan suivant, plus proche de l'accès. Sans ça
-// (profondeur en boucle interne), tout finirait entassé contre un seul côté
-// du module au lieu de se répartir sur toute sa largeur.
+// effectivement ses caisses. Ordre de balayage, du plus externe au plus
+// interne : (1) l'axe de profondeur (depthAxis), à l'envers (du fond vers
+// l'accès) — chaque plan de profondeur se remplit avant de passer au
+// suivant, plus proche de l'accès ; (2) l'axe vertical réel (Z), du sol vers
+// le haut — une caisse ne s'empile sur une autre que si tout le sol de ce
+// plan de profondeur est déjà occupé, jamais avant d'avoir essayé une place
+// au sol toute fraîche ailleurs (sans ça, des caisses s'empilent inutilement
+// l'une sur l'autre alors que la soute reste par ailleurs largement vide,
+// créant des conflits de chargement évitables) ; (3) l'axe latéral restant,
+// pour se répartir sur toute la largeur plutôt que de s'entasser d'un côté.
 function tryPlaceInModule(grid, cellDims, box, depthAxis) {
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
+  // Si Z fait partie des deux axes de plan (cas courant), il passe en boucle
+  // médiane (priorité sol avant empilement) ; l'autre axe latéral reste la
+  // boucle la plus interne.
+  const zIsPlaneAxis = planeAxes.includes(2);
+  const outerPlaneAxis = zIsPlaneAxis ? 2 : planeAxes[0];
+  const innerPlaneAxis = zIsPlaneAxis ? planeAxes.find((axis) => axis !== 2) : planeAxes[1];
+
   const range = (size) => Array.from({ length: size }, (_, i) => i);
   const depths = range(cellDims[depthAxis]).reverse();
-  const as = range(cellDims[planeAxes[0]]);
-  const bs = range(cellDims[planeAxes[1]]);
+  const outers = range(cellDims[outerPlaneAxis]);
+  const inners = range(cellDims[innerPlaneAxis]);
 
   for (const d of depths) {
-    for (const a of as) {
-      for (const b of bs) {
+    for (const o of outers) {
+      for (const i of inners) {
         const pos = [0, 0, 0];
         pos[depthAxis] = d;
-        pos[planeAxes[0]] = a;
-        pos[planeAxes[1]] = b;
+        pos[outerPlaneAxis] = o;
+        pos[innerPlaneAxis] = i;
         for (const size of orientations) {
-          if (canPlace(grid, cellDims, pos, size)) {
+          if (canPlace(grid, cellDims, pos, size) && hasSupport(grid, pos, size)) {
             markPlaced(grid, pos, size, true);
             return { position: pos, size };
           }
