@@ -2186,8 +2186,7 @@ function renderCargoStepView() {
 // voir js/fleetyards.js), en respectant l'ordre réel de récupération/
 // livraison du dernier trajet optimisé (voir js/cargo-packing.js) : une
 // seule fenêtre naviguable arrêt par arrêt (voir renderCargoStepView),
-// démarrant sur l'arrêt où la charge est la plus importante (le plus
-// représentatif du trajet).
+// démarrant sur le premier arrêt du trajet.
 function runCargoPacking() {
   const status = document.getElementById("cargo-pack-status");
   status.className = "hint";
@@ -2240,7 +2239,7 @@ function runCargoPacking() {
     status.textContent = t("cargoPackAllPlaced", { placed: placedCount });
   }
 
-  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: result.peakStepIndex };
+  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: 0 };
   renderCargoStepView();
 }
 

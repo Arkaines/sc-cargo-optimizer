@@ -27,6 +27,10 @@ let contentGroup = null;
 // vaisseau, inconnue faute de donnée FleetYards à ce sujet) — utilisé pour
 // caler les étiquettes et les vues préréglées (voir setCargoViewerView).
 let sceneBounds = null;
+// Signature de la dernière scène cadrée automatiquement (voir
+// renderCargoViewer3D) : ne recadrer que quand ça change réellement de
+// taille (nouveau vaisseau), pas à chaque navigation d'étape.
+let lastFrameKey = null;
 
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
 // que la même mission garde toujours la même couleur d'un rendu à l'autre.
@@ -276,10 +280,18 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   right.position.set(-margin, 0, midZ);
   contentGroup.add(right);
 
-  // Recentre la caméra/les contrôles sur l'ensemble des modules affichés.
-  controls.target.set(midX, midY, midZ);
-  camera.position.set(midX, Math.max(6, totalWidth * 0.4), Math.max(10, totalWidth * 0.7));
-  controls.update();
+  // Ne recadre la caméra que si la scène a changé de taille (nouveau
+  // vaisseau) — pas à chaque navigation d'étape (voir cargo-step-prev/next
+  // dans js/app.js), sans quoi la rotation/le zoom du joueur seraient perdus
+  // à chaque clic alors que le contenu affiché change juste d'une étape à
+  // l'autre pour le même vaisseau.
+  const frameKey = `${totalWidth.toFixed(2)}|${maxDy.toFixed(2)}|${maxDz.toFixed(2)}`;
+  if (frameKey !== lastFrameKey) {
+    controls.target.set(midX, midY, midZ);
+    camera.position.set(midX, Math.max(6, totalWidth * 0.4), Math.max(10, totalWidth * 0.7));
+    controls.update();
+    lastFrameKey = frameKey;
+  }
 };
 
 // Repositionne la caméra sur l'une des 4 vues préréglées (voir les boutons
@@ -310,4 +322,5 @@ document.querySelectorAll(".btn-view-sm").forEach((btn) => {
 
 window.clearCargoViewer3D = function clearCargoViewer3D() {
   clearContent();
+  lastFrameKey = null;
 };
