@@ -895,6 +895,15 @@ tbody tr:nth-child(even) {
   color: var(--text);
 }
 
+.cargo-color-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
 .route-culprits {
   display: flex;
   flex-direction: column;

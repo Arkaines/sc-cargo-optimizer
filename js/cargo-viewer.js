@@ -30,10 +30,17 @@ let sceneBounds = null;
 
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
 // que la même mission garde toujours la même couleur d'un rendu à l'autre.
-function colorForMission(missionId) {
+function missionColorCss(missionId) {
   const hue = ((Number(missionId) || 0) * 47) % 360;
-  return new THREE.Color(`hsl(${hue}, 65%, 55%)`);
+  return `hsl(${hue}, 65%, 55%)`;
 }
+function colorForMission(missionId) {
+  return new THREE.Color(missionColorCss(missionId));
+}
+// Exposée pour que js/app.js puisse afficher une pastille de couleur assortie
+// dans la légende texte (voir renderCargoPackingLegend) — sans quoi rien ne
+// relie visuellement la couleur d'une caisse dans la vue 3D à sa mission.
+window.missionColorCss = missionColorCss;
 
 // Grille de crans (1 SCU = 1,25 m) sur les 6 faces d'un module, façon
 // hologramme de grille de cargo du jeu (voir la référence FleetYards) :

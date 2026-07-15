@@ -2107,20 +2107,36 @@ function renderCargoPackingLegend(routeResult, result) {
     title.textContent = t("cargoStepLabel", { index: stepIdx + 1, location: loc ? locationLabel(loc) : "?" });
     card.appendChild(title);
 
+    // Pastille de couleur assortie à la caisse dans la vue 3D (voir
+    // js/cargo-viewer.js:missionColorCss) : sans ça, rien ne relie
+    // visuellement une couleur à sa mission pour le joueur.
+    function addColorSwatch(li, missionId) {
+      const swatch = document.createElement("span");
+      swatch.className = "cargo-color-swatch";
+      swatch.style.background = typeof missionColorCss === "function" ? missionColorCss(missionId) : "#888";
+      li.appendChild(swatch);
+    }
+
     const ul = document.createElement("ul");
     pickups.forEach((p) => {
       const li = document.createElement("li");
-      li.textContent = t("cargoStepPickupLine", {
-        scu: p.box.scu,
-        commodity: p.entry.commodity,
-        mission: p.entry.mission.name || "?",
-        module: p.module.name,
-      });
+      addColorSwatch(li, p.entry.mission.id);
+      li.appendChild(
+        document.createTextNode(
+          t("cargoStepPickupLine", {
+            scu: p.box.scu,
+            commodity: p.entry.commodity,
+            mission: p.entry.mission.name || "?",
+            module: p.module.name,
+          })
+        )
+      );
       ul.appendChild(li);
     });
     dropoffs.forEach((p) => {
       const li = document.createElement("li");
-      li.textContent = t("cargoStepDropoffLine", {
+      addColorSwatch(li, p.entry.mission.id);
+      let text = t("cargoStepDropoffLine", {
         scu: p.box.scu,
         commodity: p.entry.commodity,
         mission: p.entry.mission.name || "?",
@@ -2130,8 +2146,9 @@ function renderCargoPackingLegend(routeResult, result) {
       if (conflict) {
         li.classList.add("warning-text");
         const blockers = conflict.blockedBy.map((e) => `${e.commodity} (${e.mission.name || "?"})`).join(", ");
-        li.textContent += " " + t("cargoConflictNote", { blockers: blockers || "?" });
+        text += " " + t("cargoConflictNote", { blockers: blockers || "?" });
       }
+      li.appendChild(document.createTextNode(text));
       ul.appendChild(li);
     });
     card.appendChild(ul);
