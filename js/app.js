@@ -1992,6 +1992,13 @@ const FRENCH_LOCATION_TYPE_PREFIXES = [
   { prefix: "dépôt logistique", suffix: "Logistics Depot" },
   { prefix: "centre de distribution", suffix: "Distribution Centre" },
   { prefix: "centre industriel de fabrication", suffix: "Industrial Manufacturing Facility" },
+  // Forme courte des stations de Lagrange (ex : "Station Green Glade"), sans
+  // la description complète du point de Lagrange (voir
+  // reorderFrenchLagrangeStation ci-dessous pour la forme longue) — le nom
+  // catalogue ("HUR-L1 Green Glade Station") contient "Green Glade Station"
+  // comme sous-chaîne une fois réordonné, donc pas besoin de reconstruire
+  // l'abréviation de planète ici.
+  { prefix: "station", suffix: "Station" },
 ];
 
 // Renvoie un ou deux réordonnancements candidats : certains lieux ont un
@@ -2032,7 +2039,10 @@ const LAGRANGE_PLANET_ABBR = {
 
 function reorderFrenchLagrangeStation(rawText) {
   const cleaned = rawText.trim();
-  const m = /^station\s+(.+?)\s+au\s+point\s+de\s+lagrange\s+l(\d)\s+d[e']\s*(.+)$/i.exec(cleaned);
+  // Tolère un artefact OCR (crochet, puce...) entre "au" et "point" : le nom
+  // du lieu tient parfois sur deux lignes en jeu, coupées juste à cet
+  // endroit, et un symbole de la ligne suivante peut se retrouver capté ici.
+  const m = /^station\s+(.+?)\s+au\s*[^\p{L}\s]*\s*point\s+de\s+lagrange\s+l(\d)\s+d[e']\s*(.+)$/iu.exec(cleaned);
   if (!m) return null;
   const abbr = LAGRANGE_PLANET_ABBR[m[3].trim().toLowerCase().replace(/[^a-z]/g, "")];
   if (!abbr) return null;
