@@ -49,7 +49,15 @@ function decomposeIntoBoxes(quantity, maxBoxScu) {
   for (const size of SCU_BOX_SIZES) {
     if (size.scu > cap) continue;
     while (remaining >= size.scu) {
-      boxes.push(size);
+      // Copie propre à chaque caisse : SCU_BOX_SIZES est une table de tailles
+      // partagée, pas des instances de caisses. Pousser la même référence
+      // partagée pour toutes les caisses d'une taille donnée les rendrait
+      // indiscernables pour tout code qui identifie une caisse par référence
+      // d'objet (ex. js/app.js:renderCargoStepView, qui associe un conflit à
+      // "la" caisse via une Map/Set) — un conflit sur UNE caisse de 2 SCU
+      // apparaîtrait alors à tort sur TOUTES les autres caisses de 2 SCU du
+      // trajet, quelle que soit leur mission ou leur position réelle.
+      boxes.push({ ...size });
       remaining -= size.scu;
     }
   }
