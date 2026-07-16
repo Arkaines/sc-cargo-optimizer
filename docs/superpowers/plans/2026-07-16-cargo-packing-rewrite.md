@@ -412,17 +412,19 @@ git commit -m "Réécrit assignMissionZones en 3D (largeur/hauteur/profondeur), 
 
 ## Task 4: 3D-aware zone reservation, Tier 2 (safe cross-mission height-stacking)
 
+> **Revision note (post-Task-3 discovery):** the version below replaces an earlier draft that gated a Tier-2 host on `heightEnd < module full height`. That precondition can never be true: Task 3's Tier-1 zones always reserve the module's *full* height by design (tested and approved — see `zone assignment: two missions on a wide module each get their own width-lane, full height`), so no Tier-1 zone ever has "spare height" to report. A Task 4 implementer correctly caught this by direct execution and escalated instead of guessing (exactly the right call). The design is corrected here: a Tier-2 guest zone reuses the **entire spatial footprint** of its host (same width AND height range), not a carved-out sub-range above it. This matches the design spec's own words (Section 3): reserving a zone only guarantees *temporal* safety; it does not carve out guaranteed physical capacity, and actual non-overlap is enforced later, at the crate level, by `canPlace` (grid occupancy) and `hasValidSupport` (Task 2's temporal/size check) — a guest's crates can only occupy cells the host's crates aren't already using, and can only rest on a host crate that safely outlasts them. If a mission's real need doesn't fit inside the shared footprint once crates are actually placed, it falls through to Task 6's ship-wide last-resort search, exactly as the spec already anticipates ("If no position inside the zone satisfies the size rule, that mission falls through to the ship-wide search"). This does **not** require touching Task 3's code at all — Tier-1 zones stay exactly as implemented.
+
 **Files:**
 - Modify: `js/cargo-packing.js` (inside `assignMissionZones`, the `while (remaining > 0.0001)` loop from Task 3)
 - Test: `scripts/cargo-packing-tests.cjs`
 
 **Interfaces:**
 - Consumes: the `moduleState` array and zone shape from Task 3.
-- Produces: no new function, but `assignMissionZones` now also returns zones with `heightStart > 0` when a mission is stacked on a host.
+- Produces: no new function, but `assignMissionZones` now also returns, for some missions, a zone whose `module`/`widthAxis`/`heightAxis`/`widthStart`/`widthEnd`/`heightStart`/`heightEnd` are identical to another mission's existing zone (a Tier-2 guest sharing its host's footprint).
 
 ### Context for this task
 
-When Task 3's `openModules` filter finds no free width-lane anywhere, instead of immediately `break`-ing (falling through to the ship-wide search), try stacking the candidate mission on top of an **already-placed zone** (from any mission, Tier 1 or Tier 2) whose presence window (`minPickupStop`..`maxDropoffStop`) **fully contains** the candidate's. This is only temporally safe because of that containment — the host is guaranteed present for the guest's entire stay. Track already-placed zones in a flat list as they're created so later missions can search them as potential hosts.
+When Task 3's `openModules` filter finds no free width-lane anywhere, instead of immediately `break`-ing (falling through to the ship-wide search), try stacking the candidate mission on top of an **already-placed zone** (from any mission, Tier 1 or Tier 2) whose presence window (`minPickupStop`..`maxDropoffStop`) **fully contains** the candidate's. This is only temporally safe because of that containment — the host is guaranteed present for the guest's entire stay. Track already-placed zones in a flat list as they're created so later missions can search them as potential hosts. Because zone reservation happens before any crate is actually placed (the "static, full-manifest" principle), there is no way to know upfront exactly how much of the host's footprint will still be free — so a Tier-2 grant is advisory capacity, not a guaranteed allocation, and satisfies the WHOLE candidate mission's remaining need in one grant (ending the `while` loop for that mission); Task 5's real crate-level search is what determines what actually fits, and Task 6's ship-wide search is the safety net for whatever doesn't.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -452,7 +454,16 @@ test("zone assignment: a mission whose window is fully contained by another gets
   const guestZones = zones.get(2);
   assert.ok(guestZones && guestZones.length, "the guest mission must get a zone via tier 2 stacking");
   const guest = guestZones[0];
-  assert.strictEqual(guest.heightStart, 1, "the guest must be placed one height level above the host (host used 0)");
+  const host = zones.get(1)[0];
+  // Le tier 2 réutilise EXACTEMENT l'empreinte spatiale de l'hôte (pas une
+  // sous-plage de hauteur découpée) — la non-collision réelle est assurée
+  // plus tard, caisse par caisse, par canPlace/hasValidSupport (Task 5), pas
+  // par le zonage lui-même.
+  assert.strictEqual(guest.widthStart, host.widthStart);
+  assert.strictEqual(guest.widthEnd, host.widthEnd);
+  assert.strictEqual(guest.heightStart, host.heightStart);
+  assert.strictEqual(guest.heightEnd, host.heightEnd);
+  assert.strictEqual(guest.module, host.module);
 });
 
 test("zone assignment: a mission whose window is NOT contained gets no tier-2 zone (falls through)", () => {
@@ -473,12 +484,40 @@ test("zone assignment: a mission whose window is NOT contained gets no tier-2 zo
   const guestZones = zones.get(2) || [];
   assert.strictEqual(guestZones.length, 0, "no safe host exists, so no zone should be reserved");
 });
+
+test("zone assignment: a third mission nested inside two other missions' windows still gets a tier-2 zone", () => {
+  const ctx = loadCargoPacking();
+  // Note : la containment de fenêtres temporelles est transitive (si la
+  // fenêtre de la mission 3 est contenue dans celle de la mission 2, qui est
+  // elle-même contenue dans celle de la mission 1, alors la mission 1 la
+  // contient forcément aussi) — et le tier 2 copie EXACTEMENT l'empreinte
+  // spatiale de son hôte, donc un troisième niveau ne produit pas une
+  // empreinte différente d'un deuxième niveau. Ce test vérifie seulement
+  // qu'empiler plusieurs invités sur le même hôte (ou une chaîne d'hôtes
+  // équivalents) reste possible et ne casse rien — pas quel hôte précis
+  // `.find` choisit en interne.
+  const modules = [
+    {
+      hold: { maxContainerSize: 32 },
+      cellDims: [8, 12, 2],
+      depthAxis: 1,
+    },
+  ];
+  const boxes = [
+    { box: { scu: 32, footprint: [8, 12], height: 1 }, entry: { mission: { id: 1 } }, pickupStop: 0, dropoffStop: 20 },
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 2 } }, pickupStop: 5, dropoffStop: 15 },
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 3 } }, pickupStop: 8, dropoffStop: 12 },
+  ];
+  const zones = ctx.assignMissionZones(boxes, modules);
+  assert.ok((zones.get(2) || []).length, "mission 2 must get a tier-2 zone");
+  assert.ok((zones.get(3) || []).length, "mission 3 must also get a tier-2 zone despite mission 1's lane already being reused once");
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `node scripts/cargo-packing-tests.cjs`
-Expected: the first new test FAILs (`guestZones` is empty — today's code just `break`s when out of width). The second one currently passes for the right reason already (no code path grants a zone) — that's fine, it's a lock-in test.
+Expected: the first and third new tests FAIL (`guestZones` empty for missions 2/3 — today's code just `break`s when out of width). The second one currently passes for the right reason already (no code path grants a zone) — that's fine, it's a lock-in test.
 
 - [ ] **Step 3: Add Tier 2 to `assignMissionZones`**
 
@@ -498,36 +537,47 @@ with:
       if (!openModules.length) {
         // Tier 2 : plus de voie libre, cherche un hôte déjà placé (n'importe
         // quelle mission, tier 1 ou déjà empilée en tier 2) dont la fenêtre de
-        // présence contient ENTIÈREMENT celle du contrat courant, avec encore
-        // de la hauteur disponible au-dessus. Sûr uniquement parce que
-        // l'hôte est garanti présent pendant tout le séjour de l'invité (la
-        // règle de taille et le reste des vérifications se font caisse par
-        // caisse via hasValidSupport, voir Task 2).
+        // présence contient ENTIÈREMENT celle du contrat courant. Sûr
+        // uniquement parce que l'hôte est garanti présent pendant tout le
+        // séjour de l'invité — mais cette réservation ne garantit QUE la
+        // sécurité temporelle, pas une capacité physique précise (le zonage
+        // se fait avant tout placement réel de caisse, voir le principe de
+        // planification statique). L'invité reprend donc EXACTEMENT
+        // l'empreinte spatiale de l'hôte (même largeur, même hauteur) plutôt
+        // qu'une sous-plage de hauteur découpée au-dessus : la non-collision
+        // réelle est assurée plus tard, caisse par caisse, par
+        // canPlace (occupation de grille) et hasValidSupport (règle de
+        // taille + sécurité temporelle, voir Task 2) — une caisse de
+        // l'invité ne peut occuper qu'une cellule libre, et ne peut reposer
+        // que sur une caisse de l'hôte qui reste au moins aussi longtemps.
+        // Si le besoin réel de l'invité ne tient finalement pas dans cette
+        // empreinte partagée, il retombe sur la recherche ville-entière de
+        // dernier recours (Task 6), exactement comme prévu par la conception.
         const host = allZones.find(
-          (z) =>
-            z.minPickupStop <= minPickupStop &&
-            z.maxDropoffStop >= maxDropoffStop &&
-            z.heightEnd < z.module.cellDims[z.heightAxis]
+          (z) => z.minPickupStop <= minPickupStop && z.maxDropoffStop >= maxDropoffStop
         );
         if (!host) break; // Vraiment plus de place : le repli en recherche libre (Task 6) prendra le relais.
 
-        const heightCellsAvailable = host.module.cellDims[host.heightAxis] - host.heightEnd;
-        const laneCapacity = host.module.cellDims[host.module.depthAxis] * (host.widthEnd - host.widthStart);
-        const neededHeight = Math.min(heightCellsAvailable, Math.max(1, Math.ceil(remaining / laneCapacity)));
         const zone = {
           module: host.module,
           widthAxis: host.widthAxis,
           heightAxis: host.heightAxis,
           widthStart: host.widthStart,
           widthEnd: host.widthEnd,
-          heightStart: host.heightEnd,
-          heightEnd: host.heightEnd + neededHeight,
+          heightStart: host.heightStart,
+          heightEnd: host.heightEnd,
           minPickupStop,
           maxDropoffStop,
         };
         zones.push(zone);
         allZones.push(zone);
-        remaining -= neededHeight * laneCapacity;
+        // On ne peut pas mesurer la capacité réellement libre dans
+        // l'empreinte de l'hôte à ce stade (elle dépend du placement réel
+        // des caisses, résolu par Task 5) : on considère le besoin de ce
+        // contrat comme couvert par CETTE zone unique, quitte à ce que
+        // Task 5/6 découvrent qu'il n'y a en réalité pas assez de place et
+        // fassent remonter l'excédent vers la recherche de dernier recours.
+        remaining = 0;
         continue;
       }
 ```
@@ -575,13 +625,13 @@ to:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `node scripts/cargo-packing-tests.cjs`
-Expected: both new tests pass. Real-data tests still fail/error — expected until Task 5.
+Expected: all three new tests pass. Real-data tests still fail/error — expected until Task 5.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add js/cargo-packing.js scripts/cargo-packing-tests.cjs
-git commit -m "Ajoute le tier 2 du zonage : empilement croisé sécurisé entre contrats par containment de fenêtre"
+git commit -m "Ajoute le tier 2 du zonage : empilement croisé sécurisé entre contrats, même empreinte que l'hôte"
 ```
 
 ---
