@@ -686,6 +686,15 @@ button:active {
   flex-wrap: wrap;
 }
 
+/* Largeur commune plutôt que calée sur la longueur de chaque libellé
+   ("Supprimer" est le plus long des trois, ~95px) : sans ça, Modifier/
+   Terminer/Supprimer ont beau faire la même hauteur, ils restent visiblement
+   de tailles différentes. */
+.actions-cell button {
+  min-width: 100px;
+  text-align: center;
+}
+
 .inline-add-location {
   display: flex;
   gap: 0.5rem;
