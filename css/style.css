@@ -870,6 +870,75 @@ tbody tr:nth-child(even) {
   border-bottom: 1px solid var(--panel-border);
 }
 
+.cargo-pack-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cargo-pack-header .warning-text {
+  margin: 0;
+}
+
+/* Bouton rond discret déclenchant une bulle d'aide en survol de contenu
+   (comme scmdb.net) plutôt que d'imposer plusieurs paragraphes d'explication
+   toujours visibles — le texte reste disponible, juste pas en permanence
+   dans le champ visuel. */
+.help-btn {
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--btn-secondary-bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--heading-font);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-popover {
+  position: absolute;
+  z-index: 60;
+  max-width: 22rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  font-size: 0.85rem;
+  color: var(--text);
+  display: none;
+}
+
+.help-popover.open {
+  display: block;
+}
+
+.help-popover p {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+}
+
+.help-popover p:last-child {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .help-popover {
+    background: var(--panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 .cargo-pack-panel .hint {
   margin: 0 0 0.5rem;
 }

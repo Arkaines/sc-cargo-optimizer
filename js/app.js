@@ -3046,6 +3046,33 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => activateTab(btn.dataset.tab));
   });
 
+  // Bulle d'aide générique (voir .help-btn/.help-popover) : un clic sur
+  // n'importe quel bouton d'aide bascule la popover qu'il référence
+  // (data-help-for) et ferme les autres ; un clic ailleurs les ferme toutes.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".help-btn");
+    if (btn) {
+      const popover = document.getElementById(btn.dataset.helpFor);
+      if (!popover) return;
+      const willOpen = !popover.classList.contains("open");
+      document.querySelectorAll(".help-popover.open").forEach((p) => p.classList.remove("open"));
+      document.querySelectorAll(".help-btn[aria-expanded='true']").forEach((b) => b.setAttribute("aria-expanded", "false"));
+      if (willOpen) {
+        popover.classList.add("open");
+        btn.setAttribute("aria-expanded", "true");
+        const rect = btn.getBoundingClientRect();
+        const popWidth = popover.offsetWidth || 352;
+        popover.style.top = `${rect.bottom + window.scrollY + 6}px`;
+        popover.style.left = `${Math.max(8, Math.min(rect.right + window.scrollX - popWidth, window.innerWidth - popWidth - 8))}px`;
+      }
+      return;
+    }
+    if (!e.target.closest(".help-popover")) {
+      document.querySelectorAll(".help-popover.open").forEach((p) => p.classList.remove("open"));
+      document.querySelectorAll(".help-btn[aria-expanded='true']").forEach((b) => b.setAttribute("aria-expanded", "false"));
+    }
+  });
+
   document.getElementById("ship-select").addEventListener("change", (e) => {
     state.selectedShip = e.target.value;
     saveState();
