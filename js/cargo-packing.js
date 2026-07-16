@@ -786,31 +786,114 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
         // ailleurs sur le vaisseau.
         if (!placed) {
           const zones = (missionId != null ? zonesByMission.get(missionId) : null) || [];
-          const zoneModules = zones
-            .filter((z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize))
-            .map((z) => z.module);
-          const zoneByModule = new Map();
-          zones.forEach((z) => zoneByModule.set(z.module, z));
-          // La zone restreint désormais l'axe de VOIE (largeur), pas la
-          // profondeur (voir assignMissionZones) : toute la profondeur du
-          // module reste disponible pour ce contrat.
-          const restrictionForModule = (m) => {
-            const zone = zoneByModule.get(m);
-            if (!zone) return null;
-            const allowed = new Set();
-            for (let v = zone.laneStart; v < zone.laneEnd; v++) allowed.add(v);
-            return { axis: zone.laneAxis, allowed };
-          };
+          const eligibleZones = zones.filter(
+            (z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize)
+          );
           // Profondeur idéale = rang de CETTE caisse parmi celles du MÊME
           // contrat, rapporté à TOUTE la profondeur du module (disponible en
-          // entier dans sa voie — pas la fraction du trajet entier, voir
+          // entier dans sa zone — pas la fraction du trajet entier, voir
           // missionBoxRank plus haut).
           const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
-          const idealDepthForModule = (m) => {
-            const maxDepthIdx = m.cellDims[m.depthAxis] - 1;
+          const idealDepthForZone = (z) => {
+            const maxDepthIdx = z.module.cellDims[z.module.depthAxis] - 1;
             return maxDepthIdx > 0 ? rankFrac * maxDepthIdx : 0;
           };
-          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, idealDepthForModule, restrictionForModule, missionId);
+          // IMPORTANT : un contrat peut avoir PLUSIEURS zones DANS LE MÊME
+          // module (une voie tier 1 partielle, puis un empilement tier 2
+          // ailleurs dans ce même module une fois la voie épuisée). Fusionner
+          // leurs plages largeur/hauteur dans une seule restriction (union
+          // des largeurs, union des hauteurs, filtrées indépendamment par
+          // findBestPosition) serait FAUX : ça autoriserait une position qui
+          // combine la largeur d'une zone avec la hauteur d'une AUTRE zone,
+          // un rectangle qui n'a jamais été réservé (et qui peut appartenir à
+          // un autre contrat). Chaque zone est donc essayée SÉPARÉMENT — un
+          // appel à findBestPosition par zone, jamais fusionnée avec une
+          // autre — et seule la meilleure position parmi TOUTES les zones
+          // (tous modules confondus) est retenue, via la même comparaison
+          // hiérarchique `isBetterPosition` déjà utilisée partout ailleurs
+          // dans ce fichier (jamais un score additif, voir son commentaire).
+          // `restriction`/`restrict()` (dans findBestPosition) ne filtrent que
+          // la coordonnée de DÉPART d'une caisse sur un axe donné, jamais son
+          // étendue complète (les plages depths/outers/inners sont calculées
+          // AVANT de savoir quelle orientation — donc quelle taille — sera
+          // essayée). Une caisse dont une orientation est plus large que sa
+          // propre zone sur l'axe de largeur ou de hauteur pourrait donc
+          // démarrer dans la zone réservée mais déborder dans une zone
+          // VOISINE (potentiellement celle d'un autre contrat) : le seul
+          // rempart est alors canPlace(), qui ne rejette que les cellules
+          // déjà occupées à CET instant — pas encore par le contrat voisin,
+          // s'il n'a pas encore rien posé. Observé concrètement : une caisse
+          // unique de 32 SCU (empreinte 2x8) dans une zone large de 2 cases
+          // choisissait l'orientation large (8 de large) plutôt qu'étroite (2
+          // de large) car elle touche plus de parois (critère de niveau 5 de
+          // isBetterPosition), et bloquait ensuite le chargement d'un autre
+          // contrat placé plus tard dans SA zone (colonnes 6-7 du même
+          // module). Pour garantir un confinement réel sans toucher
+          // findBestPosition, on bloque temporairement — le temps de cet
+          // appel seulement — toutes les cellules du module situées EN DEHORS
+          // du rectangle largeur×hauteur réservé (profondeur entière, elle,
+          // toujours disponible pour ce contrat) : canPlace() rejette alors
+          // naturellement toute orientation qui déborderait. Les cellules
+          // déjà occupées par une vraie caisse ne sont pas touchées (elles
+          // bloquent déjà canPlace de toute façon) — seules les cellules
+          // libres sont temporairement marquées, puis restaurées à `null`
+          // juste après l'appel.
+          const confineToZone = (z) => {
+            const m = z.module;
+            const [dx, dy, dz] = m.cellDims;
+            const touched = [];
+            for (let x = 0; x < dx; x++) {
+              for (let y = 0; y < dy; y++) {
+                for (let zc = 0; zc < dz; zc++) {
+                  const coord = [x, y, zc];
+                  const insideWidth = coord[z.widthAxis] >= z.widthStart && coord[z.widthAxis] < z.widthEnd;
+                  const insideHeight = coord[z.heightAxis] >= z.heightStart && coord[z.heightAxis] < z.heightEnd;
+                  if (insideWidth && insideHeight) continue;
+                  if (m.grid[x][y][zc] == null) {
+                    m.grid[x][y][zc] = true; // marqueur temporaire (jamais interprété comme une vraie caisse ailleurs, retiré avant toute autre utilisation de la grille)
+                    touched.push([x, y, zc]);
+                  }
+                }
+              }
+            }
+            return () => touched.forEach(([x, y, zc]) => (m.grid[x][y][zc] = null));
+          };
+          let best = null; // { module, candidate } où candidate = résultat de findBestPosition (position + critères de tri)
+          eligibleZones.forEach((z) => {
+            const m = z.module;
+            const widthValues = Array.from({ length: z.widthEnd - z.widthStart }, (_, i) => z.widthStart + i);
+            const heightValues = Array.from({ length: z.heightEnd - z.heightStart }, (_, i) => z.heightStart + i);
+            const restriction = [
+              { axis: z.widthAxis, allowed: new Set(widthValues) },
+              { axis: z.heightAxis, allowed: new Set(heightValues) },
+            ];
+            const restore = confineToZone(z);
+            const candidate = findBestPosition(
+              m.grid,
+              m.cellDims,
+              b.box,
+              m.depthAxis,
+              b.dropoffStop,
+              m.activeBoxes,
+              m.layerUsage,
+              idealDepthForZone(z),
+              restriction,
+              missionId
+            );
+            restore();
+            if (candidate && (!best || isBetterPosition(candidate, best.candidate))) {
+              best = { module: m, candidate };
+            }
+          });
+          if (best) {
+            markPlaced(best.module.grid, best.candidate.position, best.candidate.size, {
+              dropoffStop: b.dropoffStop,
+              scu: b.box.scu,
+              missionId,
+            });
+            bumpLayerUsage(best.module.layerUsage, best.module.depthAxis, best.candidate.position, best.candidate.size, 1);
+            placed = { module: best.module, position: best.candidate.position, size: best.candidate.size };
+          }
         }
 
         // Sinon (zone réservée pleine ou contrat sans zone), modules les

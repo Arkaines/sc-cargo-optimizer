@@ -205,6 +205,30 @@ test("zone assignment: a third mission nested inside two other missions' windows
   assert.ok((zones.get(3) || []).length, "mission 3 must also get a tier-2 zone despite mission 1's lane already being reused once");
 });
 
+// --- Régression : plusieurs zones du même contrat dans le même module ----
+test("placement: a mission with two zones in the same module never mixes their width/height ranges", () => {
+  const ctx = loadCargoPacking();
+  // Un seul module, large de 8 crans, 2 crans de haut. Mission A tient toute
+  // la largeur (8 crans) pendant tout le trajet -> pas de voie tier-1 libre
+  // pour quiconque. Mission B a deux besoins bien distincts et temporellement
+  // disjoints (2 lots), forçant potentiellement deux zones dans CE module si
+  // le zonage la fait s'empiler à deux endroits différents. On vérifie
+  // simplement qu'aucun conflit non nécessaire n'apparaît et qu'aucune caisse
+  // ne finit hors de tout rectangle réservé valide (0 conflit ici : les deux
+  // lots de B tiennent chacun dans la fenêtre de A).
+  const holds = [{ name: "test", dimensions: { x: 10, y: 15, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  const missionA = { id: 1, name: "A" };
+  const missionB = { id: 2, name: "B" };
+  const entries = [
+    { quantity: 32, commodity: "Host", mission: missionA, pickupStop: 0, dropoffStop: 14 },
+    { quantity: 4, commodity: "GuestEarly", mission: missionB, pickupStop: 1, dropoffStop: 4 },
+    { quantity: 4, commodity: "GuestLate", mission: missionB, pickupStop: 8, dropoffStop: 12 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, holds, 15);
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.conflicts.length, 0, "both of B's lots fit safely within A's window; mixing zone axes must not cause a spurious conflict or an invalid placement");
+});
+
 // --- Empilement : sécurité temporelle (le support ne doit pas partir avant) -
 //
 // Tests directs sur hasValidSupport(grid, pos, size, boxScu, dropoffStop).
@@ -303,12 +327,19 @@ test("real data: Hull B (16 modules, 10 real contracts) -> 0 conflicts", () => {
 // cette tâche : les tâches 3 à 6 (réservation de zones par mission,
 // empilement inter-contrats) changent la stratégie de placement et sont
 // censées faire redescendre ce nombre.
-test("real data: Raft (1 module, 10 real contracts) -> at most 12 conflicts (updated after stacking fix)", () => {
+//
+// Mesuré à la tâche 5 (2026-07-16), une fois le zonage 3D (tier 1 + tier 2)
+// réellement branché dans le placement (au lieu d'être un no-op silencieux,
+// voir le fix de simulateRoutePacking) : 12 -> 9 conflits. La cible resserrée
+// ici (<= 9) est le nombre mesuré, pas juste "toujours mieux que l'ancien
+// seuil" — resserrer sert à détecter une vraie régression future avec
+// précision plutôt qu'une marge de 3 conflits.
+test("real data: Raft (1 module, 10 real contracts) -> at most 9 conflicts (measured at task 5, zone confinement)", () => {
   const ctx = loadCargoPacking();
   const { entries, holds, stepCount } = loadFixture("raft-real.json");
   const r = ctx.simulateRoutePacking(entries, holds, stepCount);
   assert.strictEqual(r.unplaced.length, 0);
-  assert.ok(r.conflicts.length <= 12, `expected <= 12 conflicts (after fix), got ${r.conflicts.length}`);
+  assert.ok(r.conflicts.length <= 9, `expected <= 9 conflicts (measured at task 5), got ${r.conflicts.length}`);
 });
 
 let failed = 0;
