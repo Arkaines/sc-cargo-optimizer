@@ -2124,6 +2124,7 @@ function addCargoColorSwatch(li, missionId) {
 // pour que le texte et le rendu 3D restent toujours synchronisés sur le même
 // moment du trajet.
 function renderCargoStepView() {
+  const viewerPanel = document.getElementById("cargo-viewer-panel");
   const nav = document.getElementById("cargo-step-nav");
   const titleEl = document.getElementById("cargo-step-title");
   const actionsEl = document.getElementById("cargo-step-actions");
@@ -2131,9 +2132,15 @@ function renderCargoStepView() {
   const nextBtn = document.getElementById("cargo-step-next");
 
   if (!cargoPackState) {
+    // Pas de rangement calculé : on masque toute la visionneuse (boîte 3D
+    // vide + boutons de vue + navigation d'étape) plutôt que de laisser un
+    // grand rectangle vide occuper de la place et forcer un défilement pour
+    // rien — elle réapparaît dès qu'un rangement existe.
+    viewerPanel.style.display = "none";
     nav.style.display = "none";
     return;
   }
+  viewerPanel.style.display = "";
   nav.style.display = "flex";
 
   const { holds, routeResult, result, stepIndex } = cargoPackState;
