@@ -1,5 +1,7 @@
 # Cargo packing rewrite — design
 
+**Status: implemented.** See commits `ed53cc7` (baseline non-regression suite) through the Task 7 wrap-up commit on branch `worktree-cargo-packing-rewrite` for the full sequence (Tasks 2–7). Final measured results: Hull B (16 modules, 10 real contracts) 0 conflicts; Raft (1 module, 10 real contracts) 4 conflicts (down from a pre-rewrite best of 9) — see Section 6 for the full before/after breakdown.
+
 ## Context
 
 `js/cargo-packing.js` decides where each mission's cargo goes inside the selected ship's real cargo holds (dimensions from FleetYards.net), so the player never loses track of what's stored where during a route, and — the actual hard requirement — never has to move a crate to reach another one when that's avoidable.
@@ -51,6 +53,12 @@ Before considering this done, re-run the real data already gathered this session
 - Raft (10 real contracts, 1 module): must at least match 9 conflicts; expected to improve now that height is available for cross-mission stacking and the stacking rule is corrected.
 - The 60-mission adversarial stress test (all missions' pickup/dropoff intervals crossing) and the existing realistic-scenario tests: no regression.
 - Every improvement claim must be backed by an actual before/after run of these scenarios, not assumed from the design alone.
+
+**Final measured results (Task 7, `node scripts/cargo-packing-tests.cjs`, 22/22 passing):**
+- Hull B: **0 conflicts** — unchanged; already 0 before this rewrite too (Hull B has enough modules that the pre-existing bugs never bit it).
+- Raft: **4 conflicts** — down from a pre-rewrite baseline of 9. Both numbers are enforced as assertions in `scripts/cargo-packing-tests.cjs` (not just narrative claims); see that file's own comments for the intermediate measurements taken after each task in the rewrite.
+- **`worstConflictDropoff` polarity fix (Task 6bis):** during verification, a second real bug was found beyond the rewrite's original scope — `worstConflictDropoff`'s comparison of blocker-vs-candidate dropoff order was inverted, so a position that was actually risky could score `Infinity` (falsely "safe") and be preferred over a genuinely safe one. This wasn't part of the design gap this rewrite originally targeted (Sections 1–4 above), but it directly serves Section 5's requirement to "never accept an avoidable conflict" — the ship-wide last-resort search is only as good as its severity scoring, and an inverted polarity there could silently accept an avoidable conflict while reporting the wrong crate as the blocker. Fixing it took Raft from 9 to 4 conflicts with no further architecture change.
+- Browser-level verification (the 60-mission adversarial stress test and small realistic scenarios, both originally run ad hoc in a browser via Puppeteer during this session) could not be re-run for Task 7's final wrap-up: no Puppeteer-capable browser launch succeeded in that verification environment (see the Task 7 report for what was attempted). Only the Node-based `scripts/cargo-packing-tests.cjs` suite is re-verified as of the final commit; the browser-level scenarios remain the one outstanding verification gap.
 
 ## 7. Scope
 

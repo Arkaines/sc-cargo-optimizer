@@ -250,6 +250,68 @@ test("placement: a mission with two zones in the same module never mixes their w
   assert.strictEqual(r.conflicts.length, 0, "both of B's lots fit safely within A's window; mixing zone axes must not cause a spurious conflict or an invalid placement");
 });
 
+// --- Fast-follow (Task 7) : une mission qui obtient VRAIMENT 2 zones dans le
+// MÊME module ------------------------------------------------------------
+//
+// Signalé par la revue de la Task 5 comme un trou non bloquant : le test
+// précédent ("placement: a mission with two zones...") ne donne pas, pour sa
+// fixture précise, deux zones à UNE MÊME mission dans un module (vérifié à
+// l'époque en sondant assignMissionZones directement — voir le rapport de la
+// Task 5). Construit ici une fixture qui force réellement ce cas, sur le
+// modèle suggéré par le plan : un module unique de largeur 4 crans (profondeur
+// 10, hauteur 2, donc laneCapacity = 10*2 = 20 par cran de largeur).
+//   - Host (mission 1, 48 SCU) est traité en premier (plus gros total SCU) :
+//     ceil(48/20) = 3, donc sa voie tier-1 prend 3 des 4 crans de largeur
+//     (côté "lo"), n'en laissant qu'UN SEUL libre pour la suite.
+//   - Big (mission 2, 25 SCU) prend ce dernier cran de largeur comme voie
+//     tier-1 (forcément limitée à 1 cran, donc trop petite pour ses 25 SCU
+//     face à une capacité de 20 par cran) : plus AUCUNE voie libre nulle part
+//     sur le vaisseau ensuite, donc Big retombe en tier-2 sur le seul hôte
+//     dont la fenêtre [0,20] contient bien la sienne [5,15] — Host — qui se
+//     trouve être dans CE MÊME module (le seul du test). Big termine donc
+//     avec 2 zones, toutes deux dans ce module, aux plages de largeur
+//     distinctes et non chevauchantes ([3,4) puis [0,3), copiée de Host).
+//
+// Vérifié directement via assignMissionZones AVANT l'assertion de niveau
+// placement (même style que les Tasks 3/4/6bis) : on reproduit ici EXACTEMENT
+// la construction interne de simulateRoutePacking (modules + décomposition en
+// caisses via decomposeIntoBoxes) pour ne pas juste espérer que la fixture
+// produise ce cas.
+test("zone assignment: a mission whose tier-1 lane is too small for its need gets a genuine second, tier-2 zone in the SAME module", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "test", dimensions: { x: 5, y: 12.5, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  const missionHost = { id: 1, name: "Host" };
+  const missionBig = { id: 2, name: "Big" };
+  const entries = [
+    { quantity: 48, commodity: "Host", mission: missionHost, pickupStop: 0, dropoffStop: 20 },
+    { quantity: 25, commodity: "Big", mission: missionBig, pickupStop: 5, dropoffStop: 15 },
+  ];
+
+  // Vérification directe du préalable.
+  const cellDims = ctx.cellsFromDimensions(holds[0].dimensions);
+  const depthAxis = ctx.depthAxisIndex(cellDims);
+  const modules = [{ hold: holds[0], cellDims, depthAxis }];
+  const boxes = [];
+  entries.forEach((entry) => {
+    ctx.decomposeIntoBoxes(entry.quantity, holds[0].maxContainerSize).forEach((box) => {
+      boxes.push({ box, entry, pickupStop: entry.pickupStop, dropoffStop: entry.dropoffStop });
+    });
+  });
+  const zonesByMission = ctx.assignMissionZones(boxes, modules);
+  const bigZones = zonesByMission.get(2) || [];
+  assert.strictEqual(bigZones.length, 2, "Big must genuinely get 2 zones for this fixture, not just 1");
+  assert.ok(bigZones.every((z) => z.module === modules[0]), "both of Big's zones must be in the SAME module");
+  const overlap = bigZones[0].widthStart < bigZones[1].widthEnd && bigZones[1].widthStart < bigZones[0].widthEnd;
+  assert.strictEqual(overlap, false, "Big's two zones must not share a width range");
+
+  // Assertion de niveau placement, comme le test Task 5 : le rangement réel
+  // doit rester correct (aucun conflit, aucune caisse non placée) avec cette
+  // configuration qui a VRAIMENT 2 zones pour Big dans le même module.
+  const r = ctx.simulateRoutePacking(entries, holds, 21);
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.conflicts.length, 0, "Big's two same-module zones must not mix width/height ranges or cause a spurious conflict");
+});
+
 // --- Empilement : sécurité temporelle (le support ne doit pas partir avant) -
 //
 // Tests directs sur hasValidSupport(grid, pos, size, boxScu, dropoffStop).
