@@ -369,6 +369,8 @@ function setCargoViewerView(view) {
   else if (view === "rear") camera.position.set(midX, midY, midZ - distance);
   else if (view === "left") camera.position.set(midX + distance, midY, midZ);
   else if (view === "right") camera.position.set(midX - distance, midY, midZ);
+  else if (view === "top") camera.position.set(midX, midY + distance, midZ);
+  else if (view === "bottom") camera.position.set(midX, midY - distance, midZ);
   controls.update();
 }
 window.setCargoViewerView = setCargoViewerView;
