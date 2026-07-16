@@ -36,7 +36,8 @@ const TRANSLATIONS = {
     accessFaceBottom: "Dessous",
     accessFacesHint: "Coche les côtés par lesquels tu peux réellement récupérer les caisses sur ce vaisseau — au moins un doit rester coché. Ça permet à l'optimisation de ne pas signaler de faux conflits quand une caisse reste atteignable par un autre côté.",
 
-    syncAllBtn: "Tout synchroniser (UEX Corp et Star Citizen API)",
+    syncAllBtn: "Forcer une resynchronisation",
+    syncAutoHint: "Les données (UEX Corp, Star Citizen Wiki, FleetYards) se rafraîchissent automatiquement en arrière-plan au moins une fois par jour — ce bouton force juste un rafraîchissement immédiat.",
     syncingLocations: "Synchronisation des lieux...",
     syncingCommodities: "Synchronisation des marchandises...",
     syncingCompanies: "Synchronisation des entreprises...",
@@ -278,7 +279,8 @@ const TRANSLATIONS = {
     accessFaceBottom: "Bottom",
     accessFacesHint: "Check the sides you can actually reach cargo crates from on this ship — at least one must stay checked. This lets the optimizer avoid flagging false conflicts when a crate is still reachable from another side.",
 
-    syncAllBtn: "Sync everything (UEX Corp and Star Citizen API)",
+    syncAllBtn: "Force a resync now",
+    syncAutoHint: "Data (UEX Corp, Star Citizen Wiki, FleetYards) refreshes automatically in the background at least once a day — this button just forces an immediate refresh.",
     syncingLocations: "Syncing locations...",
     syncingCommodities: "Syncing commodities...",
     syncingCompanies: "Syncing companies...",

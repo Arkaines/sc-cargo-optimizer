@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="css/style.css?v=20260716-r26" />
+<link rel="stylesheet" href="css/style.css?v=20260716-r27" />
 <script>
   (function () {
     var saved = localStorage.getItem("sc-cargo-optimizer-theme");
@@ -30,9 +30,10 @@
       <p data-i18n="appSubtitle"></p>
       <p class="hint">
         <span data-i18n="poweredByPrefix"></span>
-        <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>
+        <a href="https://uexcorp.space/api/documentation/" target="_blank" rel="noopener">UEX Corp</a>,
+        <a href="https://api.star-citizen.wiki" target="_blank" rel="noopener">Star Citizen Wiki API</a>
         <span data-i18n="poweredByAnd"></span>
-        <a href="https://api.star-citizen.wiki" target="_blank" rel="noopener">Star Citizen Wiki API</a>.
+        <a href="https://fleetyards.net" target="_blank" rel="noopener">FleetYards</a>.
       </p>
     </div>
     <img src="assets/made-by-the-community.png" alt="Made by the community" class="brand-logo made-by-community-logo" />
@@ -67,8 +68,9 @@
   </div>
 
   <div class="side-block">
-    <button type="button" id="uex-sync-all-btn" class="btn-primary" style="width:100%;" data-i18n="syncAllBtn"></button>
+    <button type="button" id="uex-sync-all-btn" class="btn-secondary" style="width:100%;" data-i18n="syncAllBtn"></button>
     <p id="uex-status" class="hint" style="margin-top:0.5rem;"></p>
+    <p class="hint" data-i18n="syncAutoHint" style="margin-top:0.35rem;"></p>
   </div>
 
   <div class="side-block">
@@ -297,27 +299,27 @@
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/i18n.js?v=20260716-r26"></script>
-<script src="data/locations.js?v=20260716-r26"></script>
-<script src="data/location-aliases.js?v=20260716-r26"></script>
-<script src="data/commodity-aliases.js?v=20260716-r26"></script>
-<script src="data/commodities.js?v=20260716-r26"></script>
-<script src="data/companies.js?v=20260716-r26"></script>
-<script src="data/ships.js?v=20260716-r26"></script>
-<script src="data/distances.js?v=20260716-r26"></script>
-<script src="data/scwiki-locations.js?v=20260716-r26"></script>
-<script src="data/location-planets.js?v=20260716-r26"></script>
-<script src="data/mission-reputation.js?v=20260716-r26"></script>
-<script src="data/mission-reputation-by-title.js?v=20260716-r26"></script>
-<script src="data/mission-title-aliases.js?v=20260716-r26"></script>
-<script src="data/faction-reputation-ladders.js?v=20260716-r26"></script>
-<script src="js/uex.js?v=20260716-r26"></script>
-<script src="js/scwiki.js?v=20260716-r26"></script>
-<script src="js/fleetyards.js?v=20260716-r26"></script>
-<script src="js/cargo-packing.js?v=20260716-r26"></script>
-<script src="js/ocr.js?v=20260716-r26"></script>
-<script src="js/cloud.js?v=20260716-r26"></script>
-<script src="js/app.js?v=20260716-r26"></script>
+<script src="js/i18n.js?v=20260716-r27"></script>
+<script src="data/locations.js?v=20260716-r27"></script>
+<script src="data/location-aliases.js?v=20260716-r27"></script>
+<script src="data/commodity-aliases.js?v=20260716-r27"></script>
+<script src="data/commodities.js?v=20260716-r27"></script>
+<script src="data/companies.js?v=20260716-r27"></script>
+<script src="data/ships.js?v=20260716-r27"></script>
+<script src="data/distances.js?v=20260716-r27"></script>
+<script src="data/scwiki-locations.js?v=20260716-r27"></script>
+<script src="data/location-planets.js?v=20260716-r27"></script>
+<script src="data/mission-reputation.js?v=20260716-r27"></script>
+<script src="data/mission-reputation-by-title.js?v=20260716-r27"></script>
+<script src="data/mission-title-aliases.js?v=20260716-r27"></script>
+<script src="data/faction-reputation-ladders.js?v=20260716-r27"></script>
+<script src="js/uex.js?v=20260716-r27"></script>
+<script src="js/scwiki.js?v=20260716-r27"></script>
+<script src="js/fleetyards.js?v=20260716-r27"></script>
+<script src="js/cargo-packing.js?v=20260716-r27"></script>
+<script src="js/ocr.js?v=20260716-r27"></script>
+<script src="js/cloud.js?v=20260716-r27"></script>
+<script src="js/app.js?v=20260716-r27"></script>
 <script type="importmap">
 {
   "imports": {
@@ -326,7 +328,7 @@
   }
 }
 </script>
-<script type="module" src="js/cargo-viewer.js?v=20260716-r26"></script>
+<script type="module" src="js/cargo-viewer.js?v=20260716-r27"></script>
 <footer class="site-footer">
   <a href="terms.html">Conditions d'utilisation</a>
   <span aria-hidden="true">·</span>

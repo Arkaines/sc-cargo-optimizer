@@ -3266,55 +3266,83 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document.getElementById("uex-sync-all-btn").addEventListener("click", async (e) => {
-    const btn = e.target;
-    const status = document.getElementById("uex-status");
-    btn.disabled = true;
-    try {
-      btn.textContent = t("syncingLocations");
-      await syncUexLocations();
-      renderAll();
-
-      btn.textContent = t("syncingCommodities");
-      await syncUexCommodities();
-
-      btn.textContent = t("syncingCompanies");
-      await syncUexCompanies();
-
-      btn.textContent = t("syncingShips");
-      await syncUexShips();
-      renderAll();
-
-      btn.textContent = t("syncingDistances");
-      const fetched = await syncMissingDistances((done, total) => {
-        btn.textContent = t("syncingDistancesProgress", { done, total });
-      });
-      renderDistanceEditor();
-
-      btn.textContent = t("syncingScwiki");
-      await syncScwikiLocations();
-      backfillCustomLocationPlanetHints();
-      saveState();
-      renderDistanceEditor();
-
-      btn.textContent = t("syncingFleetyards");
-      await syncFleetyardsCargoHolds();
-      renderShipCapacity();
-
-      status.textContent = t("syncSummary", {
-        locs: state.uexLocations.length,
-        commodities: state.uexCommodities.length,
-        companies: state.uexCompanies.length,
-        ships: state.uexShips.length,
-        fetched,
-        scwiki: state.scwikiLocations.length,
-      });
-    } catch (err) {
-      alert(t("syncFailed", { msg: err.message }));
-    }
-    btn.disabled = false;
-    btn.textContent = t("syncAllBtn");
-  });
+  document.getElementById("uex-sync-all-btn").addEventListener("click", () => runFullSync({ manual: true }));
 
   if (typeof initCloudSync === "function") initCloudSync();
+
+  // La base doit rester à jour toute seule : si les données n'ont jamais été
+  // synchronisées, ou datent de plus de 24h, on relance la synchronisation
+  // en arrière-plan au chargement — le joueur n'a plus besoin de penser à
+  // cliquer sur "Tout synchroniser" pour que les prix/lieux/vaisseaux restent
+  // à jour. Le bouton reste disponible pour forcer un rafraîchissement
+  // immédiat (ex. juste après un patch en jeu), mais n'est plus obligatoire.
+  const AUTO_SYNC_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  if (!state.uexSyncedAt || Date.now() - state.uexSyncedAt > AUTO_SYNC_MAX_AGE_MS) {
+    runFullSync({ manual: false });
+  }
 });
+
+// Lance la synchronisation complète (UEX Corp, distances manquantes, Star
+// Citizen Wiki, FleetYards) — partagée entre le clic manuel sur le bouton
+// et le déclenchement automatique en arrière-plan au chargement (voir plus
+// haut). manual=true anime le bouton lui-même (texte d'étape, désactivé
+// pendant l'opération) ; manual=false (déclenchement auto) laisse le
+// bouton intact et ne montre l'avancement que dans la ligne de statut, pour
+// ne pas donner l'impression qu'une action de l'utilisateur est en cours.
+async function runFullSync({ manual }) {
+  const btn = document.getElementById("uex-sync-all-btn");
+  const status = document.getElementById("uex-status");
+  const setProgress = (key, params) => {
+    const text = t(key, params);
+    if (manual) btn.textContent = text;
+    else status.textContent = text;
+  };
+  if (manual) btn.disabled = true;
+  try {
+    setProgress("syncingLocations");
+    await syncUexLocations();
+    renderAll();
+
+    setProgress("syncingCommodities");
+    await syncUexCommodities();
+
+    setProgress("syncingCompanies");
+    await syncUexCompanies();
+
+    setProgress("syncingShips");
+    await syncUexShips();
+    renderAll();
+
+    setProgress("syncingDistances");
+    const fetched = await syncMissingDistances((done, total) => {
+      setProgress("syncingDistancesProgress", { done, total });
+    });
+    renderDistanceEditor();
+
+    setProgress("syncingScwiki");
+    await syncScwikiLocations();
+    backfillCustomLocationPlanetHints();
+    saveState();
+    renderDistanceEditor();
+
+    setProgress("syncingFleetyards");
+    await syncFleetyardsCargoHolds();
+    renderShipCapacity();
+
+    status.textContent = t("syncSummary", {
+      locs: state.uexLocations.length,
+      commodities: state.uexCommodities.length,
+      companies: state.uexCompanies.length,
+      ships: state.uexShips.length,
+      fetched,
+      scwiki: state.scwikiLocations.length,
+    });
+  } catch (err) {
+    if (manual) alert(t("syncFailed", { msg: err.message }));
+    else status.textContent = t("syncFailed", { msg: err.message });
+  }
+  if (manual) {
+    btn.disabled = false;
+    btn.textContent = t("syncAllBtn");
+  }
+}
