@@ -305,13 +305,25 @@ function isBlockedFromEveryAccessibleFace(faceAxesList, blockerPos, blockerSize,
 // ce qui pouvait faire scorer Infinity (sûr) une position réellement en
 // conflit, et inversement — trouvé et confirmé lors de la Task 6 par
 // exécution directe, pas seulement par lecture de code.
-function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
+//
+// faceAxesList est la liste des faces accessibles CONFIGURÉES POUR CE MODULE
+// (voir accessibleFaceAxes) — une caisse n'est un risque que si BLOQUÉE PAR
+// TOUTES les faces de cette liste (voir isBlockedFromEveryAccessibleFace) ;
+// avec une seule face (le cas par défaut), ce comportement est strictement
+// identique à l'ancien calcul à un seul axe.
+function worstConflictDropoff(faceAxesList, activeBoxes, pos, size, dropoffStop) {
   let worst = Infinity;
   for (const other of activeBoxes) {
-    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop > dropoffStop) {
+    if (
+      isBlockedFromEveryAccessibleFace(faceAxesList, other.position, other.size, pos, size) &&
+      other.dropoffStop > dropoffStop
+    ) {
       worst = Math.min(worst, dropoffStop);
     }
-    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop > other.dropoffStop) {
+    if (
+      isBlockedFromEveryAccessibleFace(faceAxesList, pos, size, other.position, other.size) &&
+      dropoffStop > other.dropoffStop
+    ) {
       worst = Math.min(worst, other.dropoffStop);
     }
   }
@@ -418,7 +430,11 @@ function isBetterPosition(a, b) {
 // réel de sortie — observé : une caisse bloquant une autre caisse de SA
 // PROPRE mission (Hydrogen bloqué par Hydrogen de la même mission M4) alors
 // que rien d'un autre contrat n'était en cause.
-function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, idealDepth, restriction, missionId) {
+function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBoxes, layerUsage, idealDepth, restriction, missionId, faceAxes) {
+  // Repli sur l'ancien modèle à un seul axe si l'appelant ne précise rien
+  // (compatibilité stricte — aucun appel existant ne doit changer de
+  // comportement sans fournir explicitement faceAxes).
+  const effectiveFaceAxes = faceAxes || [{ axis: depthAxis, direction: "near" }];
   const orientations = boxOrientations(box);
   const planeAxes = [0, 1, 2].filter((i) => i !== depthAxis);
   const zIsPlaneAxis = planeAxes.includes(2);
@@ -450,7 +466,7 @@ function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBox
           const candidate = {
             position: pos.slice(),
             size,
-            severity: worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop),
+            severity: worstConflictDropoff(effectiveFaceAxes, activeBoxes, pos, size, dropoffStop),
             depthDistance: idealDepth != null ? Math.abs(d - idealDepth) : 0,
             isFloor: pos[2] === 0,
             missionTouches: missionId != null ? countNeighborTouches(grid, cellDims, pos, size, missionId) : 0,
@@ -701,7 +717,7 @@ function placeInBestModule(candidateModules, box, dropoffStop, idealDepthForModu
   for (const m of candidateModules) {
     const restriction = restrictionForModule ? restrictionForModule(m) : null;
     const idealDepth = idealDepthForModule ? idealDepthForModule(m) : null;
-    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, idealDepth, restriction, missionId);
+    const result = findBestPosition(m.grid, m.cellDims, box, m.depthAxis, dropoffStop, m.activeBoxes, m.layerUsage, idealDepth, restriction, missionId, m.faceAxes);
     if (!result) continue;
     if (result.severity === Infinity) {
       markPlaced(m.grid, result.position, result.size, { dropoffStop, scu: box.scu, missionId });
@@ -728,14 +744,18 @@ function placeInBestModule(candidateModules, box, dropoffStop, idealDepthForModu
 // entre elle et l'accès du module — il faudra alors la déplacer
 // temporairement pour l'atteindre.
 // =========================================================================
-function simulateRoutePacking(cargoEntries, holds, stepCount) {
+function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces) {
   const modules = holds.map((h) => {
     const cellDims = cellsFromDimensions(h.dimensions);
-    return {
+    const depthAxis = depthAxisIndex(cellDims);
+    const { widthAxis, heightAxis } = moduleAxes(cellDims, depthAxis);
+    const module = {
       hold: h,
       cellDims,
       grid: createOccupancyGrid(cellDims),
-      depthAxis: depthAxisIndex(cellDims),
+      depthAxis,
+      widthAxis,
+      heightAxis,
       usedCells: 0,
       // Caisses actuellement à bord dans ce module précis ({ position, size,
       // dropoffStop }) : sert à juger si une nouvelle position est sûre
@@ -746,6 +766,12 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
       // fonction de score (voir findBestPosition).
       layerUsage: new Map(),
     };
+    // Faces accessibles configurées par le joueur pour ce vaisseau (ou
+    // DEFAULT_ACCESS_FACES si rien n'est configuré), traduites une seule fois
+    // vers les axes réels de CE module (voir accessibleFaceAxes) — réutilisé
+    // pour toutes les caisses de ce module.
+    module.faceAxes = accessibleFaceAxes(accessFaces, module);
+    return module;
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);
 
@@ -829,7 +855,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
             other.active &&
             other.dropoffStop !== step &&
             other.placement.module === m &&
-            isBlocking(m.depthAxis, other.placement.position, other.placement.size, b.placement.position, b.placement.size)
+            isBlockedFromEveryAccessibleFace(m.faceAxes, other.placement.position, other.placement.size, b.placement.position, b.placement.size)
         );
         if (blockers.length) {
           conflicts.push({ box: b.box, entry: b.entry, blockedBy: blockers.map((x) => x.entry), atStep: step });
@@ -955,7 +981,8 @@ function simulateRoutePacking(cargoEntries, holds, stepCount) {
               m.layerUsage,
               idealDepthForZone(z),
               restriction,
-              missionId
+              missionId,
+              m.faceAxes
             );
             restore();
             if (candidate && (!best || isBetterPosition(candidate, best.candidate))) {

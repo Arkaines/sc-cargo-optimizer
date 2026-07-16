@@ -477,13 +477,77 @@ test("isBlockedFromEveryAccessibleFace: blocked on every configured face IS bloc
   assert.strictEqual(ctx.isBlockedFromEveryAccessibleFace(faceAxesAll, blockerPos, blockerSize, targetPos, targetSize), true);
 });
 
+// --- Faces d'accès : effet de bord réel sur simulateRoutePacking ---------
+test("simulateRoutePacking: a second accessible face avoids a conflict the default single face would produce", () => {
+  const ctx = loadCargoPacking();
+  // Repris tel quel de la fixture "single footprint slot, crossing
+  // intervals -> 1 conflict" plus haut dans ce fichier : un seul cran de
+  // large (x) ET un seul cran de haut (z), seule la profondeur (y, 2 crans)
+  // offre de la place — une vraie file d'attente en ligne. A est récupéré et
+  // posé EN PREMIER (pickupStop=0), B arrive ENSUITE alors que A occupe déjà
+  // la place (pickupStop=1) : un conflit RÉEL et incontournable se produit
+  // avec une seule face accessible (voir preuve ci-dessous : les deux caisses
+  // partagent forcément la MÊME colonne x ET la MÊME couche z, il n'y a tout
+  // simplement nulle part ailleurs où aller sur ces deux axes).
+  //
+  // Comme les deux caisses sont forcément à la MÊME hauteur z (un seul cran
+  // disponible), le test de blocage sur l'axe vertical (isBlockingOnAxis avec
+  // axis=hauteur) échoue toujours trivialement (position identique sur cet
+  // axe, jamais "strictement plus proche") — donc ajouter la face "dessous"
+  // comme accessible EN PLUS de "arrière" fait passer isBlockedFromEvery
+  // AccessibleFace à false (il suffit d'une seule face dégagée), et le
+  // conflit RÉEL disparaît complètement. Vérifié par exécution directe (pas
+  // seulement lu dans le code) : voir task-2-report.md pour les nombres
+  // observés.
+  const holds = [{ name: "test", dimensions: { x: 1.25, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [
+    { quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 2 },
+    { quantity: 1, commodity: "B", pickupStop: 1, dropoffStop: 3 },
+  ];
+  const stepCount = 4;
+
+  // Comportement par défaut (une seule face, "arrière" = profondeur near) :
+  // reproductible tel quel, sert de témoin — on ne fait PAS d'assertion
+  // stricte dessus ici (ce n'est pas le but du test), seulement sur l'écart
+  // entre les deux runs.
+  const defaultRun = ctx.simulateRoutePacking(entries, holds, stepCount);
+
+  // Avec la face "dessous" (axe vertical, near) AUSSI accessible en plus de
+  // "arrière" : plus d'options de placement pour éviter un blocage.
+  const withBottomRun = ctx.simulateRoutePacking(entries, holds, stepCount, { back: true, bottom: true });
+
+  assert.strictEqual(withBottomRun.unplaced.length, 0);
+  assert.ok(
+    withBottomRun.conflicts.length <= defaultRun.conflicts.length,
+    `expected configuring a second accessible face to never produce MORE conflicts than the default (default: ${defaultRun.conflicts.length}, with bottom: ${withBottomRun.conflicts.length})`
+  );
+});
+
+test("simulateRoutePacking: omitting accessFaces behaves identically to the pre-existing 3-argument call", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "test", dimensions: { x: 1.25, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [
+    { quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 3 },
+    { quantity: 1, commodity: "B", pickupStop: 1, dropoffStop: 2 },
+  ];
+  const withoutArg = ctx.simulateRoutePacking(entries, holds, 4);
+  const withDefaultArg = ctx.simulateRoutePacking(entries, holds, 4, undefined);
+  assert.deepStrictEqual(withoutArg.conflicts, withDefaultArg.conflicts);
+  assert.deepStrictEqual(withoutArg.unplaced, withDefaultArg.unplaced);
+  assert.strictEqual(withoutArg.placements.length, withDefaultArg.placements.length);
+});
+
 // --- worstConflictDropoff : polarité correcte (corrigée après Task 6) ----
 test("worstConflictDropoff: a blocker that leaves LATER than the candidate is a real risk", () => {
   const ctx = loadCargoPacking();
   const activeBoxes = [{ position: [0, 0, 0], size: [1, 1, 1], dropoffStop: 20 }];
   // Notre caisse candidate est bloquée par `other` (plus proche de l'accès,
   // recoupement d'emprise) qui part APRÈS elle (20 > 5) : conflit réel.
-  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 1, 0], [1, 1, 1], 5);
+  // faceAxesList à une seule entrée (axe 1, direction "near") : équivalent
+  // strict à l'ancien appel `worstConflictDropoff(1, ...)` (voir le
+  // changement de signature de Task 2 — la fonction prend maintenant une
+  // liste de faces, pas un axe brut).
+  const severity = ctx.worstConflictDropoff([{ axis: 1, direction: "near" }], activeBoxes, [0, 1, 0], [1, 1, 1], 5);
   assert.notStrictEqual(severity, Infinity, "a blocker leaving later than our candidate must be scored as risky, not safe");
 });
 
@@ -492,7 +556,7 @@ test("worstConflictDropoff: a blocker that already left BEFORE the candidate's d
   const activeBoxes = [{ position: [0, 0, 0], size: [1, 1, 1], dropoffStop: 3 }];
   // `other` part AVANT notre candidate (3 < 20) : il sera déjà parti, donc
   // aucun conflit réel au moment où notre candidate devra elle-même partir.
-  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 1, 0], [1, 1, 1], 20);
+  const severity = ctx.worstConflictDropoff([{ axis: 1, direction: "near" }], activeBoxes, [0, 1, 0], [1, 1, 1], 20);
   assert.strictEqual(severity, Infinity, "a blocker that already departed before our candidate's own dropoff must be scored as safe");
 });
 
@@ -502,7 +566,7 @@ test("worstConflictDropoff: our candidate blocking an other that leaves earlier 
   // candidate plus proche de l'accès) ; other part avant nous (5 < 20) :
   // conflit réel (other ne pourra pas sortir à temps).
   const activeBoxes = [{ position: [0, 1, 0], size: [1, 1, 1], dropoffStop: 5 }];
-  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 0, 0], [1, 1, 1], 20);
+  const severity = ctx.worstConflictDropoff([{ axis: 1, direction: "near" }], activeBoxes, [0, 0, 0], [1, 1, 1], 20);
   assert.notStrictEqual(severity, Infinity, "blocking an other that leaves earlier than us must be scored as risky, not safe");
 });
 
