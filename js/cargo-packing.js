@@ -108,31 +108,39 @@ function canPlace(grid, cellDims, pos, size) {
 }
 
 // Règle d'empilement : une caisse ne peut reposer sur une autre que si sa
-// taille est STRICTEMENT plus petite que celle de la caisse du dessous (ex.
-// une caisse de 4 SCU crée une surface sur laquelle seules des caisses de 1
-// ou 2 SCU peuvent être empilées, jamais 4 SCU ou plus) — spécifique au jeu,
-// pas une simple histoire de tenir géométriquement dans l'empreinte.
+// taille est INFÉRIEURE OU ÉGALE à celle de la caisse du dessous (ex. deux
+// caisses de 4 SCU peuvent se poser l'une sur l'autre ; une caisse de 4 SCU
+// ne peut PAS se poser sur une caisse de 1 SCU) — spécifique au jeu, pas une
+// simple histoire de tenir géométriquement dans l'empreinte. Confirmé par
+// l'utilisateur : la règle avait été implémentée à l'envers ("strictement
+// plus petite uniquement"), ce qui interdisait à tort deux caisses de même
+// taille de s'empiler.
 function canStackOn(newScu, baseScu) {
-  return newScu < baseScu;
+  return newScu <= baseScu;
 }
 
 // Une caisse ne peut jamais flotter : elle doit reposer au sol (z=0) ou avoir
 // toute son empreinte directement soutenue par d'autres caisses juste en
-// dessous (contact complet, pas de trou, ET chacune de taille strictement
-// supérieure — voir canStackOn) — sans cette vérification, une caisse de 4
-// SCU pourrait par exemple se retrouver posée pour moitié sur une caisse de
-// 2 SCU et pour moitié dans le vide, ou empilée sur une caisse trop petite
-// pour la porter, ce que le jeu ne permet pas. z (index 2) est toujours
-// l'axe vertical réel (voir cellsFromDimensions), indépendamment de l'axe
-// d'accès choisi pour ce module (depthAxis).
-function hasValidSupport(grid, pos, size, boxScu) {
+// dessous (contact complet, pas de trou, taille autorisée par canStackOn, ET
+// dont la date de livraison est ÉGALE OU POSTÉRIEURE à celle de la caisse du
+// dessus) — sans cette dernière vérification, une caisse pourrait reposer
+// sur une caisse qui repart plus tôt et se retrouver en l'air en cours de
+// route sans qu'aucun conflit ne soit jamais détecté. z (index 2) est
+// toujours l'axe vertical réel (voir cellsFromDimensions), indépendamment de
+// l'axe d'accès choisi pour ce module (depthAxis). C'est cette règle,
+// appliquée partout où une caisse peut en supporter une autre (pas seulement
+// au sein d'un même contrat), qui rend l'empilement croisé entre contrats
+// sûr (voir assignMissionZones).
+function hasValidSupport(grid, pos, size, boxScu, dropoffStop) {
   const [px, py, pz] = pos;
   const [sx, sy] = size;
   if (pz === 0) return true;
   for (let x = px; x < px + sx; x++) {
     for (let y = py; y < py + sy; y++) {
       const below = grid[x][y][pz - 1];
-      if (!below || !canStackOn(boxScu, below.scu)) return false;
+      if (!below) return false;
+      if (!canStackOn(boxScu, below.scu)) return false;
+      if (below.dropoffStop < dropoffStop) return false;
     }
   }
   return true;
@@ -360,7 +368,7 @@ function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBox
         pos[innerPlaneAxis] = i;
         for (const size of orientations) {
           if (!canPlace(grid, cellDims, pos, size)) continue;
-          if (!hasValidSupport(grid, pos, size, box.scu)) continue;
+          if (!hasValidSupport(grid, pos, size, box.scu, dropoffStop)) continue;
 
           const candidate = {
             position: pos.slice(),
@@ -399,7 +407,7 @@ function tryStackOnExisting(existingBoxes, box, dropoffStop, missionId) {
     const pos = [basePos[0], basePos[1], basePos[2] + baseSize[2]];
     for (const size of boxOrientations(box)) {
       if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
-      if (canPlace(m.grid, m.cellDims, pos, size) && hasValidSupport(m.grid, pos, size, box.scu)) {
+      if (canPlace(m.grid, m.cellDims, pos, size) && hasValidSupport(m.grid, pos, size, box.scu, dropoffStop)) {
         markPlaced(m.grid, pos, size, { dropoffStop, scu: box.scu, missionId });
         if (m.layerUsage) bumpLayerUsage(m.layerUsage, m.depthAxis, pos, size, 1);
         return { module: m, position: pos, size };
