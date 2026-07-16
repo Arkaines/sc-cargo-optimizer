@@ -1,5 +1,7 @@
 # Faces d'accès du cargo par vaisseau — conception
 
+**Statut : implémenté.** Voir les commits `d406938..0a664ba` (tâches 1 à 4 : primitives de blocage généralisées, câblage dans `simulateRoutePacking`/`findBestPosition`/`worstConflictDropoff`, cases à cocher `state.shipAccessFaces` dans l'UI, boutons de vue caméra dessus/dessous) plus le commit de cette tâche 5 (bump du cache-busting et enregistrement des chiffres de vérification finale, voir Section 4).
+
 ## Contexte
 
 `js/cargo-packing.js` décide non seulement où ranger chaque caisse, mais aussi si elle bloque ou est bloquée par une autre — via `isBlocking`, qui suppose un seul point d'accès par module de cargaison : la coordonnée la plus proche de 0 sur l'axe le plus long du module (`depthAxisIndex`). Cette hypothèse est fausse pour au moins un vaisseau réel (le Raft, accessible à la fois par l'arrière et par le dessous), et l'utilisateur confirme que ce n'est pas un cas isolé — plusieurs vaisseaux ont plus d'un point d'accès physique réel.
@@ -57,6 +59,8 @@ C'est le changement d'algorithme, pas seulement d'interface. Aujourd'hui, `isBlo
 - Tests unitaires directs sur la nouvelle fonction de blocage généralisée : une seule face cochée doit reproduire exactement le comportement actuel de `isBlocking` (non-régression) ; plusieurs faces cochées où une seule est dégagée ne doit **pas** produire de conflit ; toutes les faces bloquées doit toujours en produire un.
 - Les fixtures réelles Hull B/Raft (`scripts/cargo-packing-tests.cjs`) tournent avec la configuration par défaut (`{ back: true }`, comportement inchangé) — donc les chiffres actuels (Hull B 0, Raft 4) restent la référence de non-régression tant que `accessFaces` n'est pas fourni.
 - Vérification réelle supplémentaire, une fois le code en place : configurer le Raft avec **arrière + dessous** (exactement la description de l'utilisateur) et re-mesurer sur les 10 vraies missions déjà utilisées comme fixture — démonstration concrète que la fonctionnalité change réellement le résultat, pas juste une case à cocher cosmétique.
+
+**Vérification (tâche 5, 2026-07-16).** Script ponctuel (non committé) rechargeant `raft-real.json` via le même loader que `scripts/cargo-packing-tests.cjs` et appelant `simulateRoutePacking(entries, holds, stepCount)` deux fois : une fois sans 4ᵉ argument (défaut, `{ back: true }` implicite), une fois avec `{ back: true, bottom: true }`. Résultat mesuré : **4 conflits par défaut → 0 conflit avec arrière + dessous**, `unplaced` à 0 dans les deux cas. C'est une amélioration réelle et complète sur cette fixture (pas un cas où les deux réglages tombent à égalité) : les 4 conflits mesurés par défaut sont, dans ce cas précis, résolubles en autorisant l'accès par le dessous du module (`hardpoint_cargo_grid`, `dimensions.z = 2.5` cases côté jeu) — cohérent avec la description réelle du Raft par l'utilisateur (accès arrière ET par le dessous) et avec l'hypothèse de la Section 3 : un bloqueur gênant sur la face arrière peut très bien laisser un chemin dégagé par le dessous une fois cette face prise en compte dans la détection de blocage.
 
 ## 5. Portée
 
