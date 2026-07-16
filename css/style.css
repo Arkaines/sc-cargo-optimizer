@@ -883,8 +883,14 @@ tbody tr:nth-child(even) {
   gap: 1rem;
 }
 
+/* Se limite à la largeur de son propre contenu (fieldset + bouton) plutôt
+   que d'occuper 60% de force : ça laisse toute la largeur restante au
+   navigateur d'étape, dont les lignes de chargement/déchargement sont
+   sensiblement plus longues et se retrouvaient coupées sur deux lignes
+   pour rien. */
 .cargo-pack-left {
-  flex: 1 1 60%;
+  flex: 0 1 auto;
+  max-width: 640px;
   min-width: 0;
 }
 
@@ -987,7 +993,7 @@ tbody tr:nth-child(even) {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
-  flex: 1 1 40%;
+  flex: 1 1 auto;
   min-width: 280px;
 }
 
