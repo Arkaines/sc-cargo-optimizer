@@ -6,7 +6,7 @@
   --panel: #1c4b82;
   --panel-border: #3568a8;
   --text: #dae1e7;
-  --muted: #93a9c4;
+  --muted: #adc0d7; /* contraste WCAG AA (4.5:1+) vérifié sur --bg ET --panel, pas seulement --bg */
   --accent: #dd6b4d;
   --accent-cyan: #4dbfdd;
   --accent-2: #7ee787;
@@ -25,7 +25,7 @@
   --panel: #f0f3f6;
   --panel-border: #b9c4d1;
   --text: #16294a;
-  --muted: #55647d;
+  --muted: #4d5c74; /* léger renfoncement pour une marge de sécurité au-dessus de 4.5:1, l'original était juste à la limite */
   --accent: #c85a3f;
   --accent-cyan: #0f6e8c;
   --accent-2: #187a41;
@@ -83,8 +83,8 @@ body {
 
 #theme-toggle,
 #lang-toggle {
-  height: 2.5rem;
-  min-width: 2.5rem;
+  height: 2.75rem; /* 44px min, cible tactile recommandée */
+  min-width: 2.75rem;
   border-radius: 8px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -541,6 +541,15 @@ button:hover {
   filter: brightness(1.08);
 }
 
+/* Anneau de focus clavier cohérent avec celui des champs (voir input:focus) —
+   :focus-visible seulement, pour ne pas afficher l'anneau sur un simple clic
+   souris. Manquait entièrement sur les boutons jusque-là. */
+button:focus-visible,
+.tab-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 40%, transparent);
+}
+
 button:active {
   transform: scale(0.96);
 }
@@ -790,8 +799,8 @@ tbody tr:nth-child(even) {
 
 .company-lock-btn {
   flex: none;
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem; /* 44px min, cible tactile recommandée */
+  height: 2.75rem;
   border-radius: 50%;
   border: none;
   font-size: 1.05rem;
@@ -884,7 +893,7 @@ tbody tr:nth-child(even) {
 
 .btn-step-nav {
   flex: 0 0 auto;
-  width: 2.4rem;
+  width: 2.75rem; /* 44px min, cible tactile recommandée */
   font-size: 1.2rem;
   line-height: 1;
 }
