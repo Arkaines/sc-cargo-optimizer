@@ -93,6 +93,36 @@ test("stacking rule: smaller crate on larger crate is allowed", () => {
   assert.strictEqual(ctx.canStackOn(1, 4), true);
 });
 
+// --- Zonage 3D : tier 1, voie indépendante en largeur ---------------------
+test("zone assignment: two missions on a wide module each get their own width-lane, full height", () => {
+  const ctx = loadCargoPacking();
+  const modules = [
+    {
+      hold: { maxContainerSize: 32 },
+      cellDims: [8, 12, 2], // largeur=8, profondeur=12, hauteur=2 (forme du Raft)
+      depthAxis: 1,
+    },
+  ];
+  const boxes = [
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 1 } }, pickupStop: 0, dropoffStop: 5 },
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 2 } }, pickupStop: 1, dropoffStop: 9 },
+  ];
+  const zones = ctx.assignMissionZones(boxes, modules);
+  const z1 = zones.get(1)[0];
+  const z2 = zones.get(2)[0];
+  assert.strictEqual(z1.heightStart, 0);
+  assert.strictEqual(z1.heightEnd, 2, "tier 1 zone reserves the full height for its own mission");
+  assert.strictEqual(z2.heightStart, 0);
+  assert.strictEqual(z2.heightEnd, 2);
+  // Les deux voies en largeur ne doivent jamais se recouvrir.
+  const overlap = z1.widthStart < z2.widthEnd && z2.widthStart < z1.widthEnd;
+  assert.strictEqual(overlap, false, "the two missions must not share a width range");
+  assert.strictEqual(z1.minPickupStop, 0);
+  assert.strictEqual(z1.maxDropoffStop, 5);
+  assert.strictEqual(z2.minPickupStop, 1);
+  assert.strictEqual(z2.maxDropoffStop, 9);
+});
+
 // --- Empilement : sécurité temporelle (le support ne doit pas partir avant) -
 //
 // Tests directs sur hasValidSupport(grid, pos, size, boxScu, dropoffStop).
