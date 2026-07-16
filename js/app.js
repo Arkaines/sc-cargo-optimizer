@@ -202,10 +202,6 @@ function hasCustomDistance(aId, bId) {
   return distanceKey(aId, bId) in state.distances;
 }
 
-function hasBakedDistance(aId, bId) {
-  return distanceKey(aId, bId) in DEFAULT_DISTANCE_MAP;
-}
-
 // Planète/lune d'un lieu : soit stockée directement dessus (lieu personnalisé
 // créé via le secours Star Citizen Wiki), soit issue du recoupement local
 // UEX <-> Star Citizen Wiki précalculé (voir data/location-planets.js) — utile
@@ -283,21 +279,6 @@ function getDistance(aId, bId) {
   }
 
   return DEFAULT_DISTANCE;
-}
-
-function getDistanceSource(aId, bId) {
-  if (aId === bId) return t("sourceIdentical");
-  if (hasCustomDistance(aId, bId)) return t("sourceManual");
-  if (hasBakedDistance(aId, bId)) return "UEX";
-  const planetA = getPlanetHint(getLocationById(aId));
-  const planetB = getPlanetHint(getLocationById(bId));
-  // N'affiche "estimée (planète)" que si l'estimation a réellement produit
-  // autre chose que le repli générique (ex. les deux planètes n'ont aucun
-  // lieu connu d'UEX en commun pour servir d'ancre).
-  if (planetA || planetB) {
-    return getDistance(aId, bId) === DEFAULT_DISTANCE ? t("sourceDefault") : t("sourcePlanetEstimate");
-  }
-  return t("sourceDefault");
 }
 
 function setDistance(aId, bId, value) {
@@ -1616,124 +1597,6 @@ function renderCompaniesTab() {
     });
 }
 
-function renderDistanceEditor() {
-  const container = document.getElementById("distance-editor");
-  container.innerHTML = "";
-  const locIds = computeUniqueLocationIds(activeMissions());
-  if (locIds.length < 2) {
-    container.textContent = t("needTwoLocations");
-    return;
-  }
-  const locs = locIds.map((id) => getLocationById(id)).filter(Boolean);
-  locs.sort((a, b) => a.name.localeCompare(b.name));
-
-  const pairs = [];
-  for (let i = 0; i < locs.length; i++) {
-    for (let j = i + 1; j < locs.length; j++) pairs.push([locs[i], locs[j]]);
-  }
-
-  const anyUexPair = pairs.some(([a, b]) => a.uexTerminalId && b.uexTerminalId);
-  if (anyUexPair) {
-    const bulkBtn = document.createElement("button");
-    bulkBtn.type = "button";
-    bulkBtn.className = "btn-secondary";
-    bulkBtn.textContent = t("fillMissingDistancesBtn");
-    bulkBtn.addEventListener("click", async () => {
-      bulkBtn.disabled = true;
-      bulkBtn.textContent = t("fetchingInProgress");
-      await syncMissingDistances((done, total) => {
-        bulkBtn.textContent = t("fetchingProgress", { done, total });
-      });
-      renderDistanceEditor();
-    });
-    container.appendChild(bulkBtn);
-  }
-
-  const table = document.createElement("table");
-  table.className = "distance-table";
-  const thead = document.createElement("thead");
-  thead.innerHTML = `<tr><th>${t("colLocA")}</th><th>${t("colLocB")}</th><th>${t("colDistanceGm")}</th><th>${t("colSource")}</th><th></th></tr>`;
-  table.appendChild(thead);
-  const tbody = document.createElement("tbody");
-
-  pairs.forEach(([a, b]) => {
-    const tr = document.createElement("tr");
-    const tdA = document.createElement("td");
-    tdA.textContent = a.name;
-    const tdB = document.createElement("td");
-    tdB.textContent = b.name;
-    const tdInput = document.createElement("td");
-    const input = document.createElement("input");
-    input.type = "number";
-    input.min = "0";
-    input.step = "any";
-    input.placeholder = String(DEFAULT_DISTANCE);
-    input.value = getDistance(a.id, b.id);
-
-    const tdSource = document.createElement("td");
-    tdSource.className = "hint";
-
-    const refreshSource = () => {
-      tdSource.textContent = getDistanceSource(a.id, b.id);
-    };
-    refreshSource();
-
-    input.addEventListener("change", () => {
-      setDistance(a.id, b.id, input.value);
-      if (input.value === "") input.value = getDistance(a.id, b.id);
-      refreshSource();
-    });
-    tdInput.appendChild(input);
-    tr.appendChild(tdA);
-    tr.appendChild(tdB);
-    tr.appendChild(tdInput);
-    tr.appendChild(tdSource);
-
-    const tdAction = document.createElement("td");
-    if (a.uexTerminalId && b.uexTerminalId) {
-      const uexBtn = document.createElement("button");
-      uexBtn.type = "button";
-      uexBtn.className = "btn-secondary";
-      uexBtn.textContent = t("viaUexBtn");
-      uexBtn.addEventListener("click", async () => {
-        uexBtn.disabled = true;
-        try {
-          const d = await fetchUexDistance(a.uexTerminalId, b.uexTerminalId);
-          input.value = d;
-          setDistance(a.id, b.id, d);
-          refreshSource();
-        } catch (e) {
-          alert(t("uexDistanceError", { msg: e.message }));
-        }
-        uexBtn.disabled = false;
-      });
-      tdAction.appendChild(uexBtn);
-    }
-    tr.appendChild(tdAction);
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  container.appendChild(table);
-
-  const note = document.createElement("p");
-  note.className = "hint";
-  note.textContent = t("defaultDistanceNote", { default: DEFAULT_DISTANCE });
-  container.appendChild(note);
-
-  filterDistanceRows();
-}
-
-// Filtre en direct les lignes de la table des distances par nom de lieu
-// (n'importe lequel des deux lieux de la paire), sans tout re-rendre.
-function filterDistanceRows() {
-  const filterInput = document.getElementById("distance-filter");
-  const query = filterInput.value.trim().toLowerCase();
-  document.querySelectorAll("#distance-editor .distance-table tbody tr").forEach((tr) => {
-    const matches = !query || tr.textContent.toLowerCase().includes(query);
-    tr.style.display = matches ? "" : "none";
-  });
-}
-
 // Pour un retrait à quantité nulle (corrigée en direct, ex : tout récupéré à
 // un seul endroit au lieu de plusieurs comme prévu) : précise où la
 // marchandise a réellement été récupérée. Retourne "" si non applicable.
@@ -2283,7 +2146,6 @@ function renderAll() {
   renderMissionsTable();
   renderHistoryTable();
   renderCompaniesTab();
-  renderDistanceEditor();
   renderBrokenElevatorsList();
   document.getElementById("route-result").innerHTML = "";
 }
@@ -3026,8 +2888,6 @@ document.addEventListener("DOMContentLoaded", () => {
     createCargoFieldRow();
   });
 
-  document.getElementById("distance-filter").addEventListener("input", filterDistanceRows);
-
   // Chaque groupe ".tabs" bascule indépendamment des autres groupes présents
   // sur la page (ex : les onglets Nouvelle mission/Missions n'affectent pas
   // ceux de Distances/Optimisation).
@@ -3287,12 +3147,10 @@ async function runFullSync() {
     renderAll();
 
     await syncMissingDistances();
-    renderDistanceEditor();
 
     await syncScwikiLocations();
     backfillCustomLocationPlanetHints();
     saveState();
-    renderDistanceEditor();
 
     await syncFleetyardsCargoHolds();
     renderShipCapacity();

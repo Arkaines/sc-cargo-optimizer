@@ -1306,10 +1306,6 @@ tbody tr:nth-child(even) {
   font-size: 0.75rem;
 }
 
-.distance-table input {
-  width: 90px;
-}
-
 footer {
   max-width: 900px;
   margin: 0 auto;
