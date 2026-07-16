@@ -16,6 +16,7 @@ const FLEETYARDS_API_BASE = "https://api.fleetyards.net/v1";
 const FLEETYARDS_NAME_ALIASES = {
   "C2 Hercules": "C2 Hercules Starlifter",
   Genesis: "Genesis Starliner",
+  "Golem OX": "Golem Ox",
 };
 
 // Échange x/y d'un module dont FleetYards signale une rotation à plat
