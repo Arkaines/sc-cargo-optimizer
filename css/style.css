@@ -615,6 +615,11 @@ button:active {
   width: 90px;
 }
 
+.cargo-boxsize-input {
+  flex: none !important;
+  width: 110px;
+}
+
 .btn-remove-field {
   background: transparent;
   border: 1px solid var(--danger);

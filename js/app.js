@@ -1952,7 +1952,10 @@ function gatherCargoEntriesForPacking(stopIndex) {
           quantity: qty,
           commodity: item.commodity || "?",
           mission: m,
-          maxCargoBoxSize: m.maxCargoBoxSize || null,
+          // Priorité à la taille saisie sur cette ligne de marchandise ; à
+          // défaut, repli sur la taille globale du contrat (import OCR, voir
+          // mission.maxCargoBoxSize plus haut).
+          maxCargoBoxSize: item.maxCargoBoxSize || m.maxCargoBoxSize || null,
           pickupId: item.pickupId,
           dropoffId: item.dropoffId,
           pickupStop: stops.pickupStop ?? null,
@@ -2166,7 +2169,7 @@ function createLocationSubInput(row, className, placeholder, value) {
   return input;
 }
 
-function createCargoFieldRow(commodity, quantity, pickupText, dropoffText) {
+function createCargoFieldRow(commodity, quantity, pickupText, dropoffText, boxSize) {
   const container = document.getElementById("cargo-fields");
   const row = document.createElement("div");
   row.className = "field-row cargo-field-row";
@@ -2188,6 +2191,29 @@ function createCargoFieldRow(commodity, quantity, pickupText, dropoffText) {
   quantityInput.className = "cargo-quantity-input";
   if (quantity) quantityInput.value = quantity;
   row.appendChild(quantityInput);
+
+  // Taille de caisse (SCU) annoncée pour cette marchandise, si connue —
+  // reprend les formats réels de SCU_BOX_SIZES (js/cargo-packing.js) plutôt
+  // qu'une liste devinée. Laissé vide par défaut ("Taille libre") : le
+  // rangement se rabat alors sur mission.maxCargoBoxSize (import OCR) ou sur
+  // le plus grand format que le vaisseau accepte (voir
+  // gatherCargoEntriesForPacking).
+  const boxSizeSelect = document.createElement("select");
+  boxSizeSelect.className = "cargo-boxsize-input";
+  const anyOption = document.createElement("option");
+  anyOption.value = "";
+  anyOption.textContent = t("cargoBoxSizeAnyOption");
+  boxSizeSelect.appendChild(anyOption);
+  SCU_BOX_SIZES.map((b) => b.scu)
+    .sort((a, b) => a - b)
+    .forEach((scu) => {
+      const opt = document.createElement("option");
+      opt.value = String(scu);
+      opt.textContent = `${scu} SCU`;
+      boxSizeSelect.appendChild(opt);
+    });
+  if (boxSize) boxSizeSelect.value = String(boxSize);
+  row.appendChild(boxSizeSelect);
 
   createLocationSubInput(row, "cargo-pickup-input", t("cargoPickupPlaceholder"), pickupText);
   createLocationSubInput(row, "cargo-dropoff-input", t("cargoDropoffPlaceholder"), dropoffText);
@@ -2218,6 +2244,7 @@ function getCargoFieldValues() {
     .map((row) => ({
       commodity: row.querySelector(".cargo-commodity-input").value.trim(),
       quantity: row.querySelector(".cargo-quantity-input").value,
+      boxSize: row.querySelector(".cargo-boxsize-input").value,
       pickupText: row.querySelector(".cargo-pickup-input").value.trim(),
       dropoffText: row.querySelector(".cargo-dropoff-input").value.trim(),
     }))
@@ -2512,7 +2539,8 @@ function startEditMission(mission) {
       item.commodity,
       item.quantity,
       pickupLoc ? locationSearchLabel(pickupLoc) : "",
-      dropoffLoc ? locationSearchLabel(dropoffLoc) : ""
+      dropoffLoc ? locationSearchLabel(dropoffLoc) : "",
+      item.maxCargoBoxSize
     );
   });
 
@@ -2881,6 +2909,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".cargo-quantity-input").forEach((i) => (i.placeholder = t("cargoScuPlaceholder")));
     document.querySelectorAll(".cargo-pickup-input").forEach((i) => (i.placeholder = t("cargoPickupPlaceholder")));
     document.querySelectorAll(".cargo-dropoff-input").forEach((i) => (i.placeholder = t("cargoDropoffPlaceholder")));
+    document
+      .querySelectorAll(".cargo-boxsize-input option[value='']")
+      .forEach((o) => (o.textContent = t("cargoBoxSizeAnyOption")));
     renderAll();
   });
 
@@ -2985,6 +3016,7 @@ document.addEventListener("DOMContentLoaded", () => {
       cargoItems.push({
         commodity: row.commodity,
         quantity: row.quantity,
+        maxCargoBoxSize: row.boxSize ? Number(row.boxSize) : null,
         pickupId: pickupLoc.id,
         dropoffId: dropoffLoc.id,
       });
