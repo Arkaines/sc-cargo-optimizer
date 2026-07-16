@@ -545,9 +545,14 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+/* border transparent (pas none) : réserve la même épaisseur de boîte que
+   les variantes qui affichent un vrai contour (.btn-danger, .btn-danger-sm,
+   .btn-remove-field...) — sinon deux boutons au même padding/font-size
+   affichent quand même une taille différente de 2px (le contour visible
+   s'ajoute à la boîte de son bouton, pas à celle sans contour). */
 button {
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 6px;
   padding: 0.55rem 1rem;
   font-size: 0.9rem;
@@ -653,7 +658,7 @@ button:active {
   background: transparent;
   border: 1px solid var(--danger);
   color: var(--danger);
-  padding: 0.55rem 0.9rem;
+  padding: 0.55rem 1rem;
   font-size: 0.9rem;
   font-weight: 600;
   border-radius: 6px;
