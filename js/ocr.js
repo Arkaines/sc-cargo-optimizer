@@ -372,7 +372,11 @@ function extractMaxCargoBoxSize(normalized) {
   // lu par l'OCR (ligne dense en accents/ponctuation) mais que cette
   // deuxième mention, elle, passe.
   const reNotesFr = /(?:conteneurs?|caisses?)\s+de\s+(\d+)\s*SCU/i;
-  const m = reFr.exec(normalized) || reEn.exec(normalized) || reNotesFr.exec(normalized);
+  // Autre formulation réelle (capture confirmée) : le texte d'ambiance du
+  // panneau DÉTAILS donne la limite en une phrase ("Max size will be X SCU")
+  // plutôt que via le champ structuré "Max Cargo Size" ci-dessus.
+  const reEnAlt = /Max(?:imum)?\s+size\s+will\s+be\s*[^0-9]{0,3}(\d+)\s*SCU/i;
+  const m = reFr.exec(normalized) || reEn.exec(normalized) || reEnAlt.exec(normalized) || reNotesFr.exec(normalized);
   return m ? Number(m[1]) : null;
 }
 
