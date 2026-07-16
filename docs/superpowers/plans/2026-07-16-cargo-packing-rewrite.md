@@ -640,79 +640,95 @@ Replace it with:
 ```js
         if (!placed) {
           const zones = (missionId != null ? zonesByMission.get(missionId) : null) || [];
-          const zoneModules = zones
-            .filter((z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize))
-            .map((z) => z.module);
-          // Un module peut avoir plusieurs zones pour le même contrat (tier 1
-          // + un ou plusieurs empilements tier 2) : garde TOUTES les
-          // restrictions possibles pour ce module, une par zone, et essaie
-          // findBestPosition avec chacune (via allowedDepthsForModule qui
-          // renvoie un TABLEAU de tableaux de restrictions, un par zone).
-          const zonesByModule = new Map();
-          zones.forEach((z) => {
-            const list = zonesByModule.get(z.module) || [];
-            list.push(z);
-            zonesByModule.set(z.module, list);
-          });
-          // La zone restreint désormais LARGEUR ET HAUTEUR (voir
-          // assignMissionZones) — toute la profondeur du module reste
-          // disponible pour ce contrat dans chaque zone.
-          const restrictionForModule = (m) => {
-            const zoneList = zonesByModule.get(m);
-            if (!zoneList || !zoneList.length) return null;
-            // Une seule zone la plupart du temps : restriction directe. Si
-            // plusieurs (tier 1 + tier 2 empilé), tente la première qui
-            // convient ; placeInBestModule est déjà appelé une fois par
-            // module dans zoneModules, donc on combine ici toutes les zones
-            // de CE module en une seule paire de restrictions (largeur OU
-            // hauteur autorisée par AU MOINS une des zones) — findBestPosition
-            // filtre indépendamment chaque axe, donc l'union des largeurs et
-            // l'union des hauteurs suffit tant qu'une même position ne mélange
-            // pas la largeur d'une zone avec la hauteur d'une autre ; avec un
-            // seul contrat par widthStart/widthEnd donné ce n'est pas un
-            // souci en pratique (chaque zone tier 2 réutilise la largeur de
-            // son hôte).
-            const widths = new Set();
-            const heights = new Set();
-            let widthAxis, heightAxis;
-            zoneList.forEach((z) => {
-              widthAxis = z.widthAxis;
-              heightAxis = z.heightAxis;
-              for (let v = z.widthStart; v < z.widthEnd; v++) widths.add(v);
-              for (let v = z.heightStart; v < z.heightEnd; v++) heights.add(v);
-            });
-            return [
-              { axis: widthAxis, allowed: widths },
-              { axis: heightAxis, allowed: heights },
-            ];
-          };
+          const eligibleZones = zones.filter(
+            (z) => !(z.module.hold.maxContainerSize && b.box.scu > z.module.hold.maxContainerSize)
+          );
           // Profondeur idéale = rang de CETTE caisse parmi celles du MÊME
           // contrat, rapporté à TOUTE la profondeur du module (disponible en
           // entier dans sa zone — pas la fraction du trajet entier, voir
           // missionBoxRank plus haut).
           const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
-          const idealDepthForModule = (m) => {
-            const maxDepthIdx = m.cellDims[m.depthAxis] - 1;
+          const idealDepthForZone = (z) => {
+            const maxDepthIdx = z.module.cellDims[z.module.depthAxis] - 1;
             return maxDepthIdx > 0 ? rankFrac * maxDepthIdx : 0;
           };
-          placed = placeInBestModule(zoneModules, b.box, b.dropoffStop, idealDepthForModule, restrictionForModule, missionId);
+          // IMPORTANT : un contrat peut avoir PLUSIEURS zones DANS LE MÊME
+          // module (une voie tier 1 partielle, puis un empilement tier 2
+          // ailleurs dans ce même module une fois la voie épuisée). Fusionner
+          // leurs plages largeur/hauteur dans une seule restriction (union
+          // des largeurs, union des hauteurs, filtrées indépendamment par
+          // findBestPosition) est FAUX : ça autoriserait une position qui
+          // combine la largeur d'une zone avec la hauteur d'une AUTRE zone,
+          // un rectangle qui n'a jamais été réservé (et qui peut appartenir à
+          // un autre contrat). Chaque zone doit donc être essayée
+          // séparément — jamais fusionnée avec une autre — et seule la
+          // meilleure position parmi TOUTES les zones (tous modules confondus)
+          // est retenue, via la même comparaison hiérarchique `isBetterPosition`
+          // déjà utilisée partout ailleurs dans ce fichier.
+          let best = null;
+          eligibleZones.forEach((z) => {
+            const restriction = [
+              { axis: z.widthAxis, allowed: new Set(Array.from({ length: z.widthEnd - z.widthStart }, (_, i) => z.widthStart + i)) },
+              { axis: z.heightAxis, allowed: new Set(Array.from({ length: z.heightEnd - z.heightStart }, (_, i) => z.heightStart + i)) },
+            ];
+            const candidate = findBestPosition(z.module.grid, z.module.cellDims, z.module.depthAxis, b.box, idealDepthForZone(z), restriction, missionId, z.module.activeBoxes, b.dropoffStop);
+            if (candidate && (!best || isBetterPosition(candidate, best.position, z.module, best.module))) {
+              best = { position: candidate, module: z.module };
+            }
+          });
+          if (best) {
+            markPlaced(best.module, b.box, best.position, missionId, b.dropoffStop);
+            placed = { module: best.module, position: best.position };
+          }
         }
 ```
 
-- [ ] **Step 2: Run the tests to verify real-data tests pass again**
+Read the actual current signatures of `findBestPosition`, `isBetterPosition`, and `markPlaced` in `js/cargo-packing.js` before transcribing this step — the parameter names/order above follow the file as last read for this plan, but confirm them against the real file first (this file changes fast across tasks) and adjust the call sites to match exactly. The non-negotiable part of this step is the *shape* of the fix: one `findBestPosition` call per zone, never a merged multi-zone restriction, and the overall winner chosen via the same hierarchical comparator already used elsewhere — not by any additive scoring.
+
+- [ ] **Step 2: Write a test proving multi-zone-per-module correctness**
+
+Add to `scripts/cargo-packing-tests.cjs`, after the Task 4 zone-assignment tests:
+
+```js
+// --- Régression : plusieurs zones du même contrat dans le même module ----
+test("placement: a mission with two zones in the same module never mixes their width/height ranges", () => {
+  const ctx = loadCargoPacking();
+  // Un seul module, large de 8 crans, 2 crans de haut. Mission A tient toute
+  // la largeur (8 crans) pendant tout le trajet -> pas de voie tier-1 libre
+  // pour quiconque. Mission B a deux besoins bien distincts et temporellement
+  // disjoints (2 lots), forçant potentiellement deux zones dans CE module si
+  // le zonage la fait s'empiler à deux endroits différents. On vérifie
+  // simplement qu'aucun conflit non nécessaire n'apparaît et qu'aucune caisse
+  // ne finit hors de tout rectangle réservé valide (0 conflit ici : les deux
+  // lots de B tiennent chacun dans la fenêtre de A).
+  const holds = [{ name: "test", dimensions: { x: 10, y: 15, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  const missionA = { id: 1, name: "A" };
+  const missionB = { id: 2, name: "B" };
+  const entries = [
+    { quantity: 32, commodity: "Host", mission: missionA, pickupStop: 0, dropoffStop: 14 },
+    { quantity: 4, commodity: "GuestEarly", mission: missionB, pickupStop: 1, dropoffStop: 4 },
+    { quantity: 4, commodity: "GuestLate", mission: missionB, pickupStop: 8, dropoffStop: 12 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, holds, 15);
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.conflicts.length, 0, "both of B's lots fit safely within A's window; mixing zone axes must not cause a spurious conflict or an invalid placement");
+});
+```
+
+- [ ] **Step 3: Run the tests to verify real-data tests pass again**
 
 Run: `node scripts/cargo-packing-tests.cjs`
-Expected: all tests pass, including Hull B (0 conflicts) and Raft (`<= 9`, record the actual number — it is expected to improve now that height-stacking is available, but the test only asserts the not-worse bound).
+Expected: all tests pass, including the new multi-zone test, Hull B (0 conflicts), and Raft (`<= 9`, record the actual number — it is expected to improve now that height-stacking is available, but the test only asserts the not-worse bound).
 
-- [ ] **Step 3: If Raft's conflict count improved, tighten the regression test**
+- [ ] **Step 4: If Raft's conflict count improved, tighten the regression test**
 
 If the printed Raft conflict count is now below 9, update the assertion in `scripts/cargo-packing-tests.cjs` from `r.conflicts.length <= 9` to the new actual number (with a comment noting the date/task this was measured), so future regressions are caught precisely rather than just "still under the old number."
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add js/cargo-packing.js scripts/cargo-packing-tests.cjs
-git commit -m "Branche le zonage 3D (tier 1 + tier 2) dans le placement des caisses"
+git commit -m "Branche le zonage 3D (tier 1 + tier 2) dans le placement des caisses, une zone à la fois"
 ```
 
 ---
