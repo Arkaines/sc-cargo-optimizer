@@ -841,6 +841,189 @@ git commit -m "Ajoute une vérification : la recherche libre profite aussi de l'
 
 ---
 
+## Task 6bis: Fix `worstConflictDropoff`'s inverted polarity (found and confirmed while executing Task 6)
+
+> **Why this task exists:** while verifying Task 6, an implementer (and, independently, a task reviewer who reproduced everything from scratch — code reading, a hand-built reproduction scenario, and direct calls to the function in isolation) confirmed a real, pre-existing bug in `worstConflictDropoff`: its two risk conditions are the exact opposite of the real runtime conflict-detection loop's own condition. This directly undermines this whole plan's Section 5 requirement ("never accept an avoidable conflict without a genuine ship-wide search") — a position that is actually risky can score as perfectly safe (`Infinity`), and vice versa, so the search can pick a real, avoidable conflict over an available safe stack. The user asked for this fixed within this plan, as its own task with its own test/review cycle, rather than deferred to a future session.
+
+**Files:**
+- Modify: `js/cargo-packing.js` (`worstConflictDropoff` only, lines ~231-242 as last read for this plan — confirm current line numbers)
+- Test: `scripts/cargo-packing-tests.cjs`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: `worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop)` — **signature unchanged**, only its internal comparison logic changes. Every caller (`findBestPosition`, line ~376) keeps working as-is.
+
+### Context for this task
+
+`isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize)` returns true when `blockerPos` is closer to the module's access point (smaller depth coordinate) than `targetPos`, and their footprints overlap on the other two axes — i.e., `blocker` physically stands between the access point and `target`.
+
+The REAL conflict rule, read directly from `simulateRoutePacking`'s runtime dropoff loop (confirmed against the actual file, not just this plan's earlier read of it — re-confirm current line numbers before editing):
+
+```js
+const blockers = boxes.filter(
+  (other) =>
+    other !== b &&
+    other.active &&
+    other.dropoffStop !== step &&
+    other.placement.module === m &&
+    isBlocking(m.depthAxis, other.placement.position, other.placement.size, b.placement.position, b.placement.size)
+);
+```
+
+This only runs for `b` at `step === b.dropoffStop`, and only considers still-`active` boxes with `other.dropoffStop !== step` — since any box with an earlier dropoff would already have been removed by a prior step's iteration, every surviving `other` here necessarily has `other.dropoffStop > step` (i.e., **later** than `b`'s own dropoff). So: **a conflict is real exactly when a blocker (closer to access) leaves LATER than the box trying to leave.** Boxes leaving at the exact same step are never blockers (`!== step`) — they both depart at once, so ordering between them doesn't matter.
+
+`worstConflictDropoff` is meant to score this same risk *before* a box is even placed, for two symmetric cases (an already-active `other` blocking our *candidate* position, and our candidate blocking an already-active `other`) — but both of its conditions currently use `<` where they need `>`, exactly inverted:
+
+```js
+function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
+  let worst = Infinity;
+  for (const other of activeBoxes) {
+    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) {
+      worst = Math.min(worst, other.dropoffStop);
+    }
+    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) {
+      worst = Math.min(worst, dropoffStop);
+    }
+  }
+  return worst;
+}
+```
+
+Worked through both branches against the real rule above:
+- **Branch 1** (`other` blocks our candidate): real risk is `other` (the blocker) leaving **later** than our candidate — `other.dropoffStop > dropoffStop`, not `<`. When this is true, our candidate is the one that can't leave on time; the conflict "bites" at our candidate's own (earlier) `dropoffStop`, so the tracked value must be `dropoffStop` (ours), not `other.dropoffStop`.
+- **Branch 2** (our candidate blocks `other`): real risk is our candidate leaving **later** than `other` — `dropoffStop > other.dropoffStop`, not `<`. When true, `other` is the one that can't leave on time; the conflict bites at `other`'s own (earlier) `dropoffStop`, so the tracked value must be `other.dropoffStop`, not `dropoffStop`.
+
+So both the comparison direction AND which value gets recorded into `worst` need to swap, in both branches — a clean, symmetric fix, not a one-line tweak of just the operators.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `scripts/cargo-packing-tests.cjs`, after the Task 2 `hasValidSupport` tests:
+
+```js
+// --- worstConflictDropoff : polarité correcte (corrigée après Task 6) ----
+test("worstConflictDropoff: a blocker that leaves LATER than the candidate is a real risk", () => {
+  const ctx = loadCargoPacking();
+  const activeBoxes = [{ position: [0, 0, 0], size: [1, 1, 1], dropoffStop: 20 }];
+  // Notre caisse candidate est bloquée par `other` (plus proche de l'accès,
+  // recoupement d'emprise) qui part APRÈS elle (20 > 5) : conflit réel.
+  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 1, 0], [1, 1, 1], 5);
+  assert.notStrictEqual(severity, Infinity, "a blocker leaving later than our candidate must be scored as risky, not safe");
+});
+
+test("worstConflictDropoff: a blocker that already left BEFORE the candidate's dropoff is safe", () => {
+  const ctx = loadCargoPacking();
+  const activeBoxes = [{ position: [0, 0, 0], size: [1, 1, 1], dropoffStop: 3 }];
+  // `other` part AVANT notre candidate (3 < 20) : il sera déjà parti, donc
+  // aucun conflit réel au moment où notre candidate devra elle-même partir.
+  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 1, 0], [1, 1, 1], 20);
+  assert.strictEqual(severity, Infinity, "a blocker that already departed before our candidate's own dropoff must be scored as safe");
+});
+
+test("worstConflictDropoff: our candidate blocking an other that leaves earlier is a real risk", () => {
+  const ctx = loadCargoPacking();
+  // `other` est ici la cible bloquée par NOTRE candidate (recoupement, notre
+  // candidate plus proche de l'accès) ; other part avant nous (5 < 20) :
+  // conflit réel (other ne pourra pas sortir à temps).
+  const activeBoxes = [{ position: [0, 1, 0], size: [1, 1, 1], dropoffStop: 5 }];
+  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 0, 0], [1, 1, 1], 20);
+  assert.notStrictEqual(severity, Infinity, "blocking an other that leaves earlier than us must be scored as risky, not safe");
+});
+```
+
+(Coordinates: `depthAxis = 1`, so axis 1 is the access/depth axis — smaller value on axis 1 is closer to access. Both boxes occupy the same slice on axes 0/2 so their footprints overlap on the required "other two axes" for `isBlocking`.)
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `node scripts/cargo-packing-tests.cjs`
+Expected: all three new tests FAIL against the current (inverted) code — the first and third currently return `Infinity` (wrongly "safe"), the second currently returns a finite number (wrongly "risky").
+
+- [ ] **Step 3: Fix `worstConflictDropoff`**
+
+Replace the function with:
+
+```js
+// Gravité d'un conflit potentiel pour une position donnée : la date de
+// livraison la plus proche parmi les caisses avec lesquelles ça coincerait
+// (dans un sens ou dans l'autre) — Infinity si aucun conflit. Utilisé par la
+// fonction de score (voir scorePosition) pour transformer un blocage
+// potentiel en pénalité : plus le conflit arrive tôt (livraison proche), plus
+// il coûte cher, pour toujours préférer déplacer un blocage lointain plutôt
+// qu'un blocage imminent quand aucune position n'est totalement sûre.
+//
+// Corrigé (Task 6bis) : un blocage n'est un risque QUE si le bloqueur (plus
+// proche de l'accès) est encore présent au moment où la caisse qui doit
+// sortir la première a besoin de partir — c'est-à-dire si le bloqueur part
+// PLUS TARD que celle qu'il bloque (voir la boucle réelle de détection de
+// conflit dans simulateRoutePacking : elle ne compte un blocage que si
+// other.dropoffStop est postérieur au step de départ de la caisse bloquée).
+// L'ancienne version comparait dans le sens inverse (`<` au lieu de `>`),
+// ce qui pouvait faire scorer Infinity (sûr) une position réellement en
+// conflit, et inversement — trouvé et confirmé lors de la Task 6 par
+// exécution directe, pas seulement par lecture de code.
+function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
+  let worst = Infinity;
+  for (const other of activeBoxes) {
+    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop > dropoffStop) {
+      worst = Math.min(worst, dropoffStop);
+    }
+    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop > other.dropoffStop) {
+      worst = Math.min(worst, other.dropoffStop);
+    }
+  }
+  return worst;
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `node scripts/cargo-packing-tests.cjs`
+Expected: all three new tests pass.
+
+- [ ] **Step 5: Add the real-world regression scenario found during Task 6's review**
+
+The Task 6 reviewer independently reconstructed a scenario that forces the ship-wide fallback path (not the zoned path) and reproduces a real, avoidable conflict caused by this bug: a full-width host mission present stop 0-20, and a second mission with TWO lots — one nested inside the host's window (stop 3-5), one entirely after the host has departed (stop 25-30) — whose AGGREGATE window (3-30) is NOT contained by the host's (0-20), so `assignMissionZones` gives it zero zones, forcing every one of its boxes through the ship-wide fallback. Add this as a committed regression test (the reviewer verified it reliably reproduces; you'll need to tune exact quantities/footprints so the host is processed first by `assignMissionZones`, per the reviewer's note that this required "tuning quantities so the host... is processed first"):
+
+```js
+// --- Régression : conflit évitable via la recherche de dernier recours ---
+test("ship-wide fallback: does not force an avoidable conflict when a safe stack exists (Task 6bis regression)", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "test", dimensions: { x: 2.5, y: 15, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  const host = { id: 1, name: "Host" };
+  const guest = { id: 2, name: "Guest" };
+  const entries = [
+    // Hôte : présent du stop 0 au stop 20, prend toute la largeur (le plus
+    // gros besoin total en SCU pour être traité en premier par assignMissionZones).
+    { quantity: 8, commodity: "Host", mission: host, pickupStop: 0, dropoffStop: 20 },
+    // Invité : deux lots dont la fenêtre AGRÉGÉE (3 à 30) déborde de celle de
+    // l'hôte (0 à 20) -> assignMissionZones ne lui donne AUCUNE zone,
+    // forçant le passage par la recherche de dernier recours (byFreeSpace).
+    { quantity: 4, commodity: "GuestEarly", mission: guest, pickupStop: 3, dropoffStop: 5 },
+    { quantity: 4, commodity: "GuestLate", mission: guest, pickupStop: 25, dropoffStop: 30 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, holds, 31);
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.conflicts.length, 0, "a safe stack on Host was available for GuestEarly; the fallback must not force an avoidable conflict");
+});
+```
+
+If this exact fixture doesn't reproduce the zero-zone condition for you (`assignMissionZones` processing order can be sensitive to exact SCU/footprint values), adjust quantities until a direct call to `ctx.assignMissionZones(...)` confirms the guest mission gets zero zones, then confirm the test fails against the CURRENT (pre-fix) code with a real conflict, before applying Step 3's fix and re-confirming it passes.
+
+- [ ] **Step 6: Re-run the full suite and confirm Hull B / Raft have not regressed**
+
+Run: `node scripts/cargo-packing-tests.cjs`
+Expected: all tests pass. Since this fix makes conflict-severity scoring MORE accurate (not just different), Hull B must stay at 0 and Raft's conflict count may improve further — if it does, tighten the Raft assertion to the new measured number (with a comment noting it was measured at Task 6bis), same convention as earlier tasks.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add js/cargo-packing.js scripts/cargo-packing-tests.cjs
+git commit -m "Corrige la polarité inversée de worstConflictDropoff (pouvait accepter un conflit évitable)"
+```
+
+**Explicitly out of scope for this task:** the Task 6 investigation also noted that `idealDepthForModule` (used by the ship-wide fallback, as opposed to the zoned path's mission-relative `missionBoxRank`) computes ideal depth from a route-global `dropoffStop / stepCount` fraction rather than a mission-relative rank — this only mattered as a *secondary* tie-break because severity was incorrectly tied at `Infinity` for both candidates in the reported scenario. Once this task's fix makes severity correctly discriminate (a real conflict scores far below `Infinity`), that specific scenario no longer needs the depth tie-break to reach the right answer. Whether `idealDepthForModule`'s global-fraction basis is *also* worth changing for the ship-wide fallback (to mirror the zoned path's mission-relative ranking) is a separate, lower-priority design question — do not change it in this task; note it for a future follow-up if the human wants to pursue it.
+
+---
+
 ## Task 7: Full verification and cleanup
 
 **Files:**
