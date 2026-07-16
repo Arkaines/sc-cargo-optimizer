@@ -117,7 +117,14 @@ function extractContractTitle(rawText) {
 
   const beforeReward = new RegExp("^([\\s\\S]*?)(?:R" + E_ACUTE_UP + "COMPENSE|Paiement|Reward)", "i").exec(rawText);
   if (beforeReward && beforeReward[1].trim()) {
-    return stripLeadingGlyph(beforeReward[1].replace(/\s+/g, " ").trim());
+    // Le titre est la toute première ligne de la bande du haut, en tête de
+    // l'écran — quand la capture ci-dessus contient plusieurs lignes, celles
+    // qui suivent sont du bruit OCR d'un élément plus bas dans ce même
+    // recadrage (ex : l'en-tête "DETAILS" mal lu en "NETAIl €"), jamais une
+    // suite légitime du titre.
+    const lines = beforeReward[1].split("\n").map((l) => l.trim()).filter(Boolean);
+    const firstLine = lines.length ? lines[0] : beforeReward[1];
+    return stripLeadingGlyph(firstLine.replace(/\s+/g, " ").trim());
   }
 
   const giverLabelSrc = "Contracted\\s*By|Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par";
@@ -386,10 +393,22 @@ const LOCATION_SUFFIX_RE = /\s+(?:sur|au|on)\b.*$/i;
 // suffixe cette fois.
 const LOCATION_IN_CITY_RE = /^.+?\bin\b\s+(.+)$/i;
 
+// Le dernier objectif d'une liste n'a aucun mot-clé suivant pour borner sa
+// capture ("from <lieu>$"/"to <lieu>$" vont jusqu'à la fin du texte reconnu)
+// — pour lui, tout le bruit d'interface qui traîne après (ex : "ACCEPT
+// OFFER") se retrouve collé au nom du lieu. Un nom de lieu ne contient
+// jamais de point ; tout ce qui suit le premier point de la phrase captée
+// n'en fait donc jamais partie.
+function truncateAtSentenceEnd(text) {
+  const dot = text.indexOf(".");
+  return dot === -1 ? text : text.slice(0, dot);
+}
+
 function stripSystemSuffix(text) {
-  const inCity = LOCATION_IN_CITY_RE.exec(text);
+  const truncated = truncateAtSentenceEnd(text);
+  const inCity = LOCATION_IN_CITY_RE.exec(truncated);
   if (inCity) return inCity[1].trim();
-  return text.replace(LOCATION_SUFFIX_RE, "").trim();
+  return truncated.replace(LOCATION_SUFFIX_RE, "").trim();
 }
 
 // Isole le nom de lieu au tout début d'un morceau de texte en retirant les
