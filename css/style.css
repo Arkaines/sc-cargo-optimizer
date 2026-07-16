@@ -848,13 +848,16 @@ tbody tr:nth-child(even) {
   font-size: 0.85rem;
 }
 
+/* Pas de carte encadrée ici : .tabs (le conteneur parent) est déjà une
+   carte à part entière (bordure + ombre) — en ajouter une seconde autour de
+   simples contrôles de formulaire crée un effet "boîte dans la boîte" plus
+   chargé que clair. La séparation avec la visionneuse 3D en dessous (elle,
+   du contenu embarqué distinct, garde sa propre carte .cargo-viewer-panel)
+   se fait par un simple filet en bas plutôt qu'un second encadré complet. */
 .cargo-pack-panel {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-  margin-bottom: 0.75rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .cargo-pack-panel .hint {
