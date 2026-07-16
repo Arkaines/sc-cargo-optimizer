@@ -531,15 +531,12 @@ select:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 25%, transparent);
 }
 
-/* Nom/Donneur dimensionnés sur la longueur réelle des textes qu'ils
-   reçoivent plutôt que sur une largeur générique égale à Récompense :
-   29.7 caractères en moyenne pour un titre de contrat (1033 titres réels,
-   data/mission-reputation-by-title.js) et 15.2 pour un nom d'entreprise
-   (312 entreprises, data/companies.js). Récompense reste flexible (peu de
-   chiffres à saisir). */
+/* Répartition 45 / 45 / 10 entre Nom, Donneur de mission et Récompense :
+   les deux champs de texte se partagent l'essentiel de la largeur à parts
+   égales, Récompense (quelques chiffres seulement) se contente du reste. */
 .form-grid {
   display: grid;
-  grid-template-columns: minmax(200px, 32ch) minmax(160px, 18ch) minmax(140px, 1fr);
+  grid-template-columns: 45fr 45fr 10fr;
   gap: 0.75rem 1rem;
   align-items: end;
 }
