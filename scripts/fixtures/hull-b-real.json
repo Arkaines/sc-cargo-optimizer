@@ -1,0 +1,390 @@
+{
+  "stepCount": 15,
+  "holds": [
+    {
+      "name": "hardpoint_cargogrid_bottom_front_left_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_front_left_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_front_right_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_front_right_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_rear_left_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_rear_left_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_rear_right_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_bottom_rear_right_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_front_left_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_front_left_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_front_right_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_front_right_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_rear_left_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_rear_left_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_rear_right_lower",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    },
+    {
+      "name": "hardpoint_cargogrid_top_rear_right_upper",
+      "dimensions": {
+        "x": 2.5,
+        "y": 10,
+        "z": 2.5
+      },
+      "capacity": 32,
+      "maxContainerSize": 32,
+      "offset": null
+    }
+  ],
+  "entries": [
+    {
+      "quantity": 4,
+      "commodity": "Silicon",
+      "missionId": 1,
+      "missionName": "M1",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 13
+    },
+    {
+      "quantity": 3,
+      "commodity": "Silicon",
+      "missionId": 1,
+      "missionName": "M1",
+      "maxCargoBoxSize": null,
+      "pickupStop": 5,
+      "dropoffStop": 13
+    },
+    {
+      "quantity": 2,
+      "commodity": "Aluminum",
+      "missionId": 2,
+      "missionName": "M2",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 13
+    },
+    {
+      "quantity": 2,
+      "commodity": "Aluminum",
+      "missionId": 2,
+      "missionName": "M2",
+      "maxCargoBoxSize": null,
+      "pickupStop": 5,
+      "dropoffStop": 13
+    },
+    {
+      "quantity": 1,
+      "commodity": "Aluminum",
+      "missionId": 2,
+      "missionName": "M2",
+      "maxCargoBoxSize": null,
+      "pickupStop": 0,
+      "dropoffStop": 13
+    },
+    {
+      "quantity": 3,
+      "commodity": "Copper",
+      "missionId": 3,
+      "missionName": "M3",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 9
+    },
+    {
+      "quantity": 3,
+      "commodity": "Copper",
+      "missionId": 3,
+      "missionName": "M3",
+      "maxCargoBoxSize": null,
+      "pickupStop": 0,
+      "dropoffStop": 9
+    },
+    {
+      "quantity": 4,
+      "commodity": "Hydrogen",
+      "missionId": 4,
+      "missionName": "M4",
+      "maxCargoBoxSize": null,
+      "pickupStop": 7,
+      "dropoffStop": 8
+    },
+    {
+      "quantity": 5,
+      "commodity": "Hydrogen",
+      "missionId": 4,
+      "missionName": "M4",
+      "maxCargoBoxSize": null,
+      "pickupStop": 7,
+      "dropoffStop": 11
+    },
+    {
+      "quantity": 12,
+      "commodity": "ProcessedFood",
+      "missionId": 5,
+      "missionName": "M5",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 10
+    },
+    {
+      "quantity": 5,
+      "commodity": "ProcessedFood",
+      "missionId": 5,
+      "missionName": "M5",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 6
+    },
+    {
+      "quantity": 6,
+      "commodity": "Quartz",
+      "missionId": 6,
+      "missionName": "M6",
+      "maxCargoBoxSize": null,
+      "pickupStop": 0,
+      "dropoffStop": 14
+    },
+    {
+      "quantity": 6,
+      "commodity": "Quartz",
+      "missionId": 6,
+      "missionName": "M6",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 14
+    },
+    {
+      "quantity": 7,
+      "commodity": "Waste",
+      "missionId": 7,
+      "missionName": "M7",
+      "maxCargoBoxSize": null,
+      "pickupStop": 10,
+      "dropoffStop": 12
+    },
+    {
+      "quantity": 6,
+      "commodity": "Waste",
+      "missionId": 7,
+      "missionName": "M7",
+      "maxCargoBoxSize": null,
+      "pickupStop": 2,
+      "dropoffStop": 12
+    },
+    {
+      "quantity": 1,
+      "commodity": "Waste",
+      "missionId": 8,
+      "missionName": "M8",
+      "maxCargoBoxSize": null,
+      "pickupStop": 5,
+      "dropoffStop": 6
+    },
+    {
+      "quantity": 1,
+      "commodity": "Waste",
+      "missionId": 8,
+      "missionName": "M8",
+      "maxCargoBoxSize": null,
+      "pickupStop": 2,
+      "dropoffStop": 6
+    },
+    {
+      "quantity": 2,
+      "commodity": "Waste",
+      "missionId": 8,
+      "missionName": "M8",
+      "maxCargoBoxSize": null,
+      "pickupStop": 3,
+      "dropoffStop": 6
+    },
+    {
+      "quantity": 3,
+      "commodity": "Waste",
+      "missionId": 9,
+      "missionName": "M9",
+      "maxCargoBoxSize": null,
+      "pickupStop": 7,
+      "dropoffStop": 11
+    },
+    {
+      "quantity": 3,
+      "commodity": "Waste",
+      "missionId": 9,
+      "missionName": "M9",
+      "maxCargoBoxSize": null,
+      "pickupStop": 1,
+      "dropoffStop": 11
+    },
+    {
+      "quantity": 3,
+      "commodity": "Waste",
+      "missionId": 9,
+      "missionName": "M9",
+      "maxCargoBoxSize": null,
+      "pickupStop": 4,
+      "dropoffStop": 11
+    },
+    {
+      "quantity": 4,
+      "commodity": "Aluminum",
+      "missionId": 10,
+      "missionName": "M10",
+      "maxCargoBoxSize": null,
+      "pickupStop": 4,
+      "dropoffStop": 14
+    },
+    {
+      "quantity": 4,
+      "commodity": "Aluminum",
+      "missionId": 10,
+      "missionName": "M10",
+      "maxCargoBoxSize": null,
+      "pickupStop": 7,
+      "dropoffStop": 14
+    }
+  ]
+}
