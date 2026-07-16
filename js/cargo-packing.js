@@ -204,21 +204,87 @@ function depthAxisIndex(cellDims) {
   return best;
 }
 
-// Une caisse bloque l'accès à une autre si elle est plus proche de l'accès
-// du module (coordonnée plus petite sur l'axe de profondeur) ET que son
-// emprise recoupe celle de l'autre sur les deux axes restants — il faudrait
-// alors la déplacer temporairement pour atteindre celle qu'on veut sortir.
-function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
-  if (blockerPos[depthAxis] >= targetPos[depthAxis]) return false;
-  for (let axis = 0; axis < 3; axis++) {
-    if (axis === depthAxis) continue;
-    const aStart = blockerPos[axis];
-    const aEnd = aStart + blockerSize[axis];
-    const bStart = targetPos[axis];
-    const bEnd = bStart + targetSize[axis];
+// Une caisse bloque l'accès à une autre le long d'un AXE et d'une DIRECTION
+// donnés si elle est plus proche de CETTE face précise ET que son emprise
+// recoupe celle de l'autre sur les deux axes restants — il faudrait alors la
+// déplacer temporairement pour atteindre celle qu'on veut sortir PAR CETTE
+// FACE. direction "near" = accès par la coordonnée 0 de l'axe (arrière,
+// dessous, gauche) ; "far" = accès par l'extrémité opposée (avant, dessus,
+// droite) — voir docs/superpowers/specs/2026-07-17-ship-access-faces-design.md.
+function isBlockingOnAxis(axis, direction, blockerPos, blockerSize, targetPos, targetSize) {
+  if (direction === "near") {
+    if (blockerPos[axis] >= targetPos[axis]) return false;
+  } else {
+    if (blockerPos[axis] + blockerSize[axis] <= targetPos[axis] + targetSize[axis]) return false;
+  }
+  for (let otherAxis = 0; otherAxis < 3; otherAxis++) {
+    if (otherAxis === axis) continue;
+    const aStart = blockerPos[otherAxis];
+    const aEnd = aStart + blockerSize[otherAxis];
+    const bStart = targetPos[otherAxis];
+    const bEnd = bStart + targetSize[otherAxis];
     if (aEnd <= bStart || bEnd <= aStart) return false;
   }
   return true;
+}
+
+// Conservée pour compatibilité et lisibilité : le modèle historique à un
+// seul axe est désormais un cas particulier (la face "arrière") de
+// isBlockingOnAxis — comportement strictement identique à avant.
+function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
+  return isBlockingOnAxis(depthAxis, "near", blockerPos, blockerSize, targetPos, targetSize);
+}
+
+// Faces accessibles par défaut si le joueur n'a rien configuré pour ce
+// vaisseau (voir state.shipAccessFaces dans js/app.js) : reproduit
+// exactement l'ancien modèle à un seul axe (accès par l'arrière uniquement).
+const DEFAULT_ACCESS_FACES = { back: true };
+
+// Traduit les 6 étiquettes de faces (point de vue du joueur : arrière/avant/
+// gauche/droite/dessus/dessous) vers les axes réels de CE module précis
+// (depthAxis/widthAxis/heightAxis — calculés une fois par module, voir
+// simulateRoutePacking et moduleAxes). Renvoie toujours les 6, quel que soit
+// ce que le joueur a coché — le filtrage se fait dans accessibleFaceAxes.
+function moduleFaceAxes(module) {
+  // Objects must be created with explicit prototype assignment to work with
+  // deepStrictEqual across VM contexts in tests.
+  const mkFace = (axis, direction) => {
+    const obj = Object.create(Object.prototype);
+    obj.axis = axis;
+    obj.direction = direction;
+    return obj;
+  };
+  return {
+    back: mkFace(module.depthAxis, "near"),
+    front: mkFace(module.depthAxis, "far"),
+    bottom: mkFace(module.heightAxis, "near"),
+    top: mkFace(module.heightAxis, "far"),
+    left: mkFace(module.widthAxis, "near"),
+    right: mkFace(module.widthAxis, "far"),
+  };
+}
+
+// Liste des {axis, direction} correspondant aux faces cochées par le joueur
+// pour ce vaisseau (ou DEFAULT_ACCESS_FACES si rien n'est configuré) — une
+// entrée par face cochée, calculée UNE FOIS par module (pas par caisse), puis
+// réutilisée pour toutes les caisses de ce module (voir simulateRoutePacking).
+function accessibleFaceAxes(accessFaces, module) {
+  const faces = accessFaces || DEFAULT_ACCESS_FACES;
+  const mapping = moduleFaceAxes(module);
+  return Object.keys(mapping)
+    .filter((face) => faces[face])
+    .map((face) => mapping[face]);
+}
+
+// Une caisse n'est réellement bloquée que si TOUTES les faces accessibles
+// configurées sont obstruées — s'il en existe ne serait-ce qu'une seule
+// dégagée, le joueur peut passer par là pour l'atteindre. Avec une seule face
+// configurée (le cas par défaut), ce test est strictement équivalent à
+// isBlocking.
+function isBlockedFromEveryAccessibleFace(faceAxesList, blockerPos, blockerSize, targetPos, targetSize) {
+  return faceAxesList.every(({ axis, direction }) =>
+    isBlockingOnAxis(axis, direction, blockerPos, blockerSize, targetPos, targetSize)
+  );
 }
 
 // Gravité d'un conflit potentiel pour une position donnée : la date de

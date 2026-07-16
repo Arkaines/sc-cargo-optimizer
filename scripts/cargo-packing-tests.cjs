@@ -12,7 +12,7 @@ const PROJECT_ROOT = path.resolve(__dirname, "..");
 
 function loadCargoPacking() {
   const code = fs.readFileSync(path.join(PROJECT_ROOT, "js/cargo-packing.js"), "utf8");
-  const ctx = {};
+  const ctx = { Object, Math, Array, String };
   vm.createContext(ctx);
   vm.runInContext(code, ctx, { filename: "js/cargo-packing.js" });
   return ctx;
@@ -355,6 +355,126 @@ test("hasValidSupport: allows a crate resting on a support that leaves at the sa
   // Cas limite : même stop de livraison que le support -> autorisé (>=).
   const okEqual = ctx.hasValidSupport(grid, [0, 0, 1], [1, 1, 1], 1, 5);
   assert.strictEqual(okEqual, true, "support leaving at the exact same stop must be allowed");
+});
+
+// --- Faces d'accès : primitives généralisées (pas encore câblées) ---------
+test("isBlockingOnAxis: near direction matches the old isBlocking exactly", () => {
+  const ctx = loadCargoPacking();
+  const blockerPos = [0, 0, 0];
+  const blockerSize = [1, 1, 1];
+  const targetPos = [0, 1, 0];
+  const targetSize = [1, 1, 1];
+  // depthAxis = 1 : le bloqueur (coordonnée 0) est plus proche de l'accès
+  // "near" que la cible (coordonnée 1) sur cet axe, emprises qui se
+  // recoupent sur les deux autres axes -> bloqué.
+  assert.strictEqual(ctx.isBlockingOnAxis(1, "near", blockerPos, blockerSize, targetPos, targetSize), true);
+  assert.strictEqual(ctx.isBlocking(1, blockerPos, blockerSize, targetPos, targetSize), true);
+});
+
+test("isBlockingOnAxis: far direction is the mirror image of near", () => {
+  const ctx = loadCargoPacking();
+  // Même paire de caisses, mais avec la face "loin" comme accès : maintenant
+  // c'est la caisse à la coordonnée 1 (target) qui est proche de la face
+  // "far" (extrémité oubliée), donc target ne bloque pas via "far" ici ---
+  // on teste directement le sens : un bloqueur à coordonnée 1, cible à
+  // coordonnée 0, doit être considéré comme bloquant via "far" (le bloqueur
+  // est plus proche de l'extrémité opposée).
+  const blockerPos = [0, 1, 0];
+  const blockerSize = [1, 1, 1];
+  const targetPos = [0, 0, 0];
+  const targetSize = [1, 1, 1];
+  assert.strictEqual(ctx.isBlockingOnAxis(1, "far", blockerPos, blockerSize, targetPos, targetSize), true);
+  // Et ce même bloqueur ne bloque PAS via "near" (il est plus loin de la
+  // coordonnée 0 que la cible).
+  assert.strictEqual(ctx.isBlockingOnAxis(1, "near", blockerPos, blockerSize, targetPos, targetSize), false);
+});
+
+test("isBlockingOnAxis: no overlap on the other axes means never blocking", () => {
+  const ctx = loadCargoPacking();
+  const blockerPos = [0, 0, 0];
+  const blockerSize = [1, 1, 1];
+  const targetPos = [5, 1, 0]; // décalé sur l'axe 0 : aucun recoupement
+  const targetSize = [1, 1, 1];
+  assert.strictEqual(ctx.isBlockingOnAxis(1, "near", blockerPos, blockerSize, targetPos, targetSize), false);
+});
+
+test("moduleFaceAxes: maps all six labels to the module's real axes", () => {
+  const ctx = loadCargoPacking();
+  const module = { depthAxis: 1, widthAxis: 0, heightAxis: 2 };
+  const faces = ctx.moduleFaceAxes(module);
+  assert.deepStrictEqual(faces.back, { axis: 1, direction: "near" });
+  assert.deepStrictEqual(faces.front, { axis: 1, direction: "far" });
+  assert.deepStrictEqual(faces.bottom, { axis: 2, direction: "near" });
+  assert.deepStrictEqual(faces.top, { axis: 2, direction: "far" });
+  assert.deepStrictEqual(faces.left, { axis: 0, direction: "near" });
+  assert.deepStrictEqual(faces.right, { axis: 0, direction: "far" });
+});
+
+test("accessibleFaceAxes: defaults to back-only when accessFaces is falsy", () => {
+  const ctx = loadCargoPacking();
+  const module = { depthAxis: 1, widthAxis: 0, heightAxis: 2 };
+  const list = ctx.accessibleFaceAxes(null, module);
+  assert.deepStrictEqual(list, [{ axis: 1, direction: "near" }]);
+});
+
+test("accessibleFaceAxes: returns one entry per checked face", () => {
+  const ctx = loadCargoPacking();
+  const module = { depthAxis: 1, widthAxis: 0, heightAxis: 2 };
+  const list = ctx.accessibleFaceAxes({ back: true, bottom: true }, module);
+  assert.strictEqual(list.length, 2);
+  assert.ok(list.some((f) => f.axis === 1 && f.direction === "near"));
+  assert.ok(list.some((f) => f.axis === 2 && f.direction === "near"));
+});
+
+test("isBlockedFromEveryAccessibleFace: blocked on one face but clear on another is NOT blocked", () => {
+  const ctx = loadCargoPacking();
+  // Bloqueur à [0,0,0], cible à [0,1,0] : même coordonnée sur les axes 0 et 2
+  // (recoupement complet sur ces deux axes), seul l'axe 1 (profondeur) les
+  // sépare. Le bloqueur est donc bloquant sur l'axe 1 via "near" (coord 0 <
+  // coord 1), mais PAS sur l'axe 2 via "near" (coord 0 >= coord 0 de la
+  // cible) puisque les deux partagent la même coordonnée sur cet axe.
+  const blockerPos = [0, 0, 0];
+  const blockerSize = [1, 1, 1];
+  const targetPos = [0, 1, 0];
+  const targetSize = [1, 1, 1];
+  assert.strictEqual(ctx.isBlockingOnAxis(1, "near", blockerPos, blockerSize, targetPos, targetSize), true);
+  assert.strictEqual(ctx.isBlockingOnAxis(2, "near", blockerPos, blockerSize, targetPos, targetSize), false);
+  // Une seule face (profondeur) configurée -> bloqué. Les deux faces
+  // (profondeur + hauteur) configurées -> PAS bloqué (la face hauteur est
+  // dégagée, donc au moins une face offre un chemin libre).
+  assert.strictEqual(
+    ctx.isBlockedFromEveryAccessibleFace([{ axis: 1, direction: "near" }], blockerPos, blockerSize, targetPos, targetSize),
+    true
+  );
+  assert.strictEqual(
+    ctx.isBlockedFromEveryAccessibleFace(
+      [
+        { axis: 1, direction: "near" },
+        { axis: 2, direction: "near" },
+      ],
+      blockerPos,
+      blockerSize,
+      targetPos,
+      targetSize
+    ),
+    false
+  );
+});
+
+test("isBlockedFromEveryAccessibleFace: blocked on every configured face IS blocked", () => {
+  const ctx = loadCargoPacking();
+  // Bloqueur qui recouvre entièrement la cible sur les 3 axes en position :
+  // bloqué depuis n'importe quelle face testée (near sur les 3 axes ici).
+  const blockerPos = [0, 0, 0];
+  const blockerSize = [2, 2, 2];
+  const targetPos = [1, 1, 1];
+  const targetSize = [1, 1, 1];
+  const faceAxesAll = [
+    { axis: 0, direction: "near" },
+    { axis: 1, direction: "near" },
+    { axis: 2, direction: "near" },
+  ];
+  assert.strictEqual(ctx.isBlockedFromEveryAccessibleFace(faceAxesAll, blockerPos, blockerSize, targetPos, targetSize), true);
 });
 
 // --- worstConflictDropoff : polarité correcte (corrigée après Task 6) ----
