@@ -369,6 +369,12 @@ aside#side-panel {
   .form-grid {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   }
+  .cargo-viewer-row {
+    flex-direction: column;
+  }
+  .cargo-step-nav {
+    max-height: none;
+  }
 }
 
 main {
@@ -899,26 +905,6 @@ tbody tr:nth-child(even) {
   margin: 0 0 0.5rem;
 }
 
-/* Deux colonnes : les contrôles (faces accessibles + bouton + messages) à
-   gauche, le navigateur d'étape à droite plutôt qu'en dessous — évite que
-   la hauteur variable de l'un déforme la position de l'autre. */
-.cargo-pack-columns {
-  display: flex;
-  align-items: stretch;
-  gap: 1rem;
-}
-
-/* Se limite à la largeur de son propre contenu (fieldset + bouton) plutôt
-   que d'occuper 60% de force : ça laisse toute la largeur restante au
-   navigateur d'étape, dont les lignes de chargement/déchargement sont
-   sensiblement plus longues et se retrouvaient coupées sur deux lignes
-   pour rien. */
-.cargo-pack-left {
-  flex: 0 1 auto;
-  max-width: 640px;
-  min-width: 0;
-}
-
 .cargo-pack-controls {
   display: flex;
   align-items: center;
@@ -975,8 +961,22 @@ tbody tr:nth-child(even) {
 
 /* Un seul panneau regroupant la vue 3D, ses contrôles et le navigateur
    d'étapes, façon fenêtre unique plutôt que des blocs séparés. */
-.cargo-viewer-panel {
+/* Vue 3D et navigateur d'étape côte à côte plutôt que l'un sous l'autre :
+   une grosse commande (ex. 447 SCU décomposés en caisses de 32/16) produit
+   une longue liste de chargement/déchargement par étape, qui repoussait la
+   vue 3D bien plus bas dans la page. Ici, seule la carte du navigateur
+   grandit/défile (voir .cargo-step-nav ci-dessous) — la vue 3D reste à sa
+   place. */
+.cargo-viewer-row {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
   margin-top: 0.75rem;
+}
+
+.cargo-viewer-panel {
+  flex: 2 1 480px;
+  min-width: 0;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   background: var(--input-bg);
@@ -1005,11 +1005,12 @@ tbody tr:nth-child(even) {
   font-size: 0.8rem;
 }
 
-/* Colonne de droite (voir .cargo-pack-columns) plutôt qu'en bas de la vue
-   3D ou sous les contrôles : reste à côté d'eux sans dépendre de leur
-   hauteur, qui variait selon le contenu du message d'avertissement/résumé
-   et déformait le panneau quand elle était partagée avec eux sur une même
-   ligne ou juste en dessous. */
+/* À côté de la vue 3D (voir .cargo-viewer-row) plutôt qu'au-dessus ou en
+   dessous. Plafonnée à la même hauteur totale que la vue 3D (560px +
+   ~50px de boutons de vue) : une commande avec beaucoup de caisses à
+   charger/décharger à une même étape fait défiler la liste À L'INTÉRIEUR
+   de cette carte plutôt que de grandir sans limite et pousser la vue 3D
+   plus bas dans la page. */
 .cargo-step-nav {
   display: flex;
   align-items: stretch;
@@ -1018,8 +1019,9 @@ tbody tr:nth-child(even) {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
-  flex: 1 1 auto;
+  flex: 1 1 340px;
   min-width: 280px;
+  max-height: 610px;
 }
 
 .btn-step-nav {
@@ -1035,11 +1037,15 @@ tbody tr:nth-child(even) {
 }
 
 .cargo-step-info {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 
 .cargo-step-info h3 {
+  flex: 0 0 auto;
   margin: 0 0 0.5rem;
   font-size: 1.1rem;
   color: var(--accent-cyan);
@@ -1048,6 +1054,9 @@ tbody tr:nth-child(even) {
 }
 
 .cargo-step-info ul {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
   padding-left: 1.2rem;
   font-size: 0.9rem;
