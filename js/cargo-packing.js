@@ -245,6 +245,14 @@ const DEFAULT_ACCESS_FACES = { back: true };
 // (depthAxis/widthAxis/heightAxis — calculés une fois par module, voir
 // simulateRoutePacking et moduleAxes). Renvoie toujours les 6, quel que soit
 // ce que le joueur a coché — le filtrage se fait dans accessibleFaceAxes.
+// Note : cet étiquetage n'est fidèle à l'orientation réelle du vaisseau que
+// lorsque depthAxis !== 2 — dans le cas rare où l'axe de profondeur d'un
+// module EST l'axe vertical (une soute plus haute que longue), le repli
+// pré-existant de moduleAxes échange largeur/hauteur, et moduleFaceAxes
+// hérite de cet échange (les cases "dessus/dessous" du joueur pilotent alors
+// en réalité une direction horizontale). Comportement inchangé, documenté
+// seulement — ne concerne que la configuration explicite de faces non-
+// défaut sur une soute de forme inhabituelle.
 function moduleFaceAxes(module) {
   // Objects must be created with explicit prototype assignment to work with
   // deepStrictEqual across VM contexts in tests.
@@ -269,10 +277,19 @@ function moduleFaceAxes(module) {
 // entrée par face cochée, calculée UNE FOIS par module (pas par caisse), puis
 // réutilisée pour toutes les caisses de ce module (voir simulateRoutePacking).
 function accessibleFaceAxes(accessFaces, module) {
-  const faces = accessFaces || DEFAULT_ACCESS_FACES;
   const mapping = moduleFaceAxes(module);
+  const filtered = Object.keys(mapping)
+    .filter((face) => accessFaces && accessFaces[face])
+    .map((face) => mapping[face]);
+  // Repli sur DEFAULT_ACCESS_FACES pas seulement quand accessFaces est
+  // falsy, mais aussi quand c'est un objet valide où AUCUNE face n'est cochée
+  // (ex : {}) -- sinon le filtre ci-dessus renvoie une liste vide, et
+  // isBlockedFromEveryAccessibleFace([].every(...)) devient vacuously true
+  // pour toute paire de caisses (voir la régression documentée dans les
+  // tests de ce fichier).
+  if (filtered.length > 0) return filtered;
   return Object.keys(mapping)
-    .filter((face) => faces[face])
+    .filter((face) => DEFAULT_ACCESS_FACES[face])
     .map((face) => mapping[face]);
 }
 

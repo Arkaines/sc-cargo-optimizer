@@ -426,6 +426,14 @@ test("accessibleFaceAxes: returns one entry per checked face", () => {
   assert.ok(list.some((f) => f.axis === 2 && f.direction === "near"));
 });
 
+test("accessibleFaceAxes: an empty object (all faces false) falls back to the default, not an empty list", () => {
+  const ctx = loadCargoPacking();
+  const module = { depthAxis: 1, widthAxis: 0, heightAxis: 2 };
+  const list = ctx.accessibleFaceAxes({}, module);
+  const defaultList = ctx.accessibleFaceAxes(null, module);
+  assert.deepStrictEqual(list, defaultList);
+});
+
 test("isBlockedFromEveryAccessibleFace: blocked on one face but clear on another is NOT blocked", () => {
   const ctx = loadCargoPacking();
   // Bloqueur à [0,0,0], cible à [0,1,0] : même coordonnée sur les axes 0 et 2
@@ -535,6 +543,25 @@ test("simulateRoutePacking: omitting accessFaces behaves identically to the pre-
   assert.deepStrictEqual(withoutArg.conflicts, withDefaultArg.conflicts);
   assert.deepStrictEqual(withoutArg.unplaced, withDefaultArg.unplaced);
   assert.strictEqual(withoutArg.placements.length, withDefaultArg.placements.length);
+});
+
+test("simulateRoutePacking: an empty accessFaces object ({}) behaves identically to omitting it entirely", () => {
+  const ctx = loadCargoPacking();
+  // Deux caisses loin l'une de l'autre dans un module large : ne devraient
+  // jamais se bloquer, avec ou sans accessFaces. Avant le fix, accessFaces:{}
+  // faisait passer accessibleFaceAxes à [], ce qui rend isBlockedFromEvery
+  // AccessibleFace vacuously true pour TOUTE paire de caisses (every() sur un
+  // tableau vide) -- un conflit apparaissait alors même ici.
+  const holds = [{ name: "test", dimensions: { x: 5, y: 5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [
+    { quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 2 },
+    { quantity: 1, commodity: "B", pickupStop: 1, dropoffStop: 3 },
+  ];
+  const withEmptyObject = ctx.simulateRoutePacking(entries, holds, 4, {});
+  const withUndefined = ctx.simulateRoutePacking(entries, holds, 4, undefined);
+  assert.deepStrictEqual(withEmptyObject.conflicts, withUndefined.conflicts);
+  assert.deepStrictEqual(withEmptyObject.unplaced, withUndefined.unplaced);
+  assert.strictEqual(withEmptyObject.placements.length, withUndefined.placements.length);
 });
 
 // --- worstConflictDropoff : polarité correcte (corrigée après Task 6) ----
