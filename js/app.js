@@ -3266,38 +3266,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document.getElementById("uex-sync-all-btn").addEventListener("click", () => runFullSync({ manual: true }));
-
   if (typeof initCloudSync === "function") initCloudSync();
 
-  // La base doit rester à jour toute seule : si les données n'ont jamais été
-  // synchronisées, ou datent de plus de 24h, on relance la synchronisation
-  // en arrière-plan au chargement — le joueur n'a plus besoin de penser à
-  // cliquer sur "Tout synchroniser" pour que les prix/lieux/vaisseaux restent
-  // à jour. Le bouton reste disponible pour forcer un rafraîchissement
-  // immédiat (ex. juste après un patch en jeu), mais n'est plus obligatoire.
-  const AUTO_SYNC_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-  if (!state.uexSyncedAt || Date.now() - state.uexSyncedAt > AUTO_SYNC_MAX_AGE_MS) {
-    runFullSync({ manual: false });
-  }
+  // Pas de bouton de synchronisation manuelle : la base se rafraîchit toute
+  // seule, jusqu'à 4 fois par jour (toutes les 6h). Un check au chargement
+  // couvre la visite normale ; l'intervalle couvre le cas d'un onglet laissé
+  // ouvert plus de 6h (le joueur n'a jamais besoin d'y penser).
+  const AUTO_SYNC_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+  const maybeAutoSync = () => {
+    if (!state.uexSyncedAt || Date.now() - state.uexSyncedAt > AUTO_SYNC_MAX_AGE_MS) {
+      runFullSync();
+    }
+  };
+  maybeAutoSync();
+  setInterval(maybeAutoSync, 15 * 60 * 1000);
 });
 
 // Lance la synchronisation complète (UEX Corp, distances manquantes, Star
-// Citizen Wiki, FleetYards) — partagée entre le clic manuel sur le bouton
-// et le déclenchement automatique en arrière-plan au chargement (voir plus
-// haut). manual=true anime le bouton lui-même (texte d'étape, désactivé
-// pendant l'opération) ; manual=false (déclenchement auto) laisse le
-// bouton intact et ne montre l'avancement que dans la ligne de statut, pour
-// ne pas donner l'impression qu'une action de l'utilisateur est en cours.
-async function runFullSync({ manual }) {
-  const btn = document.getElementById("uex-sync-all-btn");
+// Citizen Wiki, FleetYards) en arrière-plan — déclenchée automatiquement au
+// chargement puis périodiquement (voir plus haut). N'affiche l'avancement
+// que dans la ligne de statut, pour ne pas donner l'impression qu'une action
+// de l'utilisateur est en cours.
+async function runFullSync() {
   const status = document.getElementById("uex-status");
   const setProgress = (key, params) => {
-    const text = t(key, params);
-    if (manual) btn.textContent = text;
-    else status.textContent = text;
+    status.textContent = t(key, params);
   };
-  if (manual) btn.disabled = true;
   try {
     setProgress("syncingLocations");
     await syncUexLocations();
@@ -3338,11 +3332,6 @@ async function runFullSync({ manual }) {
       scwiki: state.scwikiLocations.length,
     });
   } catch (err) {
-    if (manual) alert(t("syncFailed", { msg: err.message }));
-    else status.textContent = t("syncFailed", { msg: err.message });
-  }
-  if (manual) {
-    btn.disabled = false;
-    btn.textContent = t("syncAllBtn");
+    status.textContent = t("syncFailed", { msg: err.message });
   }
 }
