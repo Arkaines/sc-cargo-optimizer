@@ -1010,15 +1010,20 @@ tbody tr:nth-child(even) {
    ~50px de boutons de vue) : une commande avec beaucoup de caisses à
    charger/décharger à une même étape fait défiler la liste À L'INTÉRIEUR
    de cette carte plutôt que de grandir sans limite et pousser la vue 3D
-   plus bas dans la page. */
+   plus bas dans la page. Traitement de carte à part entière (padding,
+   ombre, coins arrondis) — même poids visuel que .side-block ("Importer
+   une mission") — plutôt qu'une simple barre de navigation compacte,
+   pour bien se lire comme un panneau indépendant à côté de la vue 3D.
+   */
 .cargo-step-nav {
   display: flex;
   align-items: stretch;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: 1.1rem 1.25rem;
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   flex: 1 1 340px;
   min-width: 280px;
   max-height: 610px;
