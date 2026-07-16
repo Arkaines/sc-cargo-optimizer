@@ -127,7 +127,8 @@ function extractContractTitle(rawText) {
     return stripLeadingGlyph(firstLine.replace(/\s+/g, " ").trim());
   }
 
-  const giverLabelSrc = "Contracted\\s*By|Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par";
+  const giverLabelSrc =
+    "Contracted\\s*By|Contract" + E_ACUTE + "\\s*Par|Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par";
 
   // Cas précis : le badge de palier de rang précède directement le titre,
   // lui-même juste avant le repère du donneur (ex : "Member Rank Small Cargo
@@ -328,14 +329,21 @@ function extractGiver(normalized) {
   // fait matcher n'importe quelle lettre (bug de canonicalisation JS), ce qui
   // coupait la capture au premier mot venu au lieu du vrai titre de section.
   const labelRe = new RegExp(
-    "(?:Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par|Contracted\\s*By)\\s+",
+    "(?:Propos" + E_ACUTE + "\\s*Par|[E" + E_ACUTE_UP + "]mis\\s*Par|Contract" + E_ACUTE + "\\s*Par|Contracted\\s*By)\\s+",
     "i"
   );
   const labelMatch = labelRe.exec(normalized);
   if (!labelMatch) return "";
   const tail = normalized.slice(labelMatch.index + labelMatch[0].length);
   const stopMatch = /\s+\p{Lu}{3,}/u.exec(tail);
-  const giverText = stopMatch ? tail.slice(0, stopMatch.index) : tail;
+  // "DÉTAILS" perd parfois sa capitale accentuée à l'OCR ("DéTAILS"), ce qui
+  // casse la détection de mot tout en majuscules ci-dessus (une lettre
+  // minuscule au milieu du mot) — repère additionnel pour ce titre de
+  // section quasi systématique juste après le donneur, en complément de
+  // l'heuristique générale plutôt qu'à sa place.
+  const detailsMatch = new RegExp("\\s+D[E" + E_ACUTE_UP + E_ACUTE + "]TAILS\\b", "i").exec(tail);
+  const stop = [stopMatch, detailsMatch].filter(Boolean).sort((a, b) => a.index - b.index)[0];
+  const giverText = stop ? tail.slice(0, stop.index) : tail;
   return giverText.trim();
 }
 
@@ -544,6 +552,15 @@ function parseDropoffChunkAlt(content) {
 }
 
 function parsePickupChunkAlt(content) {
+  // Deux formulations réelles rencontrées pour ce gabarit : "Collecter
+  // <marchandise> depuis <lieu>" (ex : Red Wind Linehaul) et "Collecter
+  // <marchandise> à <lieu>" (gabarit d'origine). "depuis" est sans ambiguïté
+  // (jamais une préposition qu'on retrouverait à l'intérieur d'un nom de
+  // marchandise), contrairement à "à"/"a" — on le tente donc en premier.
+  const depuisMatch = /\bdepuis\s+(.+)$/i.exec(content);
+  if (depuisMatch) {
+    return stripTrailingBulletNoise(stripSystemSuffix(stripBracketNoise(depuisMatch[1])));
+  }
   const re = new RegExp("^(?:.+?\\s+[" + A_GRAVE + "a]\\s+)?(.+)$", "i");
   const m = re.exec(content);
   if (!m) return null;
