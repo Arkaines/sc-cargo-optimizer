@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="css/style.css?v=20260716-r18" />
+<link rel="stylesheet" href="css/style.css?v=20260716-r19" />
 <script>
   (function () {
     var saved = localStorage.getItem("sc-cargo-optimizer-theme");
@@ -213,22 +213,24 @@
     </div>
 
     <div class="tab-panel" id="cargo-tab" style="display:none;">
-      <p class="hint" data-i18n="cargoTabHint"></p>
-      <p class="hint warning-text" data-i18n="cargoTabNotFunctional"></p>
-      <div class="cargo-pack-controls">
-        <fieldset id="ship-access-faces" class="access-faces-fieldset">
-          <legend data-i18n="accessFacesTitle"></legend>
-          <label><input type="checkbox" id="access-face-back" /> <span data-i18n="accessFaceBack"></span></label>
-          <label><input type="checkbox" id="access-face-front" /> <span data-i18n="accessFaceFront"></span></label>
-          <label><input type="checkbox" id="access-face-left" /> <span data-i18n="accessFaceLeft"></span></label>
-          <label><input type="checkbox" id="access-face-right" /> <span data-i18n="accessFaceRight"></span></label>
-          <label><input type="checkbox" id="access-face-top" /> <span data-i18n="accessFaceTop"></span></label>
-          <label><input type="checkbox" id="access-face-bottom" /> <span data-i18n="accessFaceBottom"></span></label>
-        </fieldset>
-        <button type="button" id="pack-cargo-btn" class="btn-primary" data-i18n="packCargoBtn"></button>
+      <div class="cargo-pack-panel">
+        <p class="hint" data-i18n="cargoTabHint"></p>
+        <p class="hint warning-text" data-i18n="cargoTabNotFunctional"></p>
+        <div class="cargo-pack-controls">
+          <fieldset id="ship-access-faces" class="access-faces-fieldset">
+            <legend data-i18n="accessFacesTitle"></legend>
+            <label><input type="checkbox" id="access-face-back" /> <span data-i18n="accessFaceBack"></span></label>
+            <label><input type="checkbox" id="access-face-front" /> <span data-i18n="accessFaceFront"></span></label>
+            <label><input type="checkbox" id="access-face-left" /> <span data-i18n="accessFaceLeft"></span></label>
+            <label><input type="checkbox" id="access-face-right" /> <span data-i18n="accessFaceRight"></span></label>
+            <label><input type="checkbox" id="access-face-top" /> <span data-i18n="accessFaceTop"></span></label>
+            <label><input type="checkbox" id="access-face-bottom" /> <span data-i18n="accessFaceBottom"></span></label>
+          </fieldset>
+          <button type="button" id="pack-cargo-btn" class="btn-primary" data-i18n="packCargoBtn"></button>
+        </div>
+        <p class="hint" data-i18n="accessFacesHint"></p>
+        <p id="cargo-pack-status" class="hint" style="margin-top:0.5rem;"></p>
       </div>
-      <p class="hint" data-i18n="accessFacesHint"></p>
-      <p id="cargo-pack-status" class="hint" style="margin-top:0.5rem;"></p>
 
       <div class="cargo-viewer-panel">
         <div id="cargo-viewer-3d"></div>
@@ -290,27 +292,27 @@
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/i18n.js?v=20260716-r18"></script>
-<script src="data/locations.js?v=20260716-r18"></script>
-<script src="data/location-aliases.js?v=20260716-r18"></script>
-<script src="data/commodity-aliases.js?v=20260716-r18"></script>
-<script src="data/commodities.js?v=20260716-r18"></script>
-<script src="data/companies.js?v=20260716-r18"></script>
-<script src="data/ships.js?v=20260716-r18"></script>
-<script src="data/distances.js?v=20260716-r18"></script>
-<script src="data/scwiki-locations.js?v=20260716-r18"></script>
-<script src="data/location-planets.js?v=20260716-r18"></script>
-<script src="data/mission-reputation.js?v=20260716-r18"></script>
-<script src="data/mission-reputation-by-title.js?v=20260716-r18"></script>
-<script src="data/mission-title-aliases.js?v=20260716-r18"></script>
-<script src="data/faction-reputation-ladders.js?v=20260716-r18"></script>
-<script src="js/uex.js?v=20260716-r18"></script>
-<script src="js/scwiki.js?v=20260716-r18"></script>
-<script src="js/fleetyards.js?v=20260716-r18"></script>
-<script src="js/cargo-packing.js?v=20260716-r18"></script>
-<script src="js/ocr.js?v=20260716-r18"></script>
-<script src="js/cloud.js?v=20260716-r18"></script>
-<script src="js/app.js?v=20260716-r18"></script>
+<script src="js/i18n.js?v=20260716-r19"></script>
+<script src="data/locations.js?v=20260716-r19"></script>
+<script src="data/location-aliases.js?v=20260716-r19"></script>
+<script src="data/commodity-aliases.js?v=20260716-r19"></script>
+<script src="data/commodities.js?v=20260716-r19"></script>
+<script src="data/companies.js?v=20260716-r19"></script>
+<script src="data/ships.js?v=20260716-r19"></script>
+<script src="data/distances.js?v=20260716-r19"></script>
+<script src="data/scwiki-locations.js?v=20260716-r19"></script>
+<script src="data/location-planets.js?v=20260716-r19"></script>
+<script src="data/mission-reputation.js?v=20260716-r19"></script>
+<script src="data/mission-reputation-by-title.js?v=20260716-r19"></script>
+<script src="data/mission-title-aliases.js?v=20260716-r19"></script>
+<script src="data/faction-reputation-ladders.js?v=20260716-r19"></script>
+<script src="js/uex.js?v=20260716-r19"></script>
+<script src="js/scwiki.js?v=20260716-r19"></script>
+<script src="js/fleetyards.js?v=20260716-r19"></script>
+<script src="js/cargo-packing.js?v=20260716-r19"></script>
+<script src="js/ocr.js?v=20260716-r19"></script>
+<script src="js/cloud.js?v=20260716-r19"></script>
+<script src="js/app.js?v=20260716-r19"></script>
 <script type="importmap">
 {
   "imports": {
@@ -319,7 +321,7 @@
   }
 }
 </script>
-<script type="module" src="js/cargo-viewer.js?v=20260716-r18"></script>
+<script type="module" src="js/cargo-viewer.js?v=20260716-r19"></script>
 <footer class="site-footer">
   <a href="terms.html">Conditions d'utilisation</a>
   <span aria-hidden="true">·</span>

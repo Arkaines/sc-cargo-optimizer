@@ -848,11 +848,25 @@ tbody tr:nth-child(even) {
   font-size: 0.85rem;
 }
 
+.cargo-pack-panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  margin-bottom: 0.75rem;
+}
+
+.cargo-pack-panel .hint {
+  margin: 0 0 0.5rem;
+}
+
 .cargo-pack-controls {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  margin: 0.75rem 0;
 }
 
 .access-faces-fieldset {
