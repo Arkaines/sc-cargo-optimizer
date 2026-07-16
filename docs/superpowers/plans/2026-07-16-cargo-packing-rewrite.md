@@ -1035,9 +1035,15 @@ git commit -m "Corrige la polarité inversée de worstConflictDropoff (pouvait a
 - [ ] **Step 1: Run the full non-regression suite one more time**
 
 Run: `node scripts/cargo-packing-tests.cjs`
-Expected: all tests pass. Record the final Hull B and Raft conflict counts.
+Expected: all tests pass (21/21 as of Task 6bis). Record the final Hull B (0) and Raft (4) conflict counts.
 
-- [ ] **Step 2: Re-run the adversarial and realistic browser scenarios**
+- [ ] **Step 2: Fast-follow — add a test that literally forces two zones for one mission in one module**
+
+Flagged as a non-blocking gap by the Task 5 reviewer: the Task 5 multi-zone test (`"placement: a mission with two zones in the same module never mixes their width/height ranges"`) does not, for its specific fixture, actually give one mission two zones in one module (it verified the same protective mechanism via a different route — see the Task 5 report/review for the full explanation). The reviewer judged this low-risk since the per-zone loop has no zone-count-dependent branching, but recommended closing the gap with a dedicated fixture. Construct one: a mission whose SCU need is split across two allocations in the SAME module — e.g., a mission that first gets a partial Tier-1 width-lane too small for its full need, then (once no further Tier-1 lane is free anywhere) gets a Tier-2 zone whose host happens to live in that SAME module. Verify directly via a call to `assignMissionZones` that the mission's zone list for that module has length 2 before writing the placement-level assertion (mirror the verification style already used in Tasks 3/4/6bis — confirm the zone-count precondition directly, don't just hope the fixture produces it). The test should confirm placement still succeeds correctly (no conflict, no crossed-zone leakage) exactly like the existing Task 5 test, just for a fixture that actually has the 2-zones-1-mission-1-module shape.
+
+Add this to `scripts/cargo-packing-tests.cjs`, run the suite, confirm it passes, and note in your report whether it required any code change (it should not — Task 5's per-zone loop was reviewed as already generalizing correctly; if it doesn't pass, that's a new, real gap to investigate, not something to force-fit).
+
+- [ ] **Step 3: Re-run the adversarial and realistic browser scenarios**
 
 These live outside the repo (built ad hoc during the session that produced this plan). Recreate them if the local test server (`static-server.cjs`) and a Puppeteer-capable browser are available:
 - The 60-mission adversarial stress test (all missions' intervals crossing) — confirm the conflict count has not regressed above whatever was last measured for the current code before this rewrite started.
@@ -1045,15 +1051,15 @@ These live outside the repo (built ad hoc during the session that produced this 
 
 If browser automation isn't available in the environment (it was flaky during this session — Puppeteer/Edge launch failures unrelated to the code), state clearly to the user that only the Node-based `scripts/cargo-packing-tests.cjs` suite could be verified, and which browser-based checks are still outstanding.
 
-- [ ] **Step 3: Clean up stale comments**
+- [ ] **Step 4: Clean up stale comments**
 
 Search `js/cargo-packing.js` for comments that describe the *old* architecture and no longer match the code (e.g., any remaining reference to "laneAxis"/"laneStart" naming, or to the old strictly-smaller stacking rule). Fix any found in place — this is a documentation-only change, verify with `git diff` that no logic lines changed.
 
-- [ ] **Step 4: Update the design spec status**
+- [ ] **Step 5: Update the design spec status**
 
-Add a short "Status: implemented, see commits ed53cc7..<final>" line to the top of `docs/superpowers/specs/2026-07-16-cargo-packing-rewrite-design.md`, and record the final measured Hull B / Raft conflict counts in its Section 6 (Verification), replacing the "expected to improve" wording with the actual numbers.
+Add a short "Status: implemented, see commits ed53cc7..<final>" line to the top of `docs/superpowers/specs/2026-07-16-cargo-packing-rewrite-design.md`, and record the final measured Hull B (0) / Raft (4) conflict counts in its Section 6 (Verification), replacing the "expected to improve" wording with the actual numbers. Also add a short note that the `worstConflictDropoff` polarity bug (Task 6bis) was found and fixed during verification — it wasn't part of the original design gap this rewrite targeted, but directly served Section 5's "never accept an avoidable conflict" requirement.
 
-- [ ] **Step 5: Fix the outdated "known limitation" note in `CLAUDE.md`**
+- [ ] **Step 6: Fix the outdated "known limitation" note in `CLAUDE.md`**
 
 `CLAUDE.md`'s Architecture section currently says, about `assignMissionZones`:
 
@@ -1069,10 +1075,10 @@ This predates the discovery that height (Z) also separates missions, not just wi
 
 Also update the `SCU_BOX_SIZES`/stacking-rule bullet if it still describes the old "strictly smaller only" rule anywhere in the file — search for "smaller" in `CLAUDE.md` and correct any remaining mention to "equal or larger, never smaller" (matching Task 2's fix).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add js/cargo-packing.js docs/superpowers/specs/2026-07-16-cargo-packing-rewrite-design.md CLAUDE.md
+git add js/cargo-packing.js scripts/cargo-packing-tests.cjs docs/superpowers/specs/2026-07-16-cargo-packing-rewrite-design.md CLAUDE.md
 git commit -m "Nettoie les commentaires obsolètes et enregistre les résultats finaux de la réécriture"
 ```
 
