@@ -123,6 +123,88 @@ test("zone assignment: two missions on a wide module each get their own width-la
   assert.strictEqual(z2.maxDropoffStop, 9);
 });
 
+// --- Zonage 3D : tier 2, empilement croisé sécurisé entre contrats -------
+test("zone assignment: a mission whose window is fully contained by another gets stacked on it", () => {
+  const ctx = loadCargoPacking();
+  // Module étroit : une seule voie en largeur possible (8 crans, mais
+  // chaque caisse a besoin de 8 crans à elle seule, donc AUCUNE voie libre
+  // ne reste pour un deuxième contrat).
+  const modules = [
+    {
+      hold: { maxContainerSize: 32 },
+      cellDims: [8, 12, 2],
+      depthAxis: 1,
+    },
+  ];
+  const boxes = [
+    // Hôte : présent du stop 0 au stop 10, prend toute la largeur.
+    { box: { scu: 32, footprint: [8, 12], height: 1 }, entry: { mission: { id: 1 } }, pickupStop: 0, dropoffStop: 10 },
+    // Invité : présent du stop 2 au stop 5, ENTIÈREMENT à l'intérieur de la fenêtre de l'hôte.
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 2 } }, pickupStop: 2, dropoffStop: 5 },
+  ];
+  const zones = ctx.assignMissionZones(boxes, modules);
+  const guestZones = zones.get(2);
+  assert.ok(guestZones && guestZones.length, "the guest mission must get a zone via tier 2 stacking");
+  const guest = guestZones[0];
+  const host = zones.get(1)[0];
+  // Le tier 2 réutilise EXACTEMENT l'empreinte spatiale de l'hôte (pas une
+  // sous-plage de hauteur découpée) — la non-collision réelle est assurée
+  // plus tard, caisse par caisse, par canPlace/hasValidSupport (Task 5), pas
+  // par le zonage lui-même.
+  assert.strictEqual(guest.widthStart, host.widthStart);
+  assert.strictEqual(guest.widthEnd, host.widthEnd);
+  assert.strictEqual(guest.heightStart, host.heightStart);
+  assert.strictEqual(guest.heightEnd, host.heightEnd);
+  assert.strictEqual(guest.module, host.module);
+});
+
+test("zone assignment: a mission whose window is NOT contained gets no tier-2 zone (falls through)", () => {
+  const ctx = loadCargoPacking();
+  const modules = [
+    {
+      hold: { maxContainerSize: 32 },
+      cellDims: [8, 12, 2],
+      depthAxis: 1,
+    },
+  ];
+  const boxes = [
+    { box: { scu: 32, footprint: [8, 12], height: 1 }, entry: { mission: { id: 1 } }, pickupStop: 2, dropoffStop: 5 },
+    // Invité candidat : commence AVANT que l'hôte ne soit présent -> pas sûr.
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 2 } }, pickupStop: 0, dropoffStop: 4 },
+  ];
+  const zones = ctx.assignMissionZones(boxes, modules);
+  const guestZones = zones.get(2) || [];
+  assert.strictEqual(guestZones.length, 0, "no safe host exists, so no zone should be reserved");
+});
+
+test("zone assignment: a third mission nested inside two other missions' windows still gets a tier-2 zone", () => {
+  const ctx = loadCargoPacking();
+  // Note : la containment de fenêtres temporelles est transitive (si la
+  // fenêtre de la mission 3 est contenue dans celle de la mission 2, qui est
+  // elle-même contenue dans celle de la mission 1, alors la mission 1 la
+  // contient forcément aussi) — et le tier 2 copie EXACTEMENT l'empreinte
+  // spatiale de son hôte, donc un troisième niveau ne produit pas une
+  // empreinte différente d'un deuxième niveau. Ce test vérifie seulement
+  // qu'empiler plusieurs invités sur le même hôte (ou une chaîne d'hôtes
+  // équivalents) reste possible et ne casse rien — pas quel hôte précis
+  // `.find` choisit en interne.
+  const modules = [
+    {
+      hold: { maxContainerSize: 32 },
+      cellDims: [8, 12, 2],
+      depthAxis: 1,
+    },
+  ];
+  const boxes = [
+    { box: { scu: 32, footprint: [8, 12], height: 1 }, entry: { mission: { id: 1 } }, pickupStop: 0, dropoffStop: 20 },
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 2 } }, pickupStop: 5, dropoffStop: 15 },
+    { box: { scu: 4, footprint: [2, 2], height: 1 }, entry: { mission: { id: 3 } }, pickupStop: 8, dropoffStop: 12 },
+  ];
+  const zones = ctx.assignMissionZones(boxes, modules);
+  assert.ok((zones.get(2) || []).length, "mission 2 must get a tier-2 zone");
+  assert.ok((zones.get(3) || []).length, "mission 3 must also get a tier-2 zone despite mission 1's lane already being reused once");
+});
+
 // --- Empilement : sécurité temporelle (le support ne doit pas partir avant) -
 //
 // Tests directs sur hasValidSupport(grid, pos, size, boxScu, dropoffStop).

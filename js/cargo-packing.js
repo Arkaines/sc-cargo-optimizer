@@ -494,13 +494,59 @@ function assignMissionZones(boxes, modules) {
   // entiers dans un seul module plutôt que d'être scindés inutilement.
   const missionsSorted = [...missionNeed.values()].sort((a, b) => b.totalScu - a.totalScu);
   const zonesByMission = new Map();
+  const allZones = []; // toutes les zones déjà attribuées (tier 1 et tier 2), dans l'ordre, pour servir d'hôtes potentiels au tier 2.
 
   missionsSorted.forEach(({ mission, totalScu, minFootprintNeeded, minPickupStop, maxDropoffStop }) => {
     let remaining = totalScu;
     const zones = [];
     while (remaining > 0.0001) {
       const openModules = moduleState.filter((ms) => ms.hiEdge - ms.loEdge > 0);
-      if (!openModules.length) break; // Plus de voie libre nulle part : le tier 2 (Task 4) ou le repli en recherche libre prendra le relais.
+      if (!openModules.length) {
+        // Tier 2 : plus de voie libre, cherche un hôte déjà placé (n'importe
+        // quelle mission, tier 1 ou déjà empilée en tier 2) dont la fenêtre de
+        // présence contient ENTIÈREMENT celle du contrat courant. Sûr
+        // uniquement parce que l'hôte est garanti présent pendant tout le
+        // séjour de l'invité — mais cette réservation ne garantit QUE la
+        // sécurité temporelle, pas une capacité physique précise (le zonage
+        // se fait avant tout placement réel de caisse, voir le principe de
+        // planification statique). L'invité reprend donc EXACTEMENT
+        // l'empreinte spatiale de l'hôte (même largeur, même hauteur) plutôt
+        // qu'une sous-plage de hauteur découpée au-dessus : la non-collision
+        // réelle est assurée plus tard, caisse par caisse, par
+        // canPlace (occupation de grille) et hasValidSupport (règle de
+        // taille + sécurité temporelle, voir Task 2) — une caisse de
+        // l'invité ne peut occuper qu'une cellule libre, et ne peut reposer
+        // que sur une caisse de l'hôte qui reste au moins aussi longtemps.
+        // Si le besoin réel de l'invité ne tient finalement pas dans cette
+        // empreinte partagée, il retombe sur la recherche ville-entière de
+        // dernier recours (Task 6), exactement comme prévu par la conception.
+        const host = allZones.find(
+          (z) => z.minPickupStop <= minPickupStop && z.maxDropoffStop >= maxDropoffStop
+        );
+        if (!host) break; // Vraiment plus de place : le repli en recherche libre (Task 6) prendra le relais.
+
+        const zone = {
+          module: host.module,
+          widthAxis: host.widthAxis,
+          heightAxis: host.heightAxis,
+          widthStart: host.widthStart,
+          widthEnd: host.widthEnd,
+          heightStart: host.heightStart,
+          heightEnd: host.heightEnd,
+          minPickupStop,
+          maxDropoffStop,
+        };
+        zones.push(zone);
+        allZones.push(zone);
+        // On ne peut pas mesurer la capacité réellement libre dans
+        // l'empreinte de l'hôte à ce stade (elle dépend du placement réel
+        // des caisses, résolu par Task 5) : on considère le besoin de ce
+        // contrat comme couvert par CETTE zone unique, quitte à ce que
+        // Task 5/6 découvrent qu'il n'y a en réalité pas assez de place et
+        // fassent remonter l'excédent vers la recherche de dernier recours.
+        remaining = 0;
+        continue;
+      }
 
       const freeCapOf = (ms) => (ms.hiEdge - ms.loEdge) * ms.laneCapacity;
       const isFresh = (ms) => ms.loEdge === 0 && ms.hiEdge === ms.maxWidth;
@@ -542,7 +588,7 @@ function assignMissionZones(boxes, modules) {
         widthStart = ms.hiEdge - neededWidth;
         ms.hiEdge = widthStart;
       }
-      zones.push({
+      const zone = {
         module: ms.module,
         widthAxis: ms.widthAxis,
         heightAxis: ms.heightAxis,
@@ -552,7 +598,9 @@ function assignMissionZones(boxes, modules) {
         heightEnd: ms.module.cellDims[ms.heightAxis],
         minPickupStop,
         maxDropoffStop,
-      });
+      };
+      zones.push(zone);
+      allZones.push(zone);
       remaining -= neededWidth * ms.laneCapacity;
     }
     zonesByMission.set(mission.id, zones);
