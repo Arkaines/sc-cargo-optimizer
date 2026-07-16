@@ -2275,16 +2275,6 @@ function runCargoPacking() {
   renderCargoStepView();
 }
 
-function renderUexStatus() {
-  const status = document.getElementById("uex-status");
-  if (state.uexLocations.length) {
-    const date = new Date(state.uexSyncedAt).toLocaleString(getLang() === "en" ? "en-US" : "fr-FR");
-    status.textContent = t("uexLocationsLoaded", { count: state.uexLocations.length, date });
-  } else {
-    status.textContent = t("uexLocationsDefault", { count: DEFAULT_LOCATIONS.length });
-  }
-}
-
 function renderAll() {
   refreshAllLocationSelects();
   renderShipOptions();
@@ -2294,7 +2284,6 @@ function renderAll() {
   renderHistoryTable();
   renderCompaniesTab();
   renderDistanceEditor();
-  renderUexStatus();
   renderBrokenElevatorsList();
   document.getElementById("route-result").innerHTML = "";
 }
@@ -3284,54 +3273,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Lance la synchronisation complète (UEX Corp, distances manquantes, Star
 // Citizen Wiki, FleetYards) en arrière-plan — déclenchée automatiquement au
-// chargement puis périodiquement (voir plus haut). N'affiche l'avancement
-// que dans la ligne de statut, pour ne pas donner l'impression qu'une action
-// de l'utilisateur est en cours.
+// chargement puis périodiquement (voir plus haut). Aucune UI de statut :
+// c'est silencieux pour le joueur, une erreur ne finit qu'en console.
 async function runFullSync() {
-  const status = document.getElementById("uex-status");
-  const setProgress = (key, params) => {
-    status.textContent = t(key, params);
-  };
   try {
-    setProgress("syncingLocations");
     await syncUexLocations();
     renderAll();
 
-    setProgress("syncingCommodities");
     await syncUexCommodities();
-
-    setProgress("syncingCompanies");
     await syncUexCompanies();
 
-    setProgress("syncingShips");
     await syncUexShips();
     renderAll();
 
-    setProgress("syncingDistances");
-    const fetched = await syncMissingDistances((done, total) => {
-      setProgress("syncingDistancesProgress", { done, total });
-    });
+    await syncMissingDistances();
     renderDistanceEditor();
 
-    setProgress("syncingScwiki");
     await syncScwikiLocations();
     backfillCustomLocationPlanetHints();
     saveState();
     renderDistanceEditor();
 
-    setProgress("syncingFleetyards");
     await syncFleetyardsCargoHolds();
     renderShipCapacity();
-
-    status.textContent = t("syncSummary", {
-      locs: state.uexLocations.length,
-      commodities: state.uexCommodities.length,
-      companies: state.uexCompanies.length,
-      ships: state.uexShips.length,
-      fetched,
-      scwiki: state.scwikiLocations.length,
-    });
   } catch (err) {
-    status.textContent = t("syncFailed", { msg: err.message });
+    console.error("Sync automatique échouée :", err);
   }
 }

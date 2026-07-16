@@ -36,18 +36,6 @@ const TRANSLATIONS = {
     accessFaceBottom: "Dessous",
     accessFacesHint: "Coche les côtés par lesquels tu peux réellement récupérer les caisses sur ce vaisseau — au moins un doit rester coché. Ça permet à l'optimisation de ne pas signaler de faux conflits quand une caisse reste atteignable par un autre côté.",
 
-    syncAutoHint: "Les données (UEX Corp, Star Citizen Wiki, FleetYards) se rafraîchissent automatiquement en arrière-plan jusqu'à 4 fois par jour — rien à faire de ton côté.",
-    syncingLocations: "Synchronisation des lieux...",
-    syncingCommodities: "Synchronisation des marchandises...",
-    syncingCompanies: "Synchronisation des entreprises...",
-    syncingShips: "Synchronisation des vaisseaux...",
-    syncingDistances: "Synchronisation des distances...",
-    syncingDistancesProgress: "Synchronisation des distances... {done}/{total}",
-    syncingScwiki: "Synchronisation des lieux (Star Citizen Wiki)...",
-    syncingFleetyards: "Synchronisation des soutes de cargo (FleetYards.net)...",
-    syncSummary:
-      "{locs} lieux, {commodities} marchandises, {companies} entreprises, {ships} vaisseaux à jour — {fetched} distance(s) manquante(s) récupérée(s) via UEX — {scwiki} lieux de secours (Star Citizen Wiki) à jour.",
-    syncFailed: "Échec de la synchronisation UEX : {msg}",
 
     importMissionTitle: "Importer une mission (capture d'écran)",
     importMissionHint:
@@ -241,10 +229,6 @@ const TRANSLATIONS = {
     dropoffAction: "Déposer",
     cargoAlreadyPickedUpElsewhere: "{commodity} — déjà récupéré à {locations}",
 
-    uexLocationsLoaded: "{count} lieux chargés depuis UEX Corp (dernière synchro : {date}).",
-    uexLocationsDefault:
-      '{count} lieux intégrés par défaut (données UEX Corp). Utilise "Tout synchroniser" pour les rafraîchir.',
-
     resetAllBtn: "Réinitialiser toutes les données",
     confirmResetAll:
       "⚠ Action irréversible : ceci va TOUT supprimer sans exception — missions actives, historique des missions terminées, calibrage de réputation, lieux personnalisés et distances enregistrées. Si tu es connecté, la sauvegarde cloud sera aussi effacée définitivement. Continuer ?",
@@ -278,18 +262,6 @@ const TRANSLATIONS = {
     accessFaceBottom: "Bottom",
     accessFacesHint: "Check the sides you can actually reach cargo crates from on this ship — at least one must stay checked. This lets the optimizer avoid flagging false conflicts when a crate is still reachable from another side.",
 
-    syncAutoHint: "Data (UEX Corp, Star Citizen Wiki, FleetYards) refreshes automatically in the background up to 4 times a day — nothing for you to do.",
-    syncingLocations: "Syncing locations...",
-    syncingCommodities: "Syncing commodities...",
-    syncingCompanies: "Syncing companies...",
-    syncingShips: "Syncing ships...",
-    syncingDistances: "Syncing distances...",
-    syncingDistancesProgress: "Syncing distances... {done}/{total}",
-    syncingScwiki: "Syncing fallback locations (Star Citizen Wiki)...",
-    syncingFleetyards: "Syncing cargo holds (FleetYards.net)...",
-    syncSummary:
-      "{locs} locations, {commodities} commodities, {companies} companies, {ships} ships up to date — {fetched} missing distance(s) fetched via UEX — {scwiki} fallback locations (Star Citizen Wiki) up to date.",
-    syncFailed: "UEX sync failed: {msg}",
 
     importMissionTitle: "Import a mission (screenshot)",
     importMissionHint:
@@ -479,9 +451,6 @@ const TRANSLATIONS = {
     pickupAction: "Pick up",
     dropoffAction: "Drop off",
     cargoAlreadyPickedUpElsewhere: "{commodity} — already picked up at {locations}",
-
-    uexLocationsLoaded: "{count} locations loaded from UEX Corp (last sync: {date}).",
-    uexLocationsDefault: '{count} locations built in by default (UEX Corp data). Use "Sync everything" to refresh them.',
 
     resetAllBtn: "Reset all data",
     confirmResetAll:
