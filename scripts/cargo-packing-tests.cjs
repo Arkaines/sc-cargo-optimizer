@@ -295,6 +295,35 @@ test("hasValidSupport: allows a crate resting on a support that leaves at the sa
   assert.strictEqual(okEqual, true, "support leaving at the exact same stop must be allowed");
 });
 
+// --- worstConflictDropoff : polarité correcte (corrigée après Task 6) ----
+test("worstConflictDropoff: a blocker that leaves LATER than the candidate is a real risk", () => {
+  const ctx = loadCargoPacking();
+  const activeBoxes = [{ position: [0, 0, 0], size: [1, 1, 1], dropoffStop: 20 }];
+  // Notre caisse candidate est bloquée par `other` (plus proche de l'accès,
+  // recoupement d'emprise) qui part APRÈS elle (20 > 5) : conflit réel.
+  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 1, 0], [1, 1, 1], 5);
+  assert.notStrictEqual(severity, Infinity, "a blocker leaving later than our candidate must be scored as risky, not safe");
+});
+
+test("worstConflictDropoff: a blocker that already left BEFORE the candidate's dropoff is safe", () => {
+  const ctx = loadCargoPacking();
+  const activeBoxes = [{ position: [0, 0, 0], size: [1, 1, 1], dropoffStop: 3 }];
+  // `other` part AVANT notre candidate (3 < 20) : il sera déjà parti, donc
+  // aucun conflit réel au moment où notre candidate devra elle-même partir.
+  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 1, 0], [1, 1, 1], 20);
+  assert.strictEqual(severity, Infinity, "a blocker that already departed before our candidate's own dropoff must be scored as safe");
+});
+
+test("worstConflictDropoff: our candidate blocking an other that leaves earlier is a real risk", () => {
+  const ctx = loadCargoPacking();
+  // `other` est ici la cible bloquée par NOTRE candidate (recoupement, notre
+  // candidate plus proche de l'accès) ; other part avant nous (5 < 20) :
+  // conflit réel (other ne pourra pas sortir à temps).
+  const activeBoxes = [{ position: [0, 1, 0], size: [1, 1, 1], dropoffStop: 5 }];
+  const severity = ctx.worstConflictDropoff(1, activeBoxes, [0, 0, 0], [1, 1, 1], 20);
+  assert.notStrictEqual(severity, Infinity, "blocking an other that leaves earlier than us must be scored as risky, not safe");
+});
+
 // --- Empilement : scénario d'intégration (ordre de placement sûr) --------
 test("stacking scenario: a safe dropoff order (later-dropoff crate placed first) packs both crates", () => {
   const ctx = loadCargoPacking();
@@ -355,12 +384,71 @@ test("real data: Hull B (16 modules, 10 real contracts) -> 0 conflicts", () => {
 // ici (<= 9) est le nombre mesuré, pas juste "toujours mieux que l'ancien
 // seuil" — resserrer sert à détecter une vraie régression future avec
 // précision plutôt qu'une marge de 3 conflits.
-test("real data: Raft (1 module, 10 real contracts) -> at most 9 conflicts (measured at task 5, zone confinement)", () => {
+//
+// Mesuré à la tâche 6bis (2026-07-16), après la correction de la polarité
+// inversée de worstConflictDropoff (une position réellement risquée pouvait
+// scorer Infinity, ce qui faisait accepter un conflit évitable) : 9 -> 4
+// conflits. Comme prévu, ce fix de scoring ne peut qu'améliorer ou laisser
+// inchangé le nombre de conflits (jamais l'empirer) puisqu'il rend la
+// recherche de dernier recours plus précise, pas différente en nature.
+test("real data: Raft (1 module, 10 real contracts) -> at most 4 conflicts (measured at task 6bis, worstConflictDropoff polarity fix)", () => {
   const ctx = loadCargoPacking();
   const { entries, holds, stepCount } = loadFixture("raft-real.json");
   const r = ctx.simulateRoutePacking(entries, holds, stepCount);
   assert.strictEqual(r.unplaced.length, 0);
-  assert.ok(r.conflicts.length <= 9, `expected <= 9 conflicts (measured at task 5), got ${r.conflicts.length}`);
+  assert.ok(r.conflicts.length <= 4, `expected <= 4 conflicts (measured at task 6bis), got ${r.conflicts.length}`);
+});
+
+// --- Régression : conflit évitable via la recherche de dernier recours ---
+// Scénario reconstruit lors de la revue de la Task 6 : un contrat "Host" qui
+// consomme toute la largeur d'un module (donc toute voie tier 1) et un
+// contrat "Guest" avec deux lots dont la fenêtre AGRÉGÉE (1 à 30) déborde de
+// celle de Host (3 à 20) -> assignMissionZones ne donne AUCUNE zone à Guest
+// (vérifié directement ci-dessous via assignMissionZones, pas seulement en
+// espérant que la simulation le révèle), forçant TOUTES ses caisses à passer
+// par la recherche de dernier recours (byFreeSpace/idealDepthForModule).
+//
+// Quantités/horaires ajustés par rapport à la première idée de fixture pour
+// que le bug soit réellement exercé (pas juste une contrainte géométrique
+// inévitable) :
+// - Host est scindé en DEUX entrées de 8 SCU (pas une seule de 16, ni une
+//   seule de 8) : deux lignes de cargaison séparées évitent que
+//   tryStackOnExisting (qui n'empile que des caisses de la MÊME ligne) ne les
+//   fusionne automatiquement à la même profondeur — chacune vise sa propre
+//   profondeur idéale (rang 0 et rang 1 parmi les caisses DE SA mission) via
+//   missionBoxRank, donc HostA vise l'avant (profondeur 0) et HostB l'arrière.
+//   Un total de 16 SCU (> les 8 de Guest) garantit aussi que Host est bien
+//   traité EN PREMIER par assignMissionZones (tri par SCU total décroissant),
+//   sans dépendre d'un ordre d'insertion à égalité.
+// - GuestEarly est récupéré (pickupStop=1) AVANT Host (pickupStop=3) : il est
+//   donc déjà placé, actif, quand Host cherche sa propre position. Avec la
+//   profondeur idéale de HostA à 0 (le tout premier plan), et GuestEarly déjà
+//   posé à une profondeur non nulle SANS chevauchement physique réel de
+//   caisses (l'empreinte de HostA à la profondeur 0 ne touche pas les
+//   cellules réellement occupées par GuestEarly), canPlace() autorise les
+//   DEUX positions (devant et derrière GuestEarly) pour HostA — c'est
+//   uniquement worstConflictDropoff qui doit départager laquelle est sûre.
+//   Avec l'ancienne polarité inversée, la position "devant" (RÉELLEMENT
+//   risquée : HostA bloquerait GuestEarly qui doit sortir bien avant lui,
+//   5 < 20) scorait Infinity (faussement sûre) et gagnait sur la position
+//   "derrière" (réellement sûre : GuestEarly part bien avant que HostA n'en
+//   ait besoin) qui scorait faussement risquée — d'où un vrai conflit
+//   reproductible (confirmé ci-dessous en isolant js/cargo-packing.js d'avant
+//   la Task 6bis : 1 conflit réel, HostA placé devant GuestEarly).
+test("ship-wide fallback: does not force an avoidable conflict when a safe stack exists (Task 6bis regression)", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "test", dimensions: { x: 2.5, y: 15, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  const host = { id: 1, name: "Host" };
+  const guest = { id: 2, name: "Guest" };
+  const entries = [
+    { quantity: 8, commodity: "HostA", mission: host, pickupStop: 3, dropoffStop: 20 },
+    { quantity: 8, commodity: "HostB", mission: host, pickupStop: 3, dropoffStop: 20 },
+    { quantity: 4, commodity: "GuestEarly", mission: guest, pickupStop: 1, dropoffStop: 5 },
+    { quantity: 4, commodity: "GuestLate", mission: guest, pickupStop: 25, dropoffStop: 30 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, holds, 31);
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.conflicts.length, 0, "a safe stack for HostA (behind GuestEarly) was available; the fallback must not force an avoidable conflict");
 });
 
 let failed = 0;

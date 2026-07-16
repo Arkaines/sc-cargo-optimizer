@@ -228,14 +228,25 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
 // potentiel en pénalité : plus le conflit arrive tôt (livraison proche), plus
 // il coûte cher, pour toujours préférer déplacer un blocage lointain plutôt
 // qu'un blocage imminent quand aucune position n'est totalement sûre.
+//
+// Corrigé (Task 6bis) : un blocage n'est un risque QUE si le bloqueur (plus
+// proche de l'accès) est encore présent au moment où la caisse qui doit
+// sortir la première a besoin de partir — c'est-à-dire si le bloqueur part
+// PLUS TARD que celle qu'il bloque (voir la boucle réelle de détection de
+// conflit dans simulateRoutePacking : elle ne compte un blocage que si
+// other.dropoffStop est postérieur au step de départ de la caisse bloquée).
+// L'ancienne version comparait dans le sens inverse (`<` au lieu de `>`),
+// ce qui pouvait faire scorer Infinity (sûr) une position réellement en
+// conflit, et inversement — trouvé et confirmé lors de la Task 6 par
+// exécution directe, pas seulement par lecture de code.
 function worstConflictDropoff(depthAxis, activeBoxes, pos, size, dropoffStop) {
   let worst = Infinity;
   for (const other of activeBoxes) {
-    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop < dropoffStop) {
-      worst = Math.min(worst, other.dropoffStop);
-    }
-    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop < other.dropoffStop) {
+    if (isBlocking(depthAxis, other.position, other.size, pos, size) && other.dropoffStop > dropoffStop) {
       worst = Math.min(worst, dropoffStop);
+    }
+    if (isBlocking(depthAxis, pos, size, other.position, other.size) && dropoffStop > other.dropoffStop) {
+      worst = Math.min(worst, other.dropoffStop);
     }
   }
   return worst;
