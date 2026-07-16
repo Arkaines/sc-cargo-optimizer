@@ -1270,10 +1270,7 @@ function renderHistoryTable() {
     if (items.length) {
       items.forEach((item) => {
         const line = document.createElement("div");
-        const pickupLoc = getLocationById(item.pickupId);
-        const dropoffLoc = getLocationById(item.dropoffId);
-        const route = pickupLoc && dropoffLoc ? ` (${pickupLoc.name} → ${dropoffLoc.name})` : "";
-        line.textContent = `${item.quantity || "?"} SCU — ${item.commodity || "?"}${route}`;
+        line.textContent = `${item.quantity || "?"} SCU — ${item.commodity || "?"}`;
         tdCargo.appendChild(line);
       });
     } else {
