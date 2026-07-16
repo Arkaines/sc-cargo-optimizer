@@ -157,8 +157,7 @@ const TRANSLATIONS = {
       "⚠ Ce module est encore en développement et n'est pas fiable actuellement : le rangement calculé peut demander de déplacer des caisses pour accéder à d'autres, en particulier sur les vaisseaux à une seule grande soute.",
     packCargoBtn: "Calculer le rangement",
     cargoPackNoShip: "Sélectionne un vaisseau (menu de gauche) pour calculer le rangement.",
-    cargoPackNoData:
-      "Pas de données de soute pour ce vaisseau — synchronise via \"Tout synchroniser\" (menu de gauche), ou ce vaisseau n'est pas encore couvert par FleetYards.net.",
+    cargoPackNoData: "Pas de données de soute pour ce vaisseau.",
     cargoPackNoCargo: "Aucune marchandise à ranger (inclus au moins une mission).",
     cargoPackNoRoute: "Calcule d'abord un trajet (onglet Optimisation de la route) : le rangement en a besoin pour savoir dans quel ordre charger/décharger chaque marchandise.",
     cargoPackSummary: "{placed} caisses rangées sur {total} — {unplaced} n'ont trouvé de place nulle part.",
@@ -365,8 +364,7 @@ const TRANSLATIONS = {
       "⚠ This module is still under development and isn't reliable yet: the computed arrangement may require moving crates to reach others, especially on ships with a single large cargo hold.",
     packCargoBtn: "Compute the arrangement",
     cargoPackNoShip: "Select a ship (left menu) to compute the arrangement.",
-    cargoPackNoData:
-      "No cargo hold data for this ship — sync via \"Sync everything\" (left menu), or this ship isn't covered by FleetYards.net yet.",
+    cargoPackNoData: "No cargo hold data for this ship.",
     cargoPackNoCargo: "No cargo to arrange (include at least one mission).",
     cargoPackNoRoute: "Compute a route first (Route optimization tab): the arrangement needs it to know in what order to load/unload each item.",
     cargoPackSummary: "{placed} crates arranged out of {total} — {unplaced} found no room anywhere.",
