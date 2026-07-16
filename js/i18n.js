@@ -158,6 +158,8 @@ const TRANSLATIONS = {
     cargoTab: "Optimisation du cargo",
     cargoTabHint:
       "Range les marchandises des missions incluses dans les vraies soutes du vaisseau sélectionné (données FleetYards.net), pour savoir où mettre quoi et t'y retrouver pendant le trajet.",
+    cargoTabNotFunctional:
+      "⚠ Ce module est encore en développement et n'est pas fiable actuellement : le rangement calculé peut demander de déplacer des caisses pour accéder à d'autres, en particulier sur les vaisseaux à une seule grande soute.",
     packCargoBtn: "Calculer le rangement",
     cargoPackNoShip: "Sélectionne un vaisseau (menu de gauche) pour calculer le rangement.",
     cargoPackNoData:
@@ -388,6 +390,8 @@ const TRANSLATIONS = {
     cargoTab: "Cargo optimization",
     cargoTabHint:
       "Arranges the cargo from included missions into the selected ship's real cargo holds (FleetYards.net data), so you know what goes where and don't get lost during the run.",
+    cargoTabNotFunctional:
+      "⚠ This module is still under development and isn't reliable yet: the computed arrangement may require moving crates to reach others, especially on ships with a single large cargo hold.",
     packCargoBtn: "Compute the arrangement",
     cargoPackNoShip: "Select a ship (left menu) to compute the arrangement.",
     cargoPackNoData:
