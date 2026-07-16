@@ -2127,6 +2127,13 @@ function renderCargoStepView() {
     location: loc ? locationLabel(loc) : "?",
   });
 
+  // Même désambiguïsation que la liste des étapes de trajet (voir
+  // renderRouteResult) : plusieurs contrats peuvent partager le même nom
+  // affiché ("Mission N", noms OCR incomplets...), on ajoute alors un
+  // repère "x/y" pour les distinguer, sinon le joueur ne peut pas savoir
+  // laquelle des deux missions de même nom correspond à quelle caisse.
+  const missionTags = buildMissionRouteTags(collectRouteMissionsInOrder(routeResult));
+
   const conflictByBox = new Map();
   result.conflicts.forEach((c) => conflictByBox.set(c.box, c));
 
@@ -2142,7 +2149,7 @@ function renderCargoStepView() {
         t("cargoStepPickupLine", {
           scu: p.box.scu,
           commodity: p.entry.commodity,
-          mission: p.entry.mission.name || "?",
+          mission: missionRouteLabel(p.entry.mission, missionTags),
           module: p.module.name,
         })
       )
@@ -2155,13 +2162,13 @@ function renderCargoStepView() {
     let text = t("cargoStepDropoffLine", {
       scu: p.box.scu,
       commodity: p.entry.commodity,
-      mission: p.entry.mission.name || "?",
+      mission: missionRouteLabel(p.entry.mission, missionTags),
       module: p.module.name,
     });
     const conflict = conflictByBox.get(p.box);
     if (conflict) {
       li.classList.add("warning-text");
-      const blockers = conflict.blockedBy.map((e) => `${e.commodity} (${e.mission.name || "?"})`).join(", ");
+      const blockers = conflict.blockedBy.map((e) => missionRouteLabel(e.mission, missionTags)).join(", ");
       text += " " + t("cargoConflictNote", { blockers: blockers || "?" });
     }
     li.appendChild(document.createTextNode(text));

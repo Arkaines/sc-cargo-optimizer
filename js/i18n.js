@@ -173,8 +173,8 @@ const TRANSLATIONS = {
     cargoUnplacedWarning:
       "⚠ Certaines marchandises ne rentrent pas dans les soutes disponibles : {list}. Désélectionne une mission ou choisis un vaisseau plus grand.",
     cargoStepLabelWithTotal: "Étape {index}/{total} — {location}",
-    cargoStepPickupLine: "Charger {scu} SCU de {commodity} ({mission}) → {module}",
-    cargoStepDropoffLine: "Décharger {scu} SCU de {commodity} ({mission}) — {module}",
+    cargoStepPickupLine: "Charger {scu} SCU de {commodity} ({mission})",
+    cargoStepDropoffLine: "Décharger {scu} SCU de {commodity} ({mission})",
     cargoStepNothing: "Rien à charger ou décharger à cet arrêt.",
     cargoConflictNote: "⚠ accès bloqué par : {blockers} (à déplacer temporairement)",
     viewFrontBtn: "Vue avant",
@@ -405,8 +405,8 @@ const TRANSLATIONS = {
     cargoUnplacedWarning:
       "⚠ Some cargo doesn't fit in the available holds: {list}. Deselect a mission or pick a bigger ship.",
     cargoStepLabelWithTotal: "Step {index}/{total} — {location}",
-    cargoStepPickupLine: "Load {scu} SCU of {commodity} ({mission}) → {module}",
-    cargoStepDropoffLine: "Unload {scu} SCU of {commodity} ({mission}) — {module}",
+    cargoStepPickupLine: "Load {scu} SCU of {commodity} ({mission})",
+    cargoStepDropoffLine: "Unload {scu} SCU of {commodity} ({mission})",
     cargoStepNothing: "Nothing to load or unload at this stop.",
     cargoConflictNote: "⚠ access blocked by: {blockers} (needs to be moved temporarily)",
     viewFrontBtn: "Front view",
