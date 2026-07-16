@@ -16,7 +16,8 @@
   --btn-secondary-bg: #24487a;
   --on-accent: #ffffff;
   --heading-font: "Oswald", "Segoe UI", system-ui, sans-serif;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5; /* le défaut navigateur (~1.2) tassait le texte des libellés/indices sur tout le site */
 }
 
 :root[data-theme="light"] {
@@ -220,6 +221,7 @@ header {
 header h1 {
   margin: 0 0 0.25rem;
   font-size: 1.6rem;
+  line-height: 1.2; /* le line-height global (1.5, pensé pour le texte courant) alourdirait inutilement les titres */
   font-family: var(--heading-font);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -238,10 +240,10 @@ header p.hint {
 .layout {
   max-width: 1920px;
   margin: 0 auto;
-  padding: 1.5rem 2rem;
+  padding: 2rem;
   display: flex;
   align-items: flex-start;
-  gap: 1.5rem;
+  gap: 2rem;
 }
 
 .site-footer {
@@ -271,7 +273,8 @@ aside#side-panel {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  padding: 1.25rem 1.5rem;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
 
 .side-block h2 {
@@ -367,19 +370,21 @@ main {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  padding: 1.25rem 1.5rem;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
 
 details {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  padding: 1.25rem 1.5rem;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
 
 details > summary {
-  margin: -1.25rem -1.5rem;
-  padding: 1.25rem 1.5rem;
+  margin: -1.5rem -1.75rem;
+  padding: 1.5rem 1.75rem;
   font-size: 1.05rem;
   font-family: var(--heading-font);
   text-transform: uppercase;
@@ -453,8 +458,8 @@ details[open] > *:not(summary) {
 .tab-buttons {
   display: flex;
   gap: 0.5rem;
-  margin: -1.25rem -1.5rem 1.25rem;
-  padding: 0 1.5rem;
+  margin: -1.5rem -1.75rem 1.5rem;
+  padding: 0 1.75rem;
   border-bottom: 1px solid var(--panel-border);
 }
 
@@ -539,6 +544,13 @@ button {
 
 button:hover {
   filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+/* La barre d'onglets reste à plat contre sa bordure inférieure — un
+   soulèvement au survol y détonnerait, contrairement aux boutons d'action. */
+.tab-btn:hover {
+  transform: none;
 }
 
 /* Anneau de focus clavier cohérent avec celui des champs (voir input:focus) —
