@@ -205,6 +205,27 @@ test("zone assignment: a third mission nested inside two other missions' windows
   assert.ok((zones.get(3) || []).length, "mission 3 must also get a tier-2 zone despite mission 1's lane already being reused once");
 });
 
+// --- Recherche libre : profite aussi de l'empilement croisé sûr ----------
+test("ship-wide fallback: stacks safely on another mission's crate rather than forcing a conflict", () => {
+  const ctx = loadCargoPacking();
+  // Un seul module, une seule voie en largeur (assez pour 1 caisse de 4 SCU
+  // à la fois), 2 crans de hauteur. Mission A (contrat 1) tient toute la
+  // largeur pendant tout le trajet (stop 0 à 14, aucune zone tier 1 pour un
+  // deuxième contrat). Mission B (contrat 2) est entièrement contenue dans
+  // la fenêtre de A : la recherche libre doit l'empiler sur A plutôt que de
+  // forçer un conflit.
+  const holds = [{ name: "test", dimensions: { x: 2.5, y: 15, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  const missionA = { id: 1, name: "A" };
+  const missionB = { id: 2, name: "B" };
+  const entries = [
+    { quantity: 4, commodity: "Host", mission: missionA, pickupStop: 0, dropoffStop: 14 },
+    { quantity: 4, commodity: "Guest", mission: missionB, pickupStop: 3, dropoffStop: 8 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, holds, 15);
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.conflicts.length, 0, "the guest should stack safely on the host instead of conflicting");
+});
+
 // --- Régression : plusieurs zones du même contrat dans le même module ----
 test("placement: a mission with two zones in the same module never mixes their width/height ranges", () => {
   const ctx = loadCargoPacking();
