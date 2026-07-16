@@ -24,6 +24,7 @@ function defaultState() {
     reputationOverrides: {},
     fleetyardsCargoHolds: {},
     fleetyardsSyncedAt: null,
+    shipAccessFaces: {},
   };
 }
 
@@ -109,6 +110,7 @@ function loadState() {
       reputationOverrides: parsed.reputationOverrides || {},
       fleetyardsCargoHolds: parsed.fleetyardsCargoHolds || {},
       fleetyardsSyncedAt: parsed.fleetyardsSyncedAt || null,
+      shipAccessFaces: parsed.shipAccessFaces || {},
     };
   } catch (e) {
     return defaultState();
@@ -994,6 +996,22 @@ function renderShipCapacity() {
 
   const customInput = document.getElementById("custom-ship-capacity");
   if (document.activeElement !== customInput) customInput.value = state.customShipCapacity || "";
+}
+
+const ACCESS_FACE_KEYS = ["back", "front", "left", "right", "top", "bottom"];
+
+function getShipAccessFaces(shipName) {
+  return (shipName && state.shipAccessFaces[shipName]) || null;
+}
+
+function renderShipAccessFaces() {
+  const ship = getSelectedShip();
+  const faces = (ship && getShipAccessFaces(ship.name)) || DEFAULT_ACCESS_FACES;
+  ACCESS_FACE_KEYS.forEach((face) => {
+    const el = document.getElementById(`access-face-${face}`);
+    el.checked = !!faces[face];
+    el.disabled = !ship;
+  });
 }
 
 function renderStartLocationOptions() {
@@ -2232,7 +2250,7 @@ function runCargoPacking() {
     return;
   }
 
-  const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length);
+  const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length, getShipAccessFaces(ship.name));
   const placedCount = result.placements.length;
   const totalCount = placedCount + result.unplaced.length;
 
@@ -2264,6 +2282,7 @@ function renderAll() {
   refreshAllLocationSelects();
   renderShipOptions();
   renderShipCapacity();
+  renderShipAccessFaces();
   renderMissionsTable();
   renderHistoryTable();
   renderCompaniesTab();
@@ -3024,6 +3043,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.selectedShip = e.target.value;
     saveState();
     renderShipCapacity();
+    renderShipAccessFaces();
     renderMissionsTable();
   });
 
@@ -3032,6 +3052,26 @@ document.addEventListener("DOMContentLoaded", () => {
     saveState();
     renderShipCapacity();
     renderMissionsTable();
+  });
+
+  ACCESS_FACE_KEYS.forEach((face) => {
+    document.getElementById(`access-face-${face}`).addEventListener("change", (e) => {
+      const ship = getSelectedShip();
+      if (!ship) return;
+      const current = { ...(getShipAccessFaces(ship.name) || DEFAULT_ACCESS_FACES) };
+      current[face] = e.target.checked;
+      // Au moins une face doit rester cochée, sinon toute caisse deviendrait
+      // définitivement irrécupérable sur ce vaisseau (voir
+      // isBlockedFromEveryAccessibleFace : une liste vide bloque tout par
+      // construction) — on annule le décochage de la dernière case restante.
+      if (!ACCESS_FACE_KEYS.some((f) => current[f])) {
+        e.target.checked = true;
+        return;
+      }
+      state.shipAccessFaces[ship.name] = current;
+      saveState();
+      if (cargoPackState) runCargoPacking();
+    });
   });
 
   const ocrDropzone = document.getElementById("ocr-dropzone");
