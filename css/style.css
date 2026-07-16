@@ -372,9 +372,6 @@ aside#side-panel {
   .cargo-viewer-row {
     flex-direction: column;
   }
-  .cargo-step-nav {
-    max-height: none;
-  }
 }
 
 main {
@@ -959,17 +956,15 @@ tbody tr:nth-child(even) {
   font-weight: 600;
 }
 
-/* Un seul panneau regroupant la vue 3D, ses contrôles et le navigateur
-   d'étapes, façon fenêtre unique plutôt que des blocs séparés. */
-/* Vue 3D et navigateur d'étape côte à côte plutôt que l'un sous l'autre :
-   une grosse commande (ex. 447 SCU décomposés en caisses de 32/16) produit
-   une longue liste de chargement/déchargement par étape, qui repoussait la
-   vue 3D bien plus bas dans la page. Ici, seule la carte du navigateur
-   grandit/défile (voir .cargo-step-nav ci-dessous) — la vue 3D reste à sa
-   place. */
+/* Vue 3D et navigateur d'étape côte à côte plutôt que l'un sous l'autre,
+   mais en deux cadres bien SÉPARÉS (align-items: flex-start, pas stretch) :
+   chacun garde sa propre hauteur naturelle. Une grosse commande (ex. 447
+   SCU décomposés en caisses de 32/16) fait donc grandir uniquement la
+   carte du navigateur d'étape, qui prend la place dont elle a besoin sous
+   elle, sans forcer la vue 3D à s'étirer ni à se faire pousser plus bas. */
 .cargo-viewer-row {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 1rem;
   margin-top: 0.75rem;
 }
@@ -1005,19 +1000,17 @@ tbody tr:nth-child(even) {
   font-size: 0.8rem;
 }
 
-/* À côté de la vue 3D (voir .cargo-viewer-row) plutôt qu'au-dessus ou en
-   dessous. Plafonnée à la même hauteur totale que la vue 3D (560px +
-   ~50px de boutons de vue) : une commande avec beaucoup de caisses à
-   charger/décharger à une même étape fait défiler la liste À L'INTÉRIEUR
-   de cette carte plutôt que de grandir sans limite et pousser la vue 3D
-   plus bas dans la page. Traitement de carte à part entière (padding,
-   ombre, coins arrondis) — même poids visuel que .side-block ("Importer
-   une mission") — plutôt qu'une simple barre de navigation compacte,
-   pour bien se lire comme un panneau indépendant à côté de la vue 3D.
-   */
+/* À côté de la vue 3D (voir .cargo-viewer-row), en cadre bien séparé et
+   indépendant — pas de hauteur plafonnée ni de défilement interne : cette
+   carte prend simplement la place dont elle a besoin sous elle-même quand
+   la liste de chargement/déchargement est longue, sans dépendre de la
+   hauteur de la vue 3D à côté. Traitement de carte à part entière
+   (padding, ombre, coins arrondis) — même poids visuel que .side-block
+   ("Importer une mission") — plutôt qu'une simple barre de navigation
+   compacte. */
 .cargo-step-nav {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 0.75rem;
   padding: 1.1rem 1.25rem;
   background: var(--panel);
@@ -1026,7 +1019,6 @@ tbody tr:nth-child(even) {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   flex: 1 1 340px;
   min-width: 280px;
-  max-height: 610px;
 }
 
 .btn-step-nav {
@@ -1042,15 +1034,11 @@ tbody tr:nth-child(even) {
 }
 
 .cargo-step-info {
-  display: flex;
-  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 0;
 }
 
 .cargo-step-info h3 {
-  flex: 0 0 auto;
   margin: 0 0 0.5rem;
   font-size: 1.1rem;
   color: var(--accent-cyan);
@@ -1059,9 +1047,6 @@ tbody tr:nth-child(even) {
 }
 
 .cargo-step-info ul {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
   margin: 0;
   padding-left: 1.2rem;
   font-size: 0.9rem;
