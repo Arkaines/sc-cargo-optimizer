@@ -1176,7 +1176,7 @@ function renderMissionsTable() {
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
-    delBtn.className = "btn-danger-sm";
+    delBtn.className = "btn-danger";
     delBtn.textContent = t("deleteBtn");
     delBtn.addEventListener("click", () => {
       removeMission(m.id);
