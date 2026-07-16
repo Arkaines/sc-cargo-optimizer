@@ -26,7 +26,6 @@ const TRANSLATIONS = {
     shipCapacityNone: "Sélectionne un vaisseau pour voir sa capacité.",
     customCapacityLabel: "Capacité personnalisée (SCU)",
     customCapacityPlaceholder: "Ex : capacité réelle constatée",
-    customCapacityHint: "Remplace la capacité officielle du vaisseau dans tous les calculs si renseignée (utile si tu arrives à charger plus que le chiffre officiel).",
     accessFacesTitle: "Faces accessibles de la soute",
     accessFaceBack: "Arrière",
     accessFaceFront: "Avant",
@@ -34,12 +33,8 @@ const TRANSLATIONS = {
     accessFaceRight: "Droite",
     accessFaceTop: "Dessus",
     accessFaceBottom: "Dessous",
-    accessFacesHint: "Coche les côtés par lesquels tu peux réellement récupérer les caisses sur ce vaisseau — au moins un doit rester coché. Ça permet à l'optimisation de ne pas signaler de faux conflits quand une caisse reste atteignable par un autre côté.",
-
 
     importMissionTitle: "Importer une mission (capture d'écran)",
-    importMissionHint:
-      "Fais une capture de l'écran de détails du contrat en jeu (Win+Maj+S), puis colle-la ici (Ctrl+V) ou dépose l'image. Tu peux aussi sélectionner ou déposer plusieurs captures à la fois pour créer plusieurs missions d'un coup. La reconnaissance de texte tourne entièrement dans le navigateur.",
     ocrDropzoneText: "Colle (Ctrl+V) ou dépose une ou plusieurs images ici",
     ocrPreviewAlt: "Capture importée",
     ocrHelpTitle: "Quelle capture faire ?",
@@ -151,8 +146,6 @@ const TRANSLATIONS = {
 
     optimizeTab: "Optimisation de la route",
     cargoTab: "Optimisation du cargo",
-    cargoTabHint:
-      "Range les marchandises des missions incluses dans les vraies soutes du vaisseau sélectionné (données FleetYards.net), pour savoir où mettre quoi et t'y retrouver pendant le trajet.",
     cargoTabNotFunctional: "⚠ Ce module est encore en développement et peut comporter des erreurs.",
     packCargoBtn: "Calculer le rangement",
     cargoPackNoShip: "Sélectionne un vaisseau (menu de gauche) pour calculer le rangement.",
@@ -232,7 +225,6 @@ const TRANSLATIONS = {
     shipCapacityNone: "Select a ship to see its capacity.",
     customCapacityLabel: "Custom capacity (SCU)",
     customCapacityPlaceholder: "E.g.: actual capacity observed",
-    customCapacityHint: "Overrides the ship's official capacity in all calculations when set (useful if you manage to load more than the official number).",
     accessFacesTitle: "Accessible cargo grid faces",
     accessFaceBack: "Back",
     accessFaceFront: "Front",
@@ -240,12 +232,9 @@ const TRANSLATIONS = {
     accessFaceRight: "Right",
     accessFaceTop: "Top",
     accessFaceBottom: "Bottom",
-    accessFacesHint: "Check the sides you can actually reach cargo crates from on this ship — at least one must stay checked. This lets the optimizer avoid flagging false conflicts when a crate is still reachable from another side.",
 
 
     importMissionTitle: "Import a mission (screenshot)",
-    importMissionHint:
-      "Take a screenshot of the contract details screen in-game (Win+Shift+S), then paste it here (Ctrl+V) or drop the image. You can also select or drop several screenshots at once to create several missions in one go. Text recognition runs entirely in your browser.",
     ocrDropzoneText: "Paste (Ctrl+V) or drop one or more images here",
     ocrPreviewAlt: "Imported screenshot",
     ocrHelpTitle: "What screenshot should I take?",
@@ -357,8 +346,6 @@ const TRANSLATIONS = {
 
     optimizeTab: "Route optimization",
     cargoTab: "Cargo optimization",
-    cargoTabHint:
-      "Arranges the cargo from included missions into the selected ship's real cargo holds (FleetYards.net data), so you know what goes where and don't get lost during the run.",
     cargoTabNotFunctional: "⚠ This module is still under development and may have errors.",
     packCargoBtn: "Compute the arrangement",
     cargoPackNoShip: "Select a ship (left menu) to compute the arrangement.",

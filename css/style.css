@@ -870,77 +870,22 @@ tbody tr:nth-child(even) {
   border-bottom: 1px solid var(--panel-border);
 }
 
-.cargo-pack-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.cargo-pack-header .warning-text {
-  margin: 0;
-}
-
-/* Bouton rond discret déclenchant une bulle d'aide en survol de contenu
-   (comme scmdb.net) plutôt que d'imposer plusieurs paragraphes d'explication
-   toujours visibles — le texte reste disponible, juste pas en permanence
-   dans le champ visuel. */
-.help-btn {
-  flex: none;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 50%;
-  background: var(--btn-secondary-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  font-size: 0.85rem;
-  font-weight: 700;
-  font-family: var(--heading-font);
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.help-popover {
-  position: absolute;
-  z-index: 60;
-  max-width: 22rem;
-  padding: 0.85rem 1rem;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--panel-border);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
-  font-size: 0.85rem;
-  color: var(--text);
-  display: none;
-}
-
-.help-popover.open {
-  display: block;
-}
-
-.help-popover p {
-  margin: 0 0 0.5rem;
-  color: var(--muted);
-}
-
-.help-popover p:last-child {
-  margin-bottom: 0;
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .help-popover {
-    background: var(--panel);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
-
 .cargo-pack-panel .hint {
   margin: 0 0 0.5rem;
+}
+
+/* Deux colonnes : les contrôles (faces accessibles + bouton + messages) à
+   gauche, le navigateur d'étape à droite plutôt qu'en dessous — évite que
+   la hauteur variable de l'un déforme la position de l'autre. */
+.cargo-pack-columns {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.cargo-pack-left {
+  flex: 1 1 60%;
+  min-width: 0;
 }
 
 .cargo-pack-controls {
@@ -1029,10 +974,11 @@ tbody tr:nth-child(even) {
   font-size: 0.8rem;
 }
 
-/* À côté du bouton "Calculer le rangement" plutôt qu'en bas de la vue 3D,
-   pour voir en un coup d'œil où on en est dans le trajet sans avoir à
-   chercher plus bas dans le panneau. Bordure propre pour se distinguer du
-   fieldset "Faces accessibles" juste à sa gauche. */
+/* Colonne de droite (voir .cargo-pack-columns) plutôt qu'en bas de la vue
+   3D ou sous les contrôles : reste à côté d'eux sans dépendre de leur
+   hauteur, qui variait selon le contenu du message d'avertissement/résumé
+   et déformait le panneau quand elle était partagée avec eux sur une même
+   ligne ou juste en dessous. */
 .cargo-step-nav {
   display: flex;
   align-items: stretch;
@@ -1041,8 +987,8 @@ tbody tr:nth-child(even) {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
-  flex: 1 1 260px;
-  min-width: 260px;
+  flex: 1 1 40%;
+  min-width: 280px;
 }
 
 .btn-step-nav {
