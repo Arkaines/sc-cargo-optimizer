@@ -307,10 +307,16 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
 
   // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : un simple
   // repère d'orientation pour ce rendu (pas l'avant/arrière réel du
-  // vaisseau, inconnu — voir le commentaire en tête de fichier). Avant/
-  // Arrière sur l'axe X et Gauche/Droite sur l'axe Z (et non l'inverse) —
-  // confirmé par comparaison directe avec fleetyards.net/tools/cargo-grids/,
-  // qui affiche cette orientation-là pour les mêmes vaisseaux.
+  // vaisseau, inconnu — voir le commentaire en tête de fichier). Avant = +Z :
+  // en repère main droite avec l'axe Y vers le haut, faire face à +Z met la
+  // droite du côté -X et la gauche du côté +X (règle de la main droite,
+  // pas l'inverse) — d'où gauche posée du côté totalWidth+margin ci-dessous.
+  // Un essai d'inversion (Avant/Droite et Arrière/Gauche) basé sur une seule
+  // comparaison visuelle (Caterpillar) a été tenté puis annulé : le vrai
+  // problème du Caterpillar était la rotation de module ignorée (voir
+  // rotateFlatDimensions dans js/fleetyards.js, déjà corrigé), pas cette
+  // convention — l'inversion cassait l'orientation du Raft, qui n'a aucune
+  // rotation de module et n'avait donc pas besoin d'y être touché.
   // Proportionnelles à la taille réelle de la scène affichée : une marge/
   // taille fixe écraserait un petit vaisseau (soute de 2-3 m) sous des
   // étiquettes démesurées, ou serait à peine visible pour un gros vaisseau
@@ -319,16 +325,16 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   const margin = sceneScale * 0.12;
   const labelWidth = Math.max(0.6, sceneScale * 0.3);
   const front = makeAxisLabel(t("axisFront"), labelWidth);
-  front.position.set(-margin, 0, midZ);
+  front.position.set(midX, 0, maxDz + margin);
   contentGroup.add(front);
   const rear = makeAxisLabel(t("axisRear"), labelWidth);
-  rear.position.set(totalWidth + margin, 0, midZ);
+  rear.position.set(midX, 0, -margin);
   contentGroup.add(rear);
   const left = makeAxisLabel(t("axisLeft"), labelWidth);
-  left.position.set(midX, 0, -margin);
+  left.position.set(totalWidth + margin, 0, midZ);
   contentGroup.add(left);
   const right = makeAxisLabel(t("axisRight"), labelWidth);
-  right.position.set(midX, 0, maxDz + margin);
+  right.position.set(-margin, 0, midZ);
   contentGroup.add(right);
 
   // Ne recadre la caméra que si la scène a changé de taille (nouveau
@@ -362,13 +368,13 @@ function setCargoViewerView(view) {
   const midZ = (minZ + maxZ) / 2;
   const distance = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 6) * 1.6;
   controls.target.set(midX, midY, midZ);
-  // Cohérent avec les étiquettes ci-dessus (Avant/Arrière sur X, Gauche/
-  // Droite sur Z) : la "vue avant" place la caméra du côté avant (-X) pour
-  // regarder vers le vaisseau depuis ce côté.
-  if (view === "front") camera.position.set(midX - distance, midY, midZ);
-  else if (view === "rear") camera.position.set(midX + distance, midY, midZ);
-  else if (view === "left") camera.position.set(midX, midY, midZ - distance);
-  else if (view === "right") camera.position.set(midX, midY, midZ + distance);
+  // Cohérent avec les étiquettes ci-dessus (Avant = +Z, Gauche = +X) : la
+  // "vue gauche" place la caméra du côté gauche (+X) pour regarder vers le
+  // vaisseau depuis ce côté.
+  if (view === "front") camera.position.set(midX, midY, midZ + distance);
+  else if (view === "rear") camera.position.set(midX, midY, midZ - distance);
+  else if (view === "left") camera.position.set(midX + distance, midY, midZ);
+  else if (view === "right") camera.position.set(midX - distance, midY, midZ);
   else if (view === "top") camera.position.set(midX, midY + distance, midZ);
   else if (view === "bottom") camera.position.set(midX, midY - distance, midZ);
   controls.update();
