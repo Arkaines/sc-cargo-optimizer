@@ -2069,7 +2069,13 @@ function renderCargoStepView() {
   prevBtn.disabled = stepIndex <= 0;
   nextBtn.disabled = stepIndex >= routeResult.steps.length - 1;
 
-  const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop > stepIndex);
+  // dropoffStop >= stepIndex (pas > ) : une caisse reste visible sur la
+  // grille PENDANT l'étape où on la décharge (le texte de l'étape dit déjà
+  // "Décharger X" à ce même stepIndex, voir dropoffs ci-dessus) — elle ne
+  // doit disparaître qu'à l'étape SUIVANTE. Avec >, elle disparaissait dès
+  // l'arrivée à l'étape de déchargement, obligeant à revenir en arrière
+  // pour la voir encore sur la grille.
+  const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop >= stepIndex);
   if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present);
 }
 
