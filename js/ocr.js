@@ -377,7 +377,18 @@ function extractMaxCargoBoxSize(normalized) {
 // qui suit ce mot-clé.
 const LOCATION_SUFFIX_RE = /\s+(?:sur|au|on)\b.*$/i;
 
+// Un repère précis (spatioport, terminal...) situé DANS une ville qu'on ne
+// suit pas individuellement (ex : "Teasa Spaceport in Lorville") — à
+// l'inverse de "sur/au/on" ci-dessus, qui qualifie par un CONTEXTE parent en
+// suffixe et dont on garde alors le préfixe (plus précis), "in" qualifie ici
+// un repère précis PAR la ville qui le contient : seule cette ville (après
+// "in") correspond à un lieu qu'on suit réellement, donc on garde le
+// suffixe cette fois.
+const LOCATION_IN_CITY_RE = /^.+?\bin\b\s+(.+)$/i;
+
 function stripSystemSuffix(text) {
+  const inCity = LOCATION_IN_CITY_RE.exec(text);
+  if (inCity) return inCity[1].trim();
   return text.replace(LOCATION_SUFFIX_RE, "").trim();
 }
 
