@@ -366,6 +366,9 @@ aside#side-panel {
   .company-next-rank {
     text-align: left;
   }
+  .form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
 }
 
 main {
@@ -528,9 +531,15 @@ select:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 25%, transparent);
 }
 
+/* Nom/Donneur dimensionnés sur la longueur réelle des textes qu'ils
+   reçoivent plutôt que sur une largeur générique égale à Récompense :
+   29.7 caractères en moyenne pour un titre de contrat (1033 titres réels,
+   data/mission-reputation-by-title.js) et 15.2 pour un nom d'entreprise
+   (312 entreprises, data/companies.js). Récompense reste flexible (peu de
+   chiffres à saisir). */
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: minmax(200px, 32ch) minmax(160px, 18ch) minmax(140px, 1fr);
   gap: 0.75rem 1rem;
   align-items: end;
 }
