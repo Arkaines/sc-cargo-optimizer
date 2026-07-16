@@ -18,6 +18,18 @@ const FLEETYARDS_NAME_ALIASES = {
   Genesis: "Genesis Starliner",
 };
 
+// Échange x/y d'un module dont FleetYards signale une rotation à plat
+// (90 ou 270° autour de l'axe vertical) — z (hauteur) reste inchangé, une
+// rotation à plat ne joue jamais sur la hauteur. Une rotation de 180° (ou
+// l'absence de rotation) ne change pas l'empreinte au sol, donc ne fait
+// rien ici.
+function rotateFlatDimensions(dimensions, rotation) {
+  if (!dimensions) return dimensions;
+  const normalized = ((rotation || 0) % 180 + 180) % 180;
+  if (normalized !== 90) return dimensions;
+  return { x: dimensions.y, y: dimensions.x, z: dimensions.z };
+}
+
 async function fleetyardsGet(path) {
   const res = await fetch(`${FLEETYARDS_API_BASE}/${path}`, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Erreur FleetYards (${res.status})`);
@@ -44,7 +56,14 @@ async function syncFleetyardsCargoHolds() {
     const ourName = FLEETYARDS_NAME_ALIASES[ship.name] || ship.name;
     byOurName[ourName] = ship.cargoHolds.map((h) => ({
       name: h.name,
-      dimensions: h.dimensions,
+      // FleetYards donne dimensions.x/y dans le repère LOCAL du module (avant
+      // rotation) ; h.rotation (relevé jusqu'ici à 90 ou 270 sur Carrack,
+      // Caterpillar, Hull C) tourne le module à plat autour de l'axe vertical
+      // et échange donc x/y au sol — z (hauteur) n'est jamais affecté par une
+      // rotation à plat. Sans cet échange, le module "nez" du Caterpillar par
+      // exemple gardait une empreinte au sol tournée de 90° par rapport à ce
+      // qu'affiche fleetyards.net/tools/cargo-grids/.
+      dimensions: rotateFlatDimensions(h.dimensions, h.rotation),
       capacity: h.capacity,
       maxContainerSize: h.maxContainerSize ? h.maxContainerSize.size : null,
       // Position relative de ce module dans le vaisseau — fiable pour les
@@ -54,7 +73,9 @@ async function syncFleetyardsCargoHolds() {
       // (ex. les 4 baies du Caterpillar) puisqu'il s'agit alors de l'offset
       // local au préfab répété, pas d'une position absolue sur le vaisseau —
       // voir js/cargo-viewer.js qui détecte ce cas et retombe sur une
-      // disposition en rangée pour les modules à l'offset dupliqué.
+      // disposition en rangée pour les modules à l'offset dupliqué. Exprimé
+      // dans le repère du vaisseau (déjà après rotation), contrairement à
+      // dimensions : pas d'échange x/y à faire ici.
       offset: h.offset || null,
     }));
   });
