@@ -1107,7 +1107,10 @@ window.onReservationVehicleDropped = function onReservationVehicleDropped(vx, vz
   if (!ship) return;
   const fps = resolveVehicleReservations(vx, vz, sx, sy, getResolvedCargoGrid());
   if (!fps.length) return;
-  const vid = Date.now();
+  // Identifiant de véhicule unique même pour deux déposes dans la même
+  // milliseconde (Date.now() seul collait, voir revue brique B #6) : suffixe
+  // aléatoire. Sert au regroupement et à « Effacer ».
+  const vid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   if (!state.cargoReservations[ship]) state.cargoReservations[ship] = {};
   fps.forEach((f) => {
     if (!state.cargoReservations[ship][f.moduleKey]) state.cargoReservations[ship][f.moduleKey] = [];
@@ -1157,8 +1160,11 @@ function reservedScuForShip(ship) {
 function setReservationEditUI(on) {
   document.getElementById("reservation-panel").style.display = on ? "" : "none";
   document.getElementById("reservation-edit-btn").style.display = on ? "none" : "";
-  // Un seul mode d'édition à la fois : masquer les autres contrôles pendant.
-  ["cargo-viewer-edit-btn", "cargo-viewer-rotate-btn", "cargo-viewer-mirror-btn"].forEach((id) => {
+  // Un seul mode d'édition à la fois : masquer les autres entrées pendant, y
+  // compris celle de l'éditeur admin (voir revue brique B, finding #4 — sinon
+  // ouvrir l'éditeur admin en mode réservation laisse un éditeur bloqué, les
+  // modules n'étant pas cliquables tant que reservationMode est actif).
+  ["cargo-viewer-edit-btn", "cargo-viewer-rotate-btn", "cargo-viewer-mirror-btn", "admin-grid-edit-btn"].forEach((id) => {
     const el = document.getElementById(id);
     if (el && on) el.style.display = "none";
   });
@@ -1180,6 +1186,9 @@ function exitReservationEdit() {
   if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(false);
   setReservationEditUI(false);
   renderCargoStepView();
+  // Restaure l'entrée de l'éditeur admin, masquée pendant la réservation (elle
+  // n'est réaffichée que pour un admin avec un vaisseau, voir renderAdminGridEntry).
+  renderAdminGridEntry();
 }
 
 // Crée la grille virtuelle à glisser depuis les champs Longueur/Largeur.
@@ -1383,6 +1392,11 @@ function setAdminGridEditUI(editing) {
     document.getElementById("cargo-viewer-edit-done-btn").style.display = "none";
     document.getElementById("cargo-viewer-reset-layout-btn").style.display = "none";
     document.getElementById("cargo-edit-hint").style.display = "none";
+    // Exclusivité : « Réserver » ne doit pas rester cliquable pendant l'édition
+    // admin — sinon on lancerait le mode réservation par-dessus un brouillon
+    // admin en cours (voir revue brique B, finding #4).
+    const resBtn = document.getElementById("reservation-edit-btn");
+    if (resBtn) resBtn.style.display = "none";
   } else {
     setCargoLayoutEditUI(false);
   }

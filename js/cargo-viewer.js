@@ -540,6 +540,11 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   // désormais corriger chaque grille à la main (« Éditer la disposition »),
   // ce qui est la bonne réponse à une vue chargée — pas le fait de cacher
   // des grilles réelles.
+  // NE PAS filtrer ni réordonner displayHolds : moduleKey (exposé par
+  // getResolvedCargoGrid et recalculé côté packer) désambiguïse les soutes
+  // homonymes par leur INDICE dans ce tableau. Filtrer/trier ici désaccorderait
+  // silencieusement les clés entre les réservations stockées (brique B) et le
+  // rangement — un changement à peser avec ça en tête.
   const displayHolds = holds;
 
   // FleetYards.net fournit parfois la vraie position relative de chaque
