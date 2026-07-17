@@ -5,16 +5,18 @@
 // js/fleetyards.js) est affiché en caissons filaires, avec les caisses
 // effectivement rangées (voir js/cargo-packing.js) dedans en solide, coloré
 // par mission. Trois niveaux de disposition selon ce que FleetYards fournit
-// pour ce vaisseau : (1) offset réel et fiable (unique parmi les modules du
-// vaisseau, ex. Hull B) -> position exacte ; (2) pas d'offset fiable mais le
-// nom du hardpoint donne au moins un indice avant/arrière/gauche/droite/
-// haut/bas (ex. Ironclad, qui n'a AUCUN offset FleetYards du tout) -> grille
-// reconstruite à partir de ces mots-clés (voir parsePositionHint) ; (3)
-// vraiment aucune info -> rangée plate, comme avant. Cette reconstruction
-// reste une supposition, pas une donnée exacte : le joueur peut corriger
-// l'étiquetage avant/arrière/gauche/droite (boutons "Tourner"/"Miroir", voir
-// currentOrientation/currentMirror) sans que la géométrie affichée ne bouge,
-// et sans perdre l'angle de vue/zoom en cours (voir buildAxisLabels).
+// pour ce vaisseau : (1) offsets réels et fiables (une nette majorité des
+// modules ont un offset distinct, ex. Hull B) -> positions exactes ; (2)
+// offsets absents ou peu fiables mais un indice latéral/vertical dans le nom
+// du hardpoint (ex. Ironclad : front_left, rear_right...) -> grille
+// avant/arrière × gauche/droite reconstruite (voir parsePositionHint) ; (3)
+// juste une enfilade de baies (indice avant/arrière seul, ou aucun, ex. les
+// 4 baies du Caterpillar) -> colonne le long de l'axe avant-arrière, ordonnée
+// nez puis baies numérotées. Cette reconstruction reste une supposition, pas
+// une donnée exacte : le joueur peut corriger l'étiquetage avant/arrière/
+// gauche/droite (boutons "Tourner"/"Miroir", voir currentOrientation/
+// currentMirror) sans que la géométrie affichée ne bouge, et sans perdre
+// l'angle de vue/zoom en cours (voir buildAxisLabels).
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -174,6 +176,18 @@ function parsePositionHint(name) {
   return { z, x, y, recognized: z !== 0 || x !== 0 || y !== 0 };
 }
 
+// Indice numérique de fin de nom ("hardpoint_cargogrid_module_03" -> 3),
+// pour ordonner les baies répétées et numérotées d'un vaisseau-colonne (ex.
+// les 4 baies du Caterpillar) dans leur ordre réel plutôt qu'au hasard de
+// l'ordre de l'API FleetYards. Un module sans numéro (ex. "nose") revient
+// après les numérotés dans cet ordre secondaire, mais son indice avant/
+// arrière (front) le fait passer devant, à l'avant (voir le tri de la
+// colonne de repli plus bas).
+function trailingIndex(name) {
+  const m = (name || "").match(/(\d+)\s*$/);
+  return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+}
+
 // Les 4 étiquettes de repère à plat, dans l'ordre où elles occupent les 4
 // coins de la scène à rotation nulle : indice i -> direction physique
 // +Z, +X, -Z, -X respectivement (voir les positions de makeAxisLabel plus
@@ -329,32 +343,43 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   // FleetYards détaille parfois la soute d'un vaisseau en plusieurs petits
   // modules structurels annexes (échelle, passerelle, accès nez...) en plus
   // des vraies baies de cargo — tous comptent pour le rangement, mais les
-  // afficher tous en rangée rend la vue illisible. On ne montre par défaut
-  // que les modules d'une taille comparable à la plus grande baie du
-  // vaisseau, plus ceux qui contiennent effectivement une caisse à cet
-  // instant précis du trajet.
-  const maxCapacity = Math.max(...holds.map((h) => h.capacity || 0), 1);
+  // afficher rend la vue illisible et ils ne correspondent à aucune vraie
+  // grille de rangement dans le jeu. On les masque par leur NOM de hardpoint
+  // (ladder/walkway/access/stair...), pas par un seuil de capacité :
+  // l'ancien seuil « au moins 25 % de la plus grosse baie » cachait à tort
+  // les vraies petites soutes sécurisées de l'Ironclad (5 grilles de 8 SCU,
+  // face à des baies principales de 720) alors que ce sont de vrais
+  // emplacements de rangement, pas des éléments de structure. Un module qui
+  // contient effectivement une caisse à cette étape est toujours affiché,
+  // quoi qu'il arrive (filet de sécurité).
+  const STRUCTURAL_NAME_RE = /ladder|walkway|catwalk|stair|access|corridor|ramp|elevator|\blift\b/i;
   const displayHolds = holds.filter(
-    (h) => (h.capacity || 0) >= maxCapacity * 0.25 || placements.some((p) => p.module === h)
+    (h) => !STRUCTURAL_NAME_RE.test(h.name || "") || placements.some((p) => p.module === h)
   );
 
   // FleetYards.net fournit parfois la vraie position relative de chaque
-  // module (offset), mais seulement fiable quand elle est UNIQUE parmi tous
-  // les modules du vaisseau : un même offset partagé par plusieurs modules
-  // (ex. les 4 baies identiques du Caterpillar) est l'offset local au préfab
-  // répété, pas une position absolue sur le vaisseau, et ne permet pas de
-  // les situer les uns par rapport aux autres — dans ce cas (ou en l'absence
-  // d'offset) on retombe sur une simple rangée, comme avant. Pour les
-  // vaisseaux aux modules tous différents (ex. Hull B, dont les noms
-  // encodent même la position : "bottom_front_left_lower"...), la vraie
-  // disposition dans l'espace est utilisée.
+  // module (offset). Pour un vaisseau comme le Hull B, les 16 modules ont
+  // chacun un offset distinct qui décrit leur vraie place dans la soute ->
+  // on l'utilise. Mais pour un vaisseau comme le Caterpillar, la plupart des
+  // modules partagent le même offset (les 4 baies identiques, leurs échelles,
+  // leurs passerelles) : c'est un offset LOCAL au préfab répété, pas une
+  // position absolue. Deux modules (nez, accès nez) y ont un offset unique,
+  // mais par accident — c'est aussi un offset local, pas une vraie position.
+  // On ne se fie donc aux offsets que si une nette majorité des modules
+  // affichés en ont un DISTINCT (Hull B : 16/16 ; Caterpillar : 1/5) ;
+  // sinon on bascule tout le vaisseau sur la reconstruction par nom
+  // (grille/colonne, voir plus bas), pour ne pas mal placer les quelques
+  // modules aux offsets uniques-par-hasard.
   const offsetKey = (o) => (o ? `${o.x.toFixed(2)},${o.y.toFixed(2)},${o.z.toFixed(2)}` : null);
   const offsetCounts = new Map();
-  holds.forEach((h) => {
+  displayHolds.forEach((h) => {
     const key = offsetKey(h.offset);
     if (key) offsetCounts.set(key, (offsetCounts.get(key) || 0) + 1);
   });
-  const hasReliableOffset = (h) => offsetCounts.get(offsetKey(h.offset)) === 1;
+  const withOffset = displayHolds.filter((h) => offsetKey(h.offset) !== null);
+  const uniqueOffsetCount = withOffset.filter((h) => offsetCounts.get(offsetKey(h.offset)) === 1).length;
+  const offsetsReliable = withOffset.length > 0 && uniqueOffsetCount >= withOffset.length * 0.5;
+  const hasReliableOffset = (h) => offsetsReliable && offsetCounts.get(offsetKey(h.offset)) === 1;
 
   // dx/dy/dz : mêmes dimensions que ci-dessous (échange y/z, repère
   // Three.js), calculées une fois par module affiché.
@@ -368,12 +393,16 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
 
   const positioned = layout.filter((l) => hasReliableOffset(l.hold));
   const remaining = layout.filter((l) => !hasReliableOffset(l.hold));
-  // Modules sans offset fiable mais dont le nom donne au moins un indice de
-  // position (voir parsePositionHint) : reconstruits en grille. Le reste
-  // (vraiment aucune info directionnelle) retombe sur l'ancienne rangée
-  // plate, inchangée.
-  const fallbackGrid = remaining.filter((l) => l.hint.recognized);
-  const fallbackRow = remaining.filter((l) => !l.hint.recognized);
+  // Un indice LATÉRAL (gauche/droite) ou VERTICAL (haut/bas) décrit un vrai
+  // agencement en 2D/3D -> grille (ex. l'Ironclad : front_left/right,
+  // rear_left/right...). Un indice seulement avant/arrière (ou aucun indice)
+  // décrit une simple suite de modules le long de l'axe du vaisseau -> une
+  // COLONNE avant-arrière (ex. les baies en enfilade du Caterpillar : nez +
+  // module_01..04), et non plus une rangée gauche-droite comme avant, qui ne
+  // ressemblait pas au vaisseau réel. L'indice avant/arrière, quand il
+  // existe, sert alors juste à ordonner la colonne (le nez passe devant).
+  const fallbackGrid = remaining.filter((l) => l.hint.x !== 0 || l.hint.y !== 0);
+  const fallbackRow = remaining.filter((l) => l.hint.x === 0 && l.hint.y === 0);
 
   // Modules à offset fiable : position réelle (même échange y/z que les
   // dimensions, x reste x).
@@ -436,11 +465,26 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     if (fallbackRow.length) fallbackBaseX += MODULE_GAP;
   }
 
-  // Modules sans aucun indice exploitable : rangée de repli, comme avant.
-  fallbackRow.forEach((l) => {
-    l.worldPos = [fallbackBaseX, 0, 0];
-    fallbackBaseX += l.dx + MODULE_GAP;
-  });
+  // Colonne de repli : les modules en enfilade (aucun indice latéral/vertical)
+  // sont posés le long de l'axe avant-arrière (Z), pas gauche-droite (X),
+  // pour lire comme la vraie enfilade de baies du vaisseau. Ordre : d'abord
+  // l'avant (indice front, ex. le nez du Caterpillar), puis par numéro de
+  // baie croissant (module_01, 02, 03, 04). L'avant = +Z (côté de l'étiquette
+  // « Avant », voir plus bas), donc on pose du fond (Z=0) vers l'avant en
+  // parcourant la colonne dans l'ordre inverse.
+  const rowFrontToBack = fallbackRow
+    .slice()
+    .sort((a, b) => b.hint.z - a.hint.z || trailingIndex(a.hold.name) - trailingIndex(b.hold.name));
+  const rowWidth = rowFrontToBack.reduce((max, l) => Math.max(max, l.dx), 0);
+  let rowZ = 0;
+  rowFrontToBack
+    .slice()
+    .reverse()
+    .forEach((l) => {
+      l.worldPos = [fallbackBaseX, 0, rowZ];
+      rowZ += l.dz + MODULE_GAP;
+    });
+  if (fallbackRow.length) fallbackBaseX += rowWidth + MODULE_GAP;
 
   // Ramène tout à des coordonnées positives (les offsets réels peuvent
   // démarrer n'importe où) pour que les étiquettes/la caméra ci-dessous

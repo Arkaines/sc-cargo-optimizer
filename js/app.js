@@ -2192,9 +2192,21 @@ function runCargoPacking() {
   }
 
   const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length, getShipAccessFaces(ship.name));
+  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: 0 };
+  renderCargoPackStatus();
+  renderCargoStepView();
+}
+
+// Résumé texte du rangement (« X caisses rangées, tout rentre... ») recalculé
+// depuis cargoPackState.result — extrait de runCargoPacking pour pouvoir être
+// rejoué seul, notamment au changement de langue (le texte est cuit avec t()
+// au moment du rendu, comme les étiquettes 3D). No-op si aucun rangement.
+function renderCargoPackStatus() {
+  const status = document.getElementById("cargo-pack-status");
+  if (!status || !cargoPackState) return;
+  const { result } = cargoPackState;
   const placedCount = result.placements.length;
   const totalCount = placedCount + result.unplaced.length;
-
   if (result.unplaced.length) {
     status.className = "hint warning-text";
     status.textContent = t("cargoPackSummary", { placed: placedCount, total: totalCount, unplaced: result.unplaced.length });
@@ -2202,11 +2214,9 @@ function runCargoPacking() {
     status.className = "hint warning-text";
     status.textContent = t("cargoPackConflictSummary", { placed: placedCount, conflicts: result.conflicts.length });
   } else {
+    status.className = "hint";
     status.textContent = t("cargoPackAllPlaced", { placed: placedCount });
   }
-
-  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: 0 };
-  renderCargoStepView();
 }
 
 function renderAll() {
@@ -2981,6 +2991,17 @@ document.addEventListener("DOMContentLoaded", () => {
       .querySelectorAll(".cargo-boxsize-input option[value='']")
       .forEach((o) => (o.textContent = t("cargoBoxSizeAnyOption")));
     renderAll();
+    // Le texte de l'onglet « Optimisation du cargo » (étape courante,
+    // récupérations/livraisons) ET les étiquettes Avant/Arrière/Gauche/Droite
+    // de la vue 3D (textures canvas cuites avec le texte au moment du rendu,
+    // voir makeAxisLabel dans js/cargo-viewer.js) ne sont pas couverts par
+    // renderAll() : on rejoue le rendu de l'étape courante pour tout
+    // retraduire d'un coup. renderCargoStepView() conserve l'étape courante
+    // (cargoPackState.stepIndex) et ne bouge pas la caméra (même vaisseau ->
+    // même frameKey côté cargo-viewer) ; renderCargoPackStatus() retraduit la
+    // ligne de résumé. Les deux sont no-op si aucun rangement n'est affiché.
+    renderCargoStepView();
+    renderCargoPackStatus();
   });
 
   document.getElementById("add-cargo-btn").addEventListener("click", () => {
