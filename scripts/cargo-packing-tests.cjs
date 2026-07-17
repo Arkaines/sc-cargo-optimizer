@@ -724,6 +724,98 @@ test("ship-wide fallback: does not force an avoidable conflict when a safe stack
   assert.strictEqual(r.conflicts.length, 0, "a safe stack for HostA (behind GuestEarly) was available; the fallback must not force an avoidable conflict");
 });
 
+// Vrai si un placement occupe au moins une cellule du pavé réservé
+// [rx, ry, 0]..[rx+rsx, ry+rsy, hauteur[ sur les axes 0 et 1 (Z ignoré :
+// la réservation est pleine hauteur, donc tout chevauchement XY compte).
+function overlapsReserved(placement, rx, ry, rsx, rsy) {
+  const [px, py] = placement.position;
+  const [sx, sy] = placement.size;
+  const sepX = px + sx <= rx || rx + rsx <= px;
+  const sepY = py + sy <= ry || ry + rsy <= py;
+  return !(sepX || sepY);
+}
+
+// ===== Brique A : zones réservées — admission (Task 1) ====================
+
+// Un gros module bien large ; sans réservation une caisse se place en (0,0).
+test("reserved: crate never occupies a reserved cell", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 6.25, y: 6.25, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const reservations = { bay: { x0: 0, y0: 0, sx: 2, sy: 2 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  r.placements.forEach((p) => {
+    assert.ok(!overlapsReserved(p, 0, 0, 2, 2), "un placement recouvre la zone réservée");
+  });
+});
+
+// Réserver tout le module = ce module ne peut rien accueillir.
+test("reserved: whole module reserved -> nothing placed there", () => {
+  const ctx = loadCargoPacking();
+  const holds = [
+    { name: "full", dimensions: { x: 2.5, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 },
+    { name: "free", dimensions: { x: 2.5, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 },
+  ];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const reservations = { full: { x0: 0, y0: 0, sx: 2, sy: 2 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  const inFull = r.placements.filter((p) => p.module.name === "full");
+  assert.strictEqual(inFull.length, 0, "une caisse s'est placée dans le module entièrement réservé");
+  assert.strictEqual(r.placements.length, 1, "la caisse aurait dû aller dans le module libre");
+});
+
+// Une réservation invalide est ignorée (comportement = sans réservation).
+test("reserved: invalid reservation is ignored", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 2.5, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const base = ctx.simulateRoutePacking(entries, holds, 2);
+  const bad = [
+    { bay: { x0: 0, y0: 0, sx: 99, sy: 1 } }, // déborde
+    { bay: { x0: 0, y0: 0, sx: 0, sy: 1 } }, // taille nulle
+    { bay: { x0: 0, y0: 0, sx: 1.5, sy: 1 } }, // non entier
+    { bay: { x0: -1, y0: 0, sx: 1, sy: 1 } }, // négatif
+  ];
+  bad.forEach((reservations) => {
+    const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+    assert.strictEqual(r.placements.length, base.placements.length);
+    assert.strictEqual(r.unplaced.length, base.unplaced.length);
+  });
+});
+
+// Rétrocompat : appel SANS le 5e argument identique à avant (déjà couvert par
+// les 34 tests ; on l'affirme aussi explicitement ici sur un cas simple).
+test("reserved: omitting reservations keeps prior behaviour", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 2.5, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 2, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const a = ctx.simulateRoutePacking(entries, holds, 2);
+  const b = ctx.simulateRoutePacking(entries, holds, 2, undefined, {});
+  assert.deepStrictEqual(b.placements.map((p) => p.position), a.placements.map((p) => p.position));
+});
+
+// Pleine hauteur : rien ne repose sur une colonne réservée (§5.1).
+test("reserved: nothing stacks on the reserved column", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 2.5, y: 1.25, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
+  // Beaucoup de petites caisses : sans réservation certaines s'empilent (z>0).
+  const entries = [{ quantity: 4, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  r.placements.forEach((p) => {
+    assert.ok(!overlapsReserved(p, 0, 0, 1, 1), "une caisse occupe la colonne réservée (empilée ou non)");
+  });
+});
+
+test("reserved: the parked-vehicle obstacle is never a reported conflict", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 3.75, y: 1.25, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  r.conflicts.forEach((c) => assert.ok(c.entry, "un conflit sans entry = l'obstacle réservé a fui dans les conflits"));
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
