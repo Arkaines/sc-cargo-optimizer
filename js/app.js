@@ -1111,11 +1111,121 @@ window.onReservationVehicleDropped = function onReservationVehicleDropped(vx, vz
   if (!state.cargoReservations[ship]) state.cargoReservations[ship] = {};
   fps.forEach((f) => {
     if (!state.cargoReservations[ship][f.moduleKey]) state.cargoReservations[ship][f.moduleKey] = [];
-    state.cargoReservations[ship][f.moduleKey].push({ x0: f.x0, y0: f.y0, sx: f.sx, sy: f.sy, vid });
+    // vl/vw = taille du véhicule d'origine (label de la liste) ; le packer les
+    // ignore. sx/sy = empreinte réelle dans CE module (peut être plus petite si
+    // le véhicule est à cheval).
+    state.cargoReservations[ship][f.moduleKey].push({ x0: f.x0, y0: f.y0, sx: f.sx, sy: f.sy, vid, vl: sx, vw: sy });
   });
   saveState();
   rerenderCargoReservationView();
+  if (typeof renderReservationList === "function") renderReservationList();
 };
+
+// Retire toutes les empreintes d'un véhicule (par vid) sur toutes les soutes du
+// vaisseau, supprime les listes/soutes vidées, et rafraîchit.
+function removeReservationVehicle(ship, vid) {
+  const byModule = state.cargoReservations[ship];
+  if (!byModule) return;
+  Object.keys(byModule).forEach((key) => {
+    byModule[key] = byModule[key].filter((f) => f.vid !== vid);
+    if (!byModule[key].length) delete byModule[key];
+  });
+  if (!Object.keys(byModule).length) delete state.cargoReservations[ship];
+  saveState();
+  rerenderCargoReservationView();
+  renderReservationList();
+  if (cargoPackState) runCargoPacking(); // relance le rangement si un est affiché
+}
+
+// Total SCU réservés sur ce vaisseau = Σ (sx·sy·hauteur-du-module en cellules).
+// La hauteur (pleine, axe 2) vient des soutes résolues, par moduleKey.
+function reservedScuForShip(ship) {
+  const byModule = (ship && state.cargoReservations[ship]) || {};
+  const heightByKey = {};
+  (getResolvedCargoGrid && getResolvedCargoGrid() || []).forEach((m) => {
+    heightByKey[m.moduleKey] = Math.max(1, Math.round(m.dimensions.z / UNIT_M));
+  });
+  let total = 0;
+  Object.keys(byModule).forEach((key) => {
+    const h = heightByKey[key] || 1;
+    byModule[key].forEach((f) => (total += f.sx * f.sy * h));
+  });
+  return total;
+}
+
+// Panneau réservation : mode exclusif + entrée/sortie.
+function setReservationEditUI(on) {
+  document.getElementById("reservation-panel").style.display = on ? "" : "none";
+  document.getElementById("reservation-edit-btn").style.display = on ? "none" : "";
+  // Un seul mode d'édition à la fois : masquer les autres contrôles pendant.
+  ["cargo-viewer-edit-btn", "cargo-viewer-rotate-btn", "cargo-viewer-mirror-btn"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && on) el.style.display = "none";
+  });
+}
+
+function enterReservationEdit() {
+  const ship = getCargoViewerShipName() || (getSelectedShip() && getSelectedShip().name);
+  if (!ship) return;
+  document.getElementById("cargo-viewer-panel").style.display = "";
+  if (typeof setCargoReservationMode === "function") setCargoReservationMode(true);
+  if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(true);
+  setReservationEditUI(true);
+  rerenderCargoReservationView();
+  renderReservationList();
+}
+
+function exitReservationEdit() {
+  if (typeof setCargoReservationMode === "function") setCargoReservationMode(false);
+  if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(false);
+  setReservationEditUI(false);
+  renderCargoStepView();
+}
+
+// Crée la grille virtuelle à glisser depuis les champs Longueur/Largeur.
+function placeReservationVehicle() {
+  const l = Math.max(1, Math.round(Number(document.getElementById("reservation-len").value) || 1));
+  const w = Math.max(1, Math.round(Number(document.getElementById("reservation-wid").value) || 1));
+  if (typeof setReservationVehicleSize === "function") setReservationVehicleSize(l, w);
+}
+
+// Liste des véhicules réservés (regroupés par vid) + « Effacer », + total SCU.
+function renderReservationList() {
+  const box = document.getElementById("reservation-list");
+  if (!box) return;
+  box.innerHTML = "";
+  const ship = getCargoViewerShipName();
+  const byModule = (ship && state.cargoReservations[ship]) || {};
+  // Regroupe les empreintes par vid (un véhicule = un vid).
+  const byVid = new Map();
+  Object.keys(byModule).forEach((key) => {
+    byModule[key].forEach((f) => {
+      if (!byVid.has(f.vid)) byVid.set(f.vid, f);
+    });
+  });
+  byVid.forEach((f, vid) => {
+    const row = document.createElement("div");
+    row.className = "admin-grid-row";
+    const label = document.createElement("span");
+    label.className = "hint";
+    label.textContent = t("reservationVehicleLabel", { l: f.vl || f.sx, w: f.vw || f.sy });
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn-danger btn-view-sm";
+    del.textContent = t("reservationClearBtn");
+    del.addEventListener("click", () => removeReservationVehicle(ship, vid));
+    row.appendChild(label);
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+  const total = reservedScuForShip(ship);
+  if (total > 0) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = t("reservedScu", { n: total });
+    box.appendChild(p);
+  }
+}
 
 // Orientation Avant/Arrière/Gauche/Droite de la vue 3D : rotation (0-3, par
 // pas de 90°) + miroir (voir js/cargo-viewer.js:currentOrientation/
@@ -1235,6 +1345,10 @@ function setCargoLayoutEditUI(editing) {
   document.getElementById("cargo-edit-hint").style.display = editing ? "" : "none";
   document.getElementById("cargo-viewer-rotate-btn").style.display = editing ? "none" : "";
   document.getElementById("cargo-viewer-mirror-btn").style.display = editing ? "none" : "";
+  // Exclusivité des modes : « Réserver » ne doit pas être cliquable pendant
+  // l'édition de disposition (un seul mode d'édition à la fois).
+  const resBtn = document.getElementById("reservation-edit-btn");
+  if (resBtn) resBtn.style.display = editing ? "none" : "";
 }
 
 // Équivalent de setCargoLayoutEditUI, mais pour L'ÉDITEUR ADMIN — ne doit
@@ -2396,6 +2510,10 @@ function renderCargoStepView() {
   const editBtn = document.getElementById("cargo-viewer-edit-btn");
   const publishedNote = document.getElementById("cargo-published-note");
   if (editBtn) editBtn.style.display = locked ? "none" : "";
+  // « Réserver un emplacement » : dispo dès qu'une grille est affichée, MÊME sur
+  // une grille publiée (la réservation est perso, pas une modif de la grille).
+  const resBtn = document.getElementById("reservation-edit-btn");
+  if (resBtn) resBtn.style.display = holds && holds.length ? "" : "none";
   if (publishedNote) publishedNote.style.display = publishedGrid ? "" : "none";
   document.getElementById("cargo-viewer-rotate-btn").style.display = locked ? "none" : "";
   document.getElementById("cargo-viewer-mirror-btn").style.display = locked ? "none" : "";
@@ -3760,6 +3878,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("cargo-viewer-edit-btn").addEventListener("click", enterCargoLayoutEdit);
   document.getElementById("cargo-viewer-edit-done-btn").addEventListener("click", exitCargoLayoutEdit);
   document.getElementById("cargo-viewer-reset-layout-btn").addEventListener("click", resetCargoViewerLayout);
+  bindEvent("reservation-edit-btn", "click", enterReservationEdit);
+  bindEvent("reservation-close-btn", "click", exitReservationEdit);
+  bindEvent("reservation-place-btn", "click", placeReservationVehicle);
   document.getElementById("cargo-step-prev").addEventListener("click", () => {
     if (!cargoPackState || cargoPackState.stepIndex <= 0) return;
     cargoPackState.stepIndex -= 1;
