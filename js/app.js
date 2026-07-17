@@ -2388,6 +2388,11 @@ function renderAdminGridEditor() {
 function renderAdminGridSelection() {
   const box = document.getElementById("admin-grid-selected");
   const mod = adminGridDraft && adminGridDraft.find((m) => m.name === adminGridSelected);
+  // « Pivoter » vit dans la barre principale (toujours visible) mais agit sur
+  // le module SÉLECTIONNÉ : sans sélection il serait un clic sans effet, donc
+  // on le grise plutôt que de le laisser mentir.
+  const rotate = document.getElementById("admin-grid-rotate-btn");
+  if (rotate) rotate.disabled = !mod;
   if (!mod) {
     box.style.display = "none";
     return;
@@ -2412,6 +2417,14 @@ function applyAdminGridSize() {
   mod.capacity = capacityFromDimensions(mod.dimensions);
   mod.maxContainerSize = Number(document.getElementById("admin-grid-mcs").value) || 1;
   renderAdminGridEditor();
+}
+
+// Câble un écouteur en tolérant un élément absent — voir le commentaire au
+// point d'appel (index.html périmé + app.js neuf : un getElementById null tuait
+// toute la fin de l'init).
+function bindEvent(id, event, handler) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, handler);
 }
 
 // Pivoter un module de 90° autour de la VERTICALE. Sur une grille alignée sur
@@ -3439,14 +3452,24 @@ document.addEventListener("DOMContentLoaded", () => {
     opt.textContent = `${s} SCU`;
     mcsSelect.appendChild(opt);
   });
-  document.getElementById("admin-grid-edit-btn").addEventListener("click", enterAdminGridEdit);
-  document.getElementById("admin-grid-close-btn").addEventListener("click", exitAdminGridEdit);
-  document.getElementById("admin-grid-add-btn").addEventListener("click", addAdminGridModule);
-  document.getElementById("admin-grid-remove-btn").addEventListener("click", removeAdminGridModule);
-  document.getElementById("admin-grid-publish-btn").addEventListener("click", publishAdminGrid);
-  document.getElementById("admin-grid-rotate-btn").addEventListener("click", rotateAdminGridModule);
+  // index.html est le SEUL fichier sans cache-bust : c'est le point d'entrée,
+  // il ne peut pas s'auto-versionner. Un navigateur peut donc servir un
+  // index.html PÉRIMÉ avec un js/app.js?v=N tout neuf (URL neuve = jamais en
+  // cache) — les éléments ajoutés au HTML par la même livraison n'existent
+  // alors pas. getElementById renvoie null, addEventListener lève, et comme
+  // l'init est un seul bloc DOMContentLoaded sans filet, TOUT ce qui suit est
+  // mort : c'est ainsi que l'ajout du bouton « Pivoter 90° » a tué le glisser
+  // (reproduit : ancien index.html + app.js?v=r35 => TypeError). Un élément
+  // absent doit dégrader — ce bouton-là ne marche pas jusqu'au rechargement —
+  // jamais casser le reste.
+  bindEvent("admin-grid-edit-btn", "click", enterAdminGridEdit);
+  bindEvent("admin-grid-close-btn", "click", exitAdminGridEdit);
+  bindEvent("admin-grid-add-btn", "click", addAdminGridModule);
+  bindEvent("admin-grid-remove-btn", "click", removeAdminGridModule);
+  bindEvent("admin-grid-publish-btn", "click", publishAdminGrid);
+  bindEvent("admin-grid-rotate-btn", "click", rotateAdminGridModule);
   ["admin-grid-cx", "admin-grid-cy", "admin-grid-cz", "admin-grid-mcs"].forEach((id) => {
-    document.getElementById(id).addEventListener("change", applyAdminGridSize);
+    bindEvent(id, "change", applyAdminGridSize);
   });
 
   document.getElementById("custom-ship-capacity").addEventListener("change", (e) => {
