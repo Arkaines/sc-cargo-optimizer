@@ -12,13 +12,19 @@ cet emplacement ni ce qu'il rend inaccessible. Modèle validé avec l'utilisateu
 
 - Le joueur **saisit la taille de son véhicule en cellules** : longueur × largeur
   (ex. 4 × 2). 1 cellule = 1,25 m = 1 SCU. Pleine hauteur (comme la brique A).
-- Ça crée une **grille virtuelle** (le véhicule) qu'il **glisse** dans la vue 3D,
-  aimantée sur les cellules — en réutilisant le glisser existant.
-- À la dépose, la grille virtuelle se **rattache au module qu'elle recouvre** ;
-  on en déduit son empreinte en **cellules locales** de ce module, stockée comme
-  réservation.
-- **Une réservation par module**, plusieurs modules possibles (plusieurs
-  véhicules sur un gros vaisseau).
+- Ça crée une **grille virtuelle** (le véhicule) qu'il **glisse LIBREMENT** dans la
+  vue 3D, aimantée sur les cellules — en réutilisant le glisser existant. Pas de
+  sélection préalable de soute, pas d'obligation de tenir dans un seul module.
+- À la dépose (ou en direct), la grille virtuelle **réserve les cellules qu'elle
+  recouvre dans CHAQUE module qu'elle touche** : on calcule l'intersection de son
+  empreinte monde avec le rectangle de sol de chaque module, et on en déduit,
+  pour chacun, une empreinte en **cellules locales**. Un véhicule à cheval sur
+  deux soutes réserve la partie couverte de chacune ; la partie qui déborde dans
+  le vide (hors de toute soute) ne réserve rien.
+- **Au plus une empreinte réservée par module** (contrainte de la brique A,
+  inchangée). Un véhicule couvrant N modules écrit UNE empreinte dans chacun.
+  Deux véhicules qui recouvrent le **même** module : le second remplace le
+  premier dans ce module (voir §5, limitation documentée).
 - **Propre à chaque joueur**, synchronisé (localStorage + Supabase), **jamais
   publié** : n'affecte que le rangement de ce joueur.
 
@@ -77,28 +83,38 @@ axes 0–1). Une empreinte réservée sur les axes packing 0 et 1 s'étend, à l
 le long de **viewer-X** et **viewer-Z**. La hauteur (packing axe 2) est
 **viewer-Y**, non éditable (pleine hauteur).
 
-**Résolution dépose → module + cellules locales** (l'inverse du rendu) :
+**Résolution dépose → réservations par module** (l'inverse du rendu, par
+intersection) :
 
 1. La grille virtuelle est glissée sur le plan du sol (Y=0), aimantée sur
    `UNIT = 1,25 m` — réutiliser exactement la mécanique du glisser existant
    (`onLayoutPointerDown/Move/Up`, `snapToUnit`).
 2. À la dépose, obtenir la position monde du coin de la grille virtuelle
-   `(vx, vz)` (viewer X, Z) et sa taille `(sx, sy)` cellules.
-3. Parmi les modules de `getResolvedCargoGrid()` (qui expose, par module,
+   `(vx, vz)` (viewer X, Z) et sa taille `(sx, sy)` cellules — soit le rectangle
+   monde `V = [vx, vx + sx·UNIT] × [vz, vz + sy·UNIT]`.
+3. Pour **chaque** module de `getResolvedCargoGrid()` (qui expose, par module,
    `name`, `dimensions` **réelles** {x,y,z}, et `position` = worldPos viewer),
-   trouver celui dont le **rectangle de sol** contient entièrement la grille
-   virtuelle :
-   - rectangle viewer du module = `[wx, wx + dimensions.x] × [wz, wz + dimensions.y]`
-     (car dx = dimensions.x le long de viewer-X, dz = dimensions.y le long de
-     viewer-Z ; `wx = position.x`, `wz = position.z`) ;
-   - la grille virtuelle `[vx, vx + sx·UNIT] × [vz, vz + sy·UNIT]` doit tenir
-     dans ce rectangle.
-4. Cellules locales : `x0 = round((vx - wx)/UNIT)`, `y0 = round((vz - wz)/UNIT)`.
-   Borner `x0, y0 ≥ 0` et `x0+sx ≤ cellsX`, `y0+sy ≤ cellsY`
+   son rectangle de sol viewer est
+   `M = [wx, wx + dimensions.x] × [wz, wz + dimensions.y]`
+   (dx = dimensions.x le long de viewer-X, dz = dimensions.y le long de viewer-Z ;
+   `wx = position.x`, `wz = position.z`).
+4. **Intersection** `V ∩ M` sur les deux axes du sol. Si elle est vide, ce module
+   n'est pas concerné. Sinon, la convertir en cellules locales du module :
+   ```
+   ix0 = max(vx, wx) ; ix1 = min(vx + sx·UNIT, wx + dimensions.x)
+   x0  = round((ix0 - wx)/UNIT) ; sxLocal = round((ix1 - ix0)/UNIT)
+   ```
+   idem sur l'axe Z → `y0, syLocal`. Borner `x0, y0 ≥ 0`,
+   `x0+sxLocal ≤ cellsX`, `y0+syLocal ≤ cellsY`
    (`cellsX = round(dimensions.x/UNIT)`, `cellsY = round(dimensions.y/UNIT)`).
-5. **Dépose invalide** (aucune grille ne contient entièrement la virtuelle, ou
-   elle est à cheval sur deux modules) : **rien n'est enregistré**, retour visuel
-   (la grille virtuelle revient / clignote), pas d'`alert` bloquante.
+   Si `sxLocal < 1` ou `syLocal < 1` après arrondi (le véhicule n'effleure
+   qu'un liseré), ignorer ce module.
+5. Écrire `state.cargoReservations[ship][hold.name] = { x0, y0, sx: sxLocal, sy: syLocal }`
+   pour chaque module intersecté. Le résultat est directement la forme que la
+   brique A valide (elle re-borne/re-valide de toute façon, §3 brique A).
+6. **Aucune intersection avec aucun module** (véhicule lâché dans le vide) :
+   rien n'est enregistré, retour visuel léger (la grille virtuelle revient), pas
+   d'`alert` bloquante.
 
 **Ce contrat est le plus fragile de la brique** (l'échange Y/Z a déjà causé des
 bugs). Sa vérification en Edge headless est **obligatoire** (§9) : poser une
@@ -113,14 +129,22 @@ Le visualiseur identifie un module par `moduleKey(hold, holds)` — qui vaut
 suffixe `#index`. La brique A, elle, indexe par `hold.name`.
 
 **Décision (v1) :** stocker et résoudre par **`hold.name`**, pour coller
-directement à la brique A sans la modifier. **Limitation connue et documentée :**
-sur un vaisseau à **soutes homonymes**, une réservation posée dans l'une
-s'applique à **toutes** celles du même nom (rendu et rangement compris). C'est
-rare (les noms de soutes FleetYards sont presque toujours distincts, ex.
-`module_01..04` du Caterpillar). Si un cas réel gêne, une brique A′ fera passer
-la brique A **et** B à la clé désambiguïsée `moduleKey` — hors périmètre ici.
+directement à la brique A sans la modifier. Deux limitations connues et
+documentées en découlent, toutes deux rares, toutes deux réparables par une
+future brique A′ (clé désambiguïsée `moduleKey` **et** liste de réservations par
+module dans la brique A) — hors périmètre ici :
 
-Cette limitation est explicitement soumise à validation utilisateur (comme le
+1. **Soutes homonymes :** sur un vaisseau où deux soutes portent le même nom,
+   une réservation s'applique à **toutes** celles du même nom (rendu et rangement).
+   Rare : les noms FleetYards sont presque toujours distincts (`module_01..04`
+   du Caterpillar).
+2. **Deux véhicules dans le MÊME module :** la brique A n'accepte qu'**une**
+   empreinte réservée par module. Un second véhicule recouvrant un module déjà
+   réservé **remplace** l'empreinte de ce module (le premier véhicule y perd sa
+   place). Un véhicule couvrant plusieurs modules distincts, ou plusieurs
+   véhicules dans des modules distincts, fonctionnent pleinement.
+
+Ces limitations sont explicitement soumises à validation utilisateur (comme le
 §5.3 de la brique A) : arbitrage simplicité-maintenant / exhaustivité-plus-tard.
 
 ## 6. Le fil vers le rangement
@@ -203,6 +227,7 @@ Chaque tâche cache-buste `index.html` (les ~23 occurrences `?v=…`) et garde
 - La clé désambiguïsée `moduleKey` côté packer pour les soutes homonymes
   (limitation §5, brique A′ éventuelle).
 - Réservation à hauteur partielle (la brique A est pleine hauteur par décision).
-- Plusieurs véhicules **dans un même module** (un par module en v1).
+- Plusieurs empreintes réservées **dans un même module** (une par module en v1 —
+  §5 limitation 2 ; nécessiterait une liste côté brique A).
 - Rotation de la grille virtuelle : elle a déjà deux champs Longueur/Largeur ;
   échanger les deux valeurs suffit (pas de bouton rotation dédié en v1).
