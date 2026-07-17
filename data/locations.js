@@ -1,7 +1,7 @@
 ﻿// Liste de lieux generee depuis l'API UEX Corp (https://uexcorp.space/api/documentation/).
 // Un lieu par station/ville/avant-poste/lune (dedoublonne), avec l'ID de terminal UEX
 // (uexTerminalId) et l'ID d'orbite (orbitId) associes, utilises pour les distances.
-// Genere le 2026-07-13. Utilise le bouton de synchronisation dans l'app pour rafraichir.
+// Genere le 2026-07-17 (scripts/refresh-data.js).
 const DEFAULT_LOCATIONS = [
   { id: "uex-outpost-1", name: "ArcCorp Mining Area 045", category: "Avant-poste", uexTerminalId: 6, orbitId: 4 },
   { id: "uex-outpost-2", name: "ArcCorp Mining Area 048", category: "Avant-poste", uexTerminalId: 7, orbitId: 4 },

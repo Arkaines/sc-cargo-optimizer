@@ -1,0 +1,62 @@
+name: Refresh catalog data
+
+# Régénère data/locations.js, commodities.js, companies.js, ships.js et
+# scwiki-locations.js depuis les APIs publiques UEX Corp et Star Citizen
+# Wiki (voir scripts/refresh-data.js) et ouvre une pull request s'il y a un
+# changement. But : que le dépôt lui-même reste à jour, sans dépendre
+# uniquement de la synchro côté navigateur d'un joueur (voir maybeAutoSync
+# dans js/app.js). Ne touche jamais master directement -- toujours via une
+# PR à relire (le script peut avertir sur des changements à vérifier, ex.
+# une entreprise suivie dans faction-reputation-ladders.js qui disparaît de
+# l'API UEX companies -- voir les logs du job ou la sortie du script).
+#
+# Ne régénère PAS data/distances.js, data/*-aliases.js,
+# data/mission-reputation*.js, data/faction-reputation-ladders.js ni
+# data/location-planets.js : ce ne sont pas de simples miroirs d'API, une
+# régénération naïve écraserait de la réconciliation faite à la main.
+
+on:
+  schedule:
+    # Tous les lundis à 06:00 UTC. Le catalogue vaisseaux/lieux/marchandises
+    # ne change pas au jour le jour (patchs du jeu, pas un flux temps réel) --
+    # un rythme hebdomadaire suffit largement.
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Régénérer les fichiers data/*.js
+        run: node scripts/refresh-data.js
+
+      - name: Ouvrir une pull request si quelque chose a changé
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Rafraîchir le catalogue depuis UEX Corp / Star Citizen Wiki"
+          title: "Rafraîchir le catalogue (vaisseaux/lieux/marchandises/entreprises)"
+          body: |
+            Régénéré automatiquement par `scripts/refresh-data.js` depuis les APIs publiques UEX Corp et Star Citizen Wiki.
+
+            Vérifie les logs du job pour d'éventuels avertissements (ex. une entreprise suivie dans `data/faction-reputation-ladders.js` qui aurait disparu du catalogue UEX) avant de merger.
+          branch: auto/refresh-data
+          delete-branch: true
+          add-paths: |
+            data/locations.js
+            data/commodities.js
+            data/companies.js
+            data/ships.js
+            data/scwiki-locations.js
+          labels: |
+            automated
+            data-refresh

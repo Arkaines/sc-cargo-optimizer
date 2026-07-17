@@ -1,5 +1,5 @@
 ﻿// Liste des commodites generee depuis l'API UEX Corp (https://uexcorp.space/api/documentation/).
-// Genere le 2026-07-13. Utilisee pour l'autocompletion du champ marchandise des missions.
+// Genere le 2026-07-17 (scripts/refresh-data.js). Utilisee pour l'autocompletion du champ marchandise des missions.
 const DEFAULT_COMMODITIES = [
   { name: "AcryliPlex Composite", kind: "Man-made", illegal: false },
   { name: "Agricium", kind: "Metal", illegal: false },
@@ -67,8 +67,8 @@ const DEFAULT_COMMODITIES = [
   { name: "Dopple", kind: "Vice", illegal: true },
   { name: "Dymantium", kind: "Explosive", illegal: false },
   { name: "DynaFlex", kind: "Man-Made", illegal: false },
-  { name: "Elespo", kind: "Man-made", illegal: false },
   { name: "E'tam", kind: "Drug", illegal: true },
+  { name: "Elespo", kind: "Man-made", illegal: false },
   { name: "Feynmaline", kind: "Mineral", illegal: false },
   { name: "Fireworks", kind: "Temporary", illegal: false },
   { name: "Fluorine", kind: "Halogen", illegal: false },

@@ -1,10 +1,8 @@
 // Liste des vaisseaux (capacite cargo en SCU) generee depuis l'API UEX Corp
-// (https://uexcorp.space/api/documentation/). Genere le 2026-07-13, complete
-// le 2026-07-17 pour inclure les variantes a capacite cargo distincte (ex.
-// Ironclad Assault) auparavant exclues par erreur du filtre de synchro.
+// (https://uexcorp.space/api/documentation/). Genere le 2026-07-17 (scripts/refresh-data.js).
 // Seuls les vaisseaux avec une capacite cargo non nulle sont retenus ; les
 // variantes purement cosmetiques/edition (meme SCU que leur vaisseau de base)
-// restent exclues -- voir js/uex.js:syncUexShips.
+// restent exclues -- voir js/uex.js:syncUexShips et ce script:fetchShips.
 const DEFAULT_SHIPS = [
   { name: "100i", scu: 2, company: "Origin Jumpworks" },
   { name: "135c", scu: 6, company: "Origin Jumpworks" },
@@ -83,6 +81,7 @@ const DEFAULT_SHIPS = [
   { name: "Mustang Alpha", scu: 4, company: "Consolidated Outland" },
   { name: "Nautilus", scu: 64, company: "Aegis Dynamics" },
   { name: "Nomad", scu: 24, company: "Consolidated Outland" },
+  { name: "Odin", scu: 6000, company: "Anvil Aerospace" },
   { name: "Odyssey", scu: 252, company: "Musashi Industrial and Starflight Concern" },
   { name: "Orion", scu: 384, company: "Roberts Space Industries" },
   { name: "Paladin", scu: 4, company: "Anvil Aerospace" },
@@ -107,6 +106,8 @@ const DEFAULT_SHIPS = [
   { name: "Starlancer MAX", scu: 224, company: "Musashi Industrial and Starflight Concern" },
   { name: "Starlancer TAC", scu: 96, company: "Musashi Industrial and Starflight Concern" },
   { name: "Syulen", scu: 6, company: "Gatac Manufacture" },
+  { name: "Tiburon", scu: 64, company: "Aegis Dynamics" },
+  { name: "Tyilui", scu: 96, company: "Gatac Manufacture" },
   { name: "Valkyrie", scu: 90, company: "Anvil Aerospace" },
   { name: "Valkyrie Liberator Edition", scu: 30, company: "Anvil Aerospace" },
   { name: "Vulcan", scu: 12, company: "Aegis Dynamics" },
