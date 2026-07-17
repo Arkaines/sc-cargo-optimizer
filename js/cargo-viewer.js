@@ -177,7 +177,12 @@ function makeAxisLabel(text, width) {
 // invisible (voir snapToUnit). Purement visuel, non cliquable (pas dans
 // pickMeshes).
 function makeFloorGrid(x0, z0, x1, z1) {
-  const pad = UNIT * 4;
+  // Marge PROPORTIONNELLE à la taille du bloc (avec un minimum) : une marge
+  // fixe rendait le sol riquiqui sous un gros vaisseau. On l'étend d'une bonne
+  // moitié de la plus grande dimension du bloc, pour avoir de la place où
+  // glisser et un vrai plancher visible quelle que soit la taille du vaisseau.
+  const span = Math.max(x1 - x0, z1 - z0);
+  const pad = Math.max(UNIT * 6, span * 0.5);
   const gx0 = Math.floor((x0 - pad) / UNIT) * UNIT;
   const gz0 = Math.floor((z0 - pad) / UNIT) * UNIT;
   const gx1 = Math.ceil((x1 + pad) / UNIT) * UNIT;
