@@ -96,13 +96,57 @@ Au montage de chaque module (la `holds.map(...)` en tête de
    - `position = [x0, y0, 0]`, `size = [sx, sy, cellDims[2]]` ;
    - `dropoffStop = Infinity` — il n'est jamais retiré (aucune étape `step ===
      Infinity`, donc la boucle de livraison ne le touche pas) ;
-   - un marqueur `reserved: true`.
-   Cette entrée fait que `worstConflictDropoff` (via
-   `isBlockedFromEveryAccessibleFace`, inchangé) considère toute position qu'elle
-   bloque comme bloquée jusqu'à `Infinity` : la comparaison
-   `worstConflict >= candidate.dropoffStop` rejette alors la position — la caisse
-   ne serait jamais récupérable. **C'est le mécanisme central du point §2.1**, et
-   il réutilise tel quel le raisonnement d'accès existant, sans le modifier.
+   - un marqueur `reserved: true` — c'est ce marqueur (pas `dropoffStop`) qui
+     identifie l'obstacle pour la barrière dure ci-dessous.
+
+### 4.1 La barrière dure : interdire de placer DERRIÈRE le véhicule
+
+**Décision utilisateur : interdiction dure**, pas un simple score. Le §2.1
+(véhicule = obstacle permanent) est appliqué comme un **refus de placement**, au
+même niveau que `canPlace` et `hasValidSupport`, et **pas** via le score de
+sévérité (`worstConflictDropoff`, qui ne fait que classer des positions
+autorisées, sans jamais en interdire une).
+
+Concrètement, une position candidate est **refusée** si l'obstacle réservé du
+module la bloque **par toutes les faces accessibles** — exactement le prédicat
+`isBlockedFromEveryAccessibleFace` déjà utilisé partout ailleurs, appliqué à
+l'obstacle réservé. Aux **deux** endroits où une caisse est effectivement posée :
+
+- **`findBestPosition`** (boucle de balayage, après `canPlace` +
+  `hasValidSupport`) : ajouter une garde qui saute (`continue`) toute position
+  telle que
+  ```js
+  activeBoxes.some((ab) => ab.reserved &&
+    isBlockedFromEveryAccessibleFace(effectiveFaceAxes, ab.position, ab.size, pos, size))
+  ```
+  `activeBoxes` et `effectiveFaceAxes` sont déjà des paramètres/locales de
+  `findBestPosition` — aucune signature à changer.
+- **`tryStackOnExisting`** (empilement direct sur une caisse déjà posée) :
+  ajouter la même garde avant `markPlaced`, avec `m.activeBoxes` et `m.faceAxes`.
+  En pratique une caisse-base a forcément passé la garde (sinon elle n'aurait pas
+  été posée), et un empilement partage son empreinte horizontale, donc il passe
+  aussi ; la garde est mise par **cohérence et robustesse**, pas parce qu'un cas
+  de fuite est connu.
+
+**Pourquoi une barrière dure et non le score de sévérité.** `worstConflictDropoff`
+alimente `severity`, le critère de niveau 1 de `isBetterPosition` : il *classe*
+les positions autorisées, il n'en *interdit* aucune. Une caisse sans position
+sans-conflit y est quand même posée (au moins mauvais endroit), et un conflit est
+signalé à la livraison. C'est le bon modèle pour deux caisses (l'une peut être
+déplacée), mais **pas** pour un véhicule (il ne bouge jamais) : la décision
+utilisateur est que cet espace, et ce qu'il y a derrière, sont **inutilisables**.
+D'où la garde dure. L'obstacle reste néanmoins dans `activeBoxes` : c'est là que
+la garde le lit (via `reserved: true`).
+
+**Effet de bord sur le score, vérifié nul.** L'obstacle réservé étant aussi dans
+`activeBoxes`, `worstConflictDropoff` l'y rencontre. Mais pour une position
+**autorisée** (donc que l'obstacle ne bloque pas — sinon la garde l'a écartée),
+`isBlockedFromEveryAccessibleFace(obstacle, position)` est faux, et l'autre
+branche exige `position.dropoffStop > obstacle.dropoffStop` c.-à-d.
+`> Infinity`, toujours faux. L'obstacle ne modifie donc **jamais** la sévérité
+d'une position autorisée : le classement des positions retenues est inchangé.
+**Test obligatoire (§8) :** un rangement sans réservation et le même avec une
+réservation qui ne bloque personne donnent un résultat identique.
 
 ## 5. Les pièges (traps) à traiter explicitement
 
@@ -121,17 +165,19 @@ a pas de `pz-1` réservé sous une cellule libre. Le trap est donc neutralisé p
 construction. **Test obligatoire** pour verrouiller l'invariant : aucune caisse
 ne se pose sur une colonne réservée (§8).
 
-### 5.2 `worstConflictDropoff` et l'obstacle permanent
+### 5.2 L'obstacle permanent ne doit ni être livré ni être signalé comme conflit
 
-Vérifié au §4.3 : l'entrée `reserved` doit être présente dans `activeBoxes` dès
-le montage du module et **ne jamais** en être retirée. Le seul retrait se fait
-dans la boucle de livraison, indexée par `dropoffStop === step` ; avec
-`dropoffStop = Infinity`, elle n'est jamais sélectionnée. Ne pas oublier non
-plus de **ne pas compter** cette entrée comme un « vrai » conflit de livraison à
-signaler au joueur (elle n'a pas d'`entry`/mission) : la boucle de conflits
-travaille sur des caisses `b.active` issues de `boxes`, pas sur `activeBoxes`,
-donc l'obstacle permanent n'y entre pas — à confirmer par lecture, pas à
-supposer.
+L'entrée `reserved` est présente dans `activeBoxes` dès le montage du module et
+**ne doit jamais** en être retirée. Le seul retrait se fait dans la boucle de
+livraison, indexée par `dropoffStop === step` ; avec `dropoffStop = Infinity`,
+elle n'est jamais sélectionnée. Elle ne doit pas non plus être comptée comme un
+« vrai » conflit de livraison à signaler au joueur (elle n'a pas
+d'`entry`/mission) : la boucle de conflits itère sur des caisses `b.active`
+issues de `boxes`, pas sur `activeBoxes`, donc l'obstacle permanent n'y entre
+pas — **à confirmer par lecture** du code au moment de l'implémentation, pas à
+supposer. Toute autre itération de `activeBoxes` (il y en a peu : le score de
+sévérité `worstConflictDropoff`, et le `splice` de retrait à la livraison) doit
+tolérer une entrée sans `.scu` ni `.entry` — à recenser une par une.
 
 ### 5.3 `assignMissionZones` suppose un module vide — RISQUE PRINCIPAL
 
@@ -199,11 +245,14 @@ Nouveaux cas, tous via `simulateRoutePacking(..., reservations)` :
    soit non placée), et **aucune** caisse n'occupe une cellule réservée.
 3. **Module entier réservé :** empreinte = tout le module → équivaut à retirer
    ce module des holds (aucune caisse dedans).
-4. **Blocage d'accès permanent :** une caisse ne peut se placer derrière la zone
-   réservée (relativement à la seule face accessible) que si elle resterait
-   inaccessible tout le trajet → position rejetée. Avec une face accessible d'un
+4. **Barrière dure d'accès (§4.1) :** avec une seule face accessible, une caisse
+   qui, faute de mieux, se placerait DERRIÈRE la zone réservée (bloquée par
+   toutes les faces) est **refusée** — elle va ailleurs, ou reste non placée ;
+   **aucune** caisse ne finit derrière le véhicule. Avec une face accessible d'un
    autre côté (non bloqué), la même caisse **peut** se placer → confirme qu'on
-   réutilise bien la logique de faces existante, sans la court-circuiter.
+   réutilise bien `isBlockedFromEveryAccessibleFace` sans le court-circuiter.
+   Cas jumeau : sévérité inchangée — un rangement avec une réservation qui ne
+   bloque personne est identique au même sans réservation (§4.1, effet nul).
 5. **Pas d'empilement sur le véhicule (§5.1) :** aucune caisse ne repose sur une
    colonne réservée ; `below.scu === undefined` n'est jamais atteint.
 6. **Réservation invalide ignorée (§3) :** empreinte hors module / taille nulle
