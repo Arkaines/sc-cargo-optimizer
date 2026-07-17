@@ -90,9 +90,28 @@ layout.forEach((l) => {
 - `window.persistCargoModulePosition(moduleKey, x, z)` : **définie dans `js/app.js`**, appelée par le visualiseur au relâchement d'un glisser. Elle écrit `state.cargoViewerLayout[shipName][moduleKey] = { x, z }` puis `saveState()`. Le visualiseur ne touche jamais `state` directement ; il ne connaît que la clé (qu'il a lui-même produite via `moduleKey`) et la position aimantée.
 - `window.resetCargoViewerLayout()` (bouton « Réinitialiser la disposition ») : dans `js/app.js`, `delete state.cargoViewerLayout[shipName]`, `saveState()`, puis re-rendu de l'étape (repart de l'auto). Reste en mode édition.
 
-## 5. Hors périmètre v1 (différé)
+## 5. v2 — édition de la hauteur (empilement vertical)
 
-- **Empilement vertical** (deux grilles superposées, ex. soutes « secure » de l'Ironclad par-dessus les grandes baies) : v1 place tout au sol (Y non éditable). Si le besoin se confirme, un réglage de hauteur viendra plus tard (poignée verticale ou champ), en réutilisant le même `cargoViewerLayout` avec un `y` optionnel.
+**Statut : à implémenter** (le v1 ci-dessus, au sol uniquement, est livré). Le besoin est confirmé : l'Ironclad a ses soutes « secure » AU-DESSUS de ses grandes baies, et les échelles/passerelles du Caterpillar ne sont pas au niveau des baies. Sans la hauteur, ces vaisseaux restent impossibles à placer correctement.
+
+**Le piège** : le mode édition bloque la vue de dessus, et vu de dessus un changement de hauteur est **invisible**. On ne peut donc pas se contenter d'ajouter un axe au glisser actuel.
+
+**Décision (utilisateur)** : le glisser se fait **dans le plan qu'on regarde**. Les 6 boutons de vue redeviennent disponibles en mode édition (la rotation libre reste désactivée, ce qui garantit 6 orientations franches et donc un plan de glisser non ambigu) :
+
+| Vue | Plan de glisser | Axes déplacés |
+|---|---|---|
+| Dessus / Dessous | horizontal | avant-arrière (Z) + gauche-droite (X) |
+| Avant / Arrière | vertical | gauche-droite (X) + **hauteur (Y)** |
+| Gauche / Droite | vertical | avant-arrière (Z) + **hauteur (Y)** |
+
+Le joueur voit donc toujours le déplacement qu'il fait. Chaque axe déplacé est aimanté sur 1,25 m et borné à `>= 0`, exactement comme le sol aujourd'hui.
+
+**Modèle de données** : `cargoViewerLayout[ship][moduleKey]` passe de `{x, z}` à `{x, y, z}`. **Rétrocompatibilité** : une entrée déjà enregistrée n'a pas de `y` — dans ce cas on ne surcharge PAS `worldPos[1]` et le module garde sa hauteur auto (comportement v1 strictement inchangé, aucune migration nécessaire). Toute entrée écrite désormais porte les trois axes.
+
+**Plan de glisser** : il passe par la position COURANTE du module, pas par l'origine. Le plan horizontal actuel est codé en dur à `Y=0` ; pour un module déjà surélevé (les soutes empilées par la reconstruction auto), le rayon croise `Y=0` loin sous le module et le décalage de préhension est faussé. Le plan doit être construit à la coordonnée courante du module sur l'axe normal.
+
+## 5bis. Hors périmètre (toujours différé)
+
 - **Rotation d'un module individuel** (tourner une seule grille) : non prévu ; l'orientation globale du vaisseau reste couverte par « Tourner »/« Miroir ».
 - **Redimensionnement** : jamais — les dimensions viennent de FleetYards, seule la position est éditable.
 
