@@ -557,6 +557,11 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     if (custom) {
       l.worldPos[0] = custom.x;
       l.worldPos[2] = custom.z;
+      // Rétrocompatibilité : une entrée enregistrée par la v1 n'a pas de `y`.
+      // Dans ce cas on laisse la hauteur calculée automatiquement (modules
+      // empilés par la reconstruction), comportement v1 strictement
+      // inchangé — pas de migration à faire.
+      if (typeof custom.y === "number") l.worldPos[1] = custom.y;
     }
   });
 
@@ -774,13 +779,14 @@ function onLayoutPointerMove(event) {
 
 function onLayoutPointerUp() {
   if (editingLayout && dragTarget && dragMoved) {
-    const { dx, dz } = dragTarget.userData.dims;
+    const { dx, dy, dz } = dragTarget.userData.dims;
     // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
     // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
     const originX = snapToUnit(dragTarget.position.x - dx / 2);
+    const originY = snapToUnit(dragTarget.position.y - dy / 2);
     const originZ = snapToUnit(dragTarget.position.z - dz / 2);
     if (typeof window.persistCargoModulePosition === "function") {
-      window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originZ);
+      window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originY, originZ);
     }
   }
   dragTarget = null;

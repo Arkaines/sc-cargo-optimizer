@@ -1075,14 +1075,14 @@ function getCargoViewerShipName() {
   return ship ? ship.name : null;
 }
 
-// Appelée par js/cargo-viewer.js au relâchement d'un glisser. x/z sont
-// l'origine (coin) du module, déjà aimantée sur 1,25 m et bornée à >= 0
+// Appelée par js/cargo-viewer.js au relâchement d'un glisser. x/y/z sont
+// l'origine (coin) du module, chacun déjà aimanté sur 1,25 m et borné à >= 0
 // côté visualiseur.
-window.persistCargoModulePosition = function persistCargoModulePosition(moduleKey, x, z) {
+window.persistCargoModulePosition = function persistCargoModulePosition(moduleKey, x, y, z) {
   const shipName = getCargoViewerShipName();
   if (!shipName || !moduleKey) return;
   if (!state.cargoViewerLayout[shipName]) state.cargoViewerLayout[shipName] = {};
-  state.cargoViewerLayout[shipName][moduleKey] = { x, z };
+  state.cargoViewerLayout[shipName][moduleKey] = { x, y, z };
   saveState();
 };
 
