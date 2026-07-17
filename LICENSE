@@ -1,21 +1,71 @@
-MIT License
+Copyright (c) 2026 Arkaines — Tous droits réservés / All rights reserved.
 
-Copyright (c) 2026 Arkaines
+=========================================================================
+FRANÇAIS
+=========================================================================
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Ce logiciel et son code source sont la propriété exclusive de leur auteur.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Aucune autorisation n'est accordée de copier, modifier, fusionner, publier,
+distribuer, sous-licencier, vendre, héberger, ou réutiliser tout ou partie
+de ce logiciel, sous quelque forme et par quelque moyen que ce soit, sans
+l'autorisation écrite préalable de l'auteur.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Ce logiciel étant un site web statique, son code est transmis au navigateur
+de chaque visiteur afin d'y être exécuté. Cette transmission est strictement
+nécessaire au fonctionnement du site et ne constitue en aucun cas une
+licence, une cession de droits, ni une autorisation de copier, de
+redistribuer ou de créer des œuvres dérivées.
+
+Portée temporelle : les versions de ce logiciel publiées antérieurement sous
+licence MIT demeurent régies par la licence MIT, pour ces versions
+uniquement. La présente licence s'applique aux versions publiées à compter
+de son entrée en vigueur.
+
+CE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE
+OU IMPLICITE. EN AUCUN CAS L'AUTEUR NE POURRA ÊTRE TENU RESPONSABLE DE TOUT
+DOMMAGE DÉCOULANT DU LOGICIEL OU DE SON UTILISATION.
+
+=========================================================================
+ENGLISH
+=========================================================================
+
+This software and its source code are the exclusive property of their author.
+
+No permission is granted to copy, modify, merge, publish, distribute,
+sublicense, sell, host, or otherwise reuse all or part of this software, in
+any form or by any means, without the prior written permission of the author.
+
+Because this software is a static website, its code is transmitted to each
+visitor's browser in order to be executed there. That transmission is
+strictly necessary for the site to function and does not constitute a
+licence, a transfer of rights, or any permission to copy, redistribute, or
+create derivative works.
+
+Temporal scope: versions of this software previously released under the MIT
+licence remain governed by the MIT licence, for those versions only. This
+licence applies to versions published from its effective date onward.
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+=========================================================================
+CONTENU DE FAN / FAN CONTENT
+=========================================================================
+
+Ce projet est un outil de fan non officiel, non affilié à Cloud Imperium
+Games ni à Roberts Space Industries, et non commercial. Star Citizen® et les
+marques associées appartiennent à Cloud Imperium Rights LLC. Les droits
+revendiqués ci-dessus portent uniquement sur le code écrit par l'auteur, et
+non sur les marques, contenus ou données appartenant à des tiers.
+
+Les données affichées proviennent d'API publiques tierces (UEX Corp,
+Star Citizen Wiki, FleetYards) et restent soumises aux conditions de leurs
+fournisseurs respectifs.
+
+This project is an unofficial, non-commercial fan tool, not affiliated with
+Cloud Imperium Games or Roberts Space Industries. Star Citizen® and related
+marks belong to Cloud Imperium Rights LLC. The rights asserted above cover
+only the code written by the author, not third-party trademarks, content or
+data.

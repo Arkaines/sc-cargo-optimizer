@@ -117,4 +117,8 @@ Le logo "Made By The Community" provient du [Fan Kit officiel de Roberts Space I
 
 ## Licence
 
-Code sous licence [MIT](LICENSE). Star Citizen, Roberts Space Industries et les autres marques citées appartiennent à leurs propriétaires respectifs — voir le bandeau de non-affiliation en haut du site.
+**Tous droits réservés** — voir [LICENSE](LICENSE). Le code de ce projet n'est pas réutilisable : aucune copie, modification, redistribution ou réutilisation n'est autorisée sans accord écrit de l'auteur.
+
+Le site étant statique, son code est nécessairement transmis au navigateur pour s'exécuter ; cela ne vaut pas autorisation de le réutiliser. Les versions publiées antérieurement sous licence MIT restent régies par MIT pour ces versions.
+
+Star Citizen, Roberts Space Industries et les autres marques citées appartiennent à leurs propriétaires respectifs — voir le bandeau de non-affiliation en haut du site. Les données affichées proviennent d'API publiques tierces (UEX Corp, Star Citizen Wiki, FleetYards) et restent soumises aux conditions de leurs fournisseurs.
