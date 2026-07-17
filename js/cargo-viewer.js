@@ -65,6 +65,10 @@ let editingLayout = false;
 // fils de fer (LineSegments), très mauvaises cibles au raycasting. Recréées
 // à chaque rendu en mode édition, libérées par clearContent().
 let pickMeshes = [];
+// Vrai quand les écouteurs de glisser sont attachés à la scène actuelle — voir
+// applyLayoutEditingToScene (le câblage doit rester idempotent, il est appelé
+// à chaque rendu).
+let layoutEditingWired = false;
 // Métriques et repères des 4 étiquettes du dernier rendu complet (voir
 // renderCargoViewer3D) : permettent à updateCargoViewerOrientation de
 // reconstruire seulement le texte des étiquettes sans toucher au reste de
@@ -690,6 +694,13 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     controls.update();
     lastFrameKey = frameKey;
   }
+
+  // La scène vient peut-être de naître (ensureScene plus haut) alors que le
+  // mode édition était DÉJÀ demandé : on s'y conforme maintenant que
+  // renderer/controls existent et que le contenu est en place (setCargoViewerView
+  // a besoin des bornes pour cadrer). Idempotent : sans changement d'état,
+  // c'est un no-op.
+  applyLayoutEditingToScene();
 };
 
 // Repositionne la caméra sur l'une des 4 vues préréglées (voir les boutons
@@ -850,23 +861,59 @@ function onLayoutPointerUp() {
   controls.enabled = true;
 }
 
-window.setCargoLayoutEditing = function setCargoLayoutEditing(on) {
-  editingLayout = !!on;
+// Sonde de test : la seule façon fiable de vérifier la SÉLECTION au clic
+// depuis un test, en projetant la position réelle d'un module à l'écran.
+// Cliquer « au centre du canvas » ne prouve rien — l'épine de la Caterpillar
+// est étroite et le centre tombe dans le vide (ça m'a valu un faux positif).
+// Lecture seule, aucun effet sur l'app.
+window.__cargoViewerTestProbe = function () {
+  const mesh = pickMeshes[0];
+  if (!mesh || !camera || !renderer) return null;
+  const v = mesh.position.clone().project(camera);
+  const rect = renderer.domElement.getBoundingClientRect();
+  return {
+    x: rect.left + ((v.x + 1) / 2) * rect.width,
+    y: rect.top + ((-v.y + 1) / 2) * rect.height,
+    moduleKey: mesh.userData.moduleKey,
+    pickMeshCount: pickMeshes.length,
+    editingLayout,
+    enableRotate: controls ? controls.enableRotate : null,
+  };
+};
+
+// Câble le glisser sur la scène. Idempotent, et SÉPARÉ de setCargoLayoutEditing
+// parce que la scène peut naître APRÈS que le mode édition a été demandé :
+// enterAdminGridEdit (js/app.js) saute son rendu d'amorçage quand une grille
+// publiée existe, donc setCargoLayoutEditing(true) tombait sur renderer/controls
+// nuls, sortait sans rien attacher, et laissait enableRotate à true — le clic
+// partait alors dans OrbitControls et faisait TOURNER la scène au lieu de
+// sélectionner. Le drapeau editingLayout fait foi ; la scène s'y conforme dès
+// qu'elle existe (appelé aussi en fin de renderCargoViewer3D).
+function applyLayoutEditingToScene() {
   if (!controls || !renderer) return;
   controls.enableRotate = !editingLayout;
   const el = renderer.domElement;
   if (editingLayout) {
+    if (layoutEditingWired) return;
     el.addEventListener("pointerdown", onLayoutPointerDown);
     el.addEventListener("pointermove", onLayoutPointerMove);
     window.addEventListener("pointerup", onLayoutPointerUp);
+    layoutEditingWired = true;
     setCargoViewerView("top");
   } else {
+    if (!layoutEditingWired) return;
     el.removeEventListener("pointerdown", onLayoutPointerDown);
     el.removeEventListener("pointermove", onLayoutPointerMove);
     window.removeEventListener("pointerup", onLayoutPointerUp);
+    layoutEditingWired = false;
     dragTarget = null;
     controls.enabled = true;
   }
+}
+
+window.setCargoLayoutEditing = function setCargoLayoutEditing(on) {
+  editingLayout = !!on;
+  applyLayoutEditingToScene();
 };
 
 // [data-view] exclut les boutons "Tourner"/"Miroir" (js/app.js) : ils
