@@ -171,6 +171,68 @@ function makeAxisLabel(text, width) {
   return mesh;
 }
 
+// Grille de sol : un quadrillage de crans (1,25 m) posé à plat sur le plan
+// Y=0, couvrant le rectangle du bloc (avec une marge pour avoir où glisser).
+// Modélise le plancher réel — sans lui, on glissait contre une origine
+// invisible (voir snapToUnit). Purement visuel, non cliquable (pas dans
+// pickMeshes).
+function makeFloorGrid(x0, z0, x1, z1) {
+  const pad = UNIT * 4;
+  const gx0 = Math.floor((x0 - pad) / UNIT) * UNIT;
+  const gz0 = Math.floor((z0 - pad) / UNIT) * UNIT;
+  const gx1 = Math.ceil((x1 + pad) / UNIT) * UNIT;
+  const gz1 = Math.ceil((z1 + pad) / UNIT) * UNIT;
+  const positions = [];
+  for (let x = gx0; x <= gx1 + 1e-6; x += UNIT) positions.push(x, 0, gz0, x, 0, gz1);
+  for (let z = gz0; z <= gz1 + 1e-6; z += UNIT) positions.push(gx0, 0, z, gx1, 0, z);
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return new THREE.LineSegments(
+    geom,
+    new THREE.LineBasicMaterial({ color: 0x3a4152, transparent: true, opacity: 0.5 })
+  );
+}
+
+// Petite étiquette texte face caméra (Sprite) pour nommer le bout d'une flèche
+// d'axe. Contrairement à makeAxisLabel (couché au sol), un Sprite reste
+// toujours lisible quel que soit l'angle de la caméra.
+function makeAxisNameLabel(text, color, size) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.font = "bold 48px sans-serif";
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 32, 34);
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false })
+  );
+  sprite.scale.set(size, size, size);
+  return sprite;
+}
+
+// Repère 3 axes à la Blender : flèches colorées X (rouge), Y (vert, la
+// verticale/le haut), Z (bleu), avec leur nom au bout. Aide d'auteur en mode
+// édition — dans la vue de résultat normale, ce sont Avant/Arrière/Gauche/
+// Droite qui parlent au joueur. Ancré au coin near du bloc (minX/minZ).
+function makeAxesHelper(originX, originZ, length) {
+  const group = new THREE.Group();
+  const helper = new THREE.AxesHelper(length);
+  helper.position.set(originX, 0, originZ);
+  group.add(helper);
+  const nameSize = Math.max(0.6, length * 0.18);
+  const xl = makeAxisNameLabel("X", "#ff5a5a", nameSize);
+  xl.position.set(originX + length + nameSize * 0.6, 0, originZ);
+  const yl = makeAxisNameLabel("Y", "#5af85a", nameSize);
+  yl.position.set(originX, length + nameSize * 0.6, originZ);
+  const zl = makeAxisNameLabel("Z", "#5a8aff", nameSize);
+  zl.position.set(originX, 0, originZ + length + nameSize * 0.6);
+  group.add(xl, yl, zl);
+  return group;
+}
+
 // Quand un module n'a pas d'offset FleetYards fiable (voir hasReliableOffset
 // dans renderCargoViewer3D), son nom de hardpoint encode presque toujours sa
 // position ("hardpoint_cargogrid_front_left", "..._secure_rear_right"...) :
@@ -333,18 +395,22 @@ const AXIS_I18N_KEYS = { front: "axisFront", rear: "axisRear", left: "axisLeft",
 // place (zoom, angle) à la souris.
 function buildAxisLabels() {
   if (!lastLabelMetrics) return;
-  const { midX, midZ, maxDz, totalWidth, margin, labelWidth } = lastLabelMetrics;
+  const { midX, midZ, minX, minZ, maxDz, totalWidth, margin, labelWidth } = lastLabelMetrics;
   disposeLabelMesh(labelMeshes.front);
   disposeLabelMesh(labelMeshes.rear);
   disposeLabelMesh(labelMeshes.left);
   disposeLabelMesh(labelMeshes.right);
 
+  // Les 4 étiquettes bordent le bloc sur ses bornes RÉELLES (minX/minZ,
+  // totalWidth/maxDz), pas une origine supposée à 0 : une fois les grilles
+  // glissées ailleurs, "Droite"/"Arrière" restent collés au bloc au lieu de
+  // rester scotchés à l'ancien coin (0,0) — c'était la cause du débordement.
   const front = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(0, currentOrientation, currentMirror)]), labelWidth);
   front.position.set(midX, 0, maxDz + margin);
   contentGroup.add(front);
 
   const rear = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(2, currentOrientation, currentMirror)]), labelWidth);
-  rear.position.set(midX, 0, -margin);
+  rear.position.set(midX, 0, minZ - margin);
   contentGroup.add(rear);
 
   const left = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(1, currentOrientation, currentMirror)]), labelWidth);
@@ -352,7 +418,7 @@ function buildAxisLabels() {
   contentGroup.add(left);
 
   const right = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(3, currentOrientation, currentMirror)]), labelWidth);
-  right.position.set(-margin, 0, midZ);
+  right.position.set(minX - margin, 0, midZ);
   contentGroup.add(right);
 
   labelMeshes = { front, rear, left, right };
@@ -579,11 +645,23 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   let maxDy = 0;
   let maxDz = 0;
   let totalWidth = 0;
+  // Bornes MINIMALES réelles : depuis que X/Z ne sont plus bornés à >= 0 (voir
+  // snapToUnit), le bloc ne commence plus forcément à l'origine. Repères et
+  // caméra doivent suivre le bloc là où il est, pas supposer un coin à (0,0).
+  let minX0 = Infinity;
+  let minZ0 = Infinity;
   layout.forEach((l) => {
     maxDy = Math.max(maxDy, l.worldPos[1] + l.dy);
     maxDz = Math.max(maxDz, l.worldPos[2] + l.dz);
     totalWidth = Math.max(totalWidth, l.worldPos[0] + l.dx);
+    minX0 = Math.min(minX0, l.worldPos[0]);
+    minZ0 = Math.min(minZ0, l.worldPos[2]);
   });
+  // Scène vide (aucun module) : bornes neutres à 0 plutôt qu'Infinity.
+  if (!layout.length) {
+    minX0 = 0;
+    minZ0 = 0;
+  }
   lastResolvedLayout = layout;
 
   layout.forEach(({ hold, dx, dy, dz, worldPos }) => {
@@ -643,10 +721,10 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
         });
   });
 
-  sceneBounds = { minX: 0, maxX: totalWidth, minY: 0, maxY: maxDy, minZ: 0, maxZ: maxDz };
-  const midX = totalWidth / 2;
+  sceneBounds = { minX: minX0, maxX: totalWidth, minY: 0, maxY: maxDy, minZ: minZ0, maxZ: maxDz };
+  const midX = (minX0 + totalWidth) / 2;
   const midY = maxDy / 2;
-  const midZ = maxDz / 2;
+  const midZ = (minZ0 + maxDz) / 2;
 
   // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : les 4
   // emplacements physiques ci-dessous (coin +Z, +X, -Z, -X) sont fixes,
@@ -671,8 +749,21 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   const sceneScale = Math.max(totalWidth, maxDz, maxDy, 1);
   const margin = sceneScale * 0.12;
   const labelWidth = Math.max(0.6, sceneScale * 0.3);
-  lastLabelMetrics = { midX, midZ, maxDz, totalWidth, margin, labelWidth };
+  lastLabelMetrics = { midX, midZ, minX: minX0, minZ: minZ0, maxDz, totalWidth, margin, labelWidth };
   buildAxisLabels();
+
+  // Aides d'auteur, en mode édition seulement (la vue de résultat normale
+  // reste épurée) : le sol pour glisser contre une référence réelle, et le
+  // repère 3 axes pour lire l'orientation. Ajoutés à contentGroup, donc
+  // libérés au prochain clearContent comme le reste.
+  if (editingLayout) {
+    const floor = makeFloorGrid(minX0, minZ0, totalWidth, maxDz);
+    floor.userData.isFloor = true;
+    contentGroup.add(floor);
+    const axes = makeAxesHelper(minX0, minZ0, Math.max(3, sceneScale * 0.18));
+    axes.userData.isAxes = true;
+    contentGroup.add(axes);
+  }
 
   // Ne recadre la caméra que si la scène a changé de taille (nouveau
   // vaisseau) — pas à chaque navigation d'étape (voir cargo-step-prev/next
@@ -783,7 +874,17 @@ let dragMoved = false;
 let dragGrabOffsetA = 0;
 let dragGrabOffsetB = 0;
 
+// Aimante une coordonnée sur la grille de 1,25 m, SANS borne : X et Z sont
+// libres. Les borner à >= 0 (ce que faisait l'ancienne version pour les trois
+// axes) créait un mur fantôme sur lequel les grilles butaient, le repère
+// "droite" — posé côté origine — en tenant lieu à l'écran. Le sol est le seul
+// vrai plancher : voir snapFloor, appliqué uniquement à la verticale.
 function snapToUnit(v) {
+  return Math.round(v / UNIT) * UNIT;
+}
+// Idem mais borné à >= 0 : réservé à l'axe vertical (Y), le sol. Aucune grille
+// ne descend sous le plancher.
+function snapFloor(v) {
   return Math.max(0, Math.round(v / UNIT) * UNIT);
 }
 
@@ -833,8 +934,12 @@ function onLayoutPointerMove(event) {
   if (!dragRaycaster.ray.intersectPlane(dragPlane, dragHitPoint)) return;
   const dims = dragTarget.userData.dims;
   const halfOf = { x: dims.dx / 2, y: dims.dy / 2, z: dims.dz / 2 };
-  const originA = snapToUnit(dragHitPoint[dragAxes.a] - dragGrabOffsetA);
-  const originB = snapToUnit(dragHitPoint[dragAxes.b] - dragGrabOffsetB);
+  // Seul l'axe vertical (Y) est borné au sol ; les axes horizontaux glissent
+  // librement (voir snapToUnit / snapFloor).
+  const snapA = dragAxes.a === "y" ? snapFloor : snapToUnit;
+  const snapB = dragAxes.b === "y" ? snapFloor : snapToUnit;
+  const originA = snapA(dragHitPoint[dragAxes.a] - dragGrabOffsetA);
+  const originB = snapB(dragHitPoint[dragAxes.b] - dragGrabOffsetB);
   const currentA = dragTarget.position[dragAxes.a] - halfOf[dragAxes.a];
   const currentB = dragTarget.position[dragAxes.b] - halfOf[dragAxes.b];
   if (originA !== currentA || originB !== currentB) dragMoved = true;
@@ -850,7 +955,7 @@ function onLayoutPointerUp() {
     // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
     // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
     const originX = snapToUnit(dragTarget.position.x - dx / 2);
-    const originY = snapToUnit(dragTarget.position.y - dy / 2);
+    const originY = snapFloor(dragTarget.position.y - dy / 2);
     const originZ = snapToUnit(dragTarget.position.z - dz / 2);
     if (typeof window.persistCargoModulePosition === "function") {
       window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originY, originZ);
@@ -866,6 +971,23 @@ function onLayoutPointerUp() {
 // Cliquer « au centre du canvas » ne prouve rien — l'épine de la Caterpillar
 // est étroite et le centre tombe dans le vide (ça m'a valu un faux positif).
 // Lecture seule, aucun effet sur l'app.
+// Sondes de test (lecture seule) : compter le sol/les axes présents dans la
+// scène, et relever la position des 4 étiquettes de repère.
+window.__sceneAudit = function () {
+  let floor = 0;
+  let axes = 0;
+  if (contentGroup)
+    contentGroup.children.forEach((c) => {
+      if (c.userData && c.userData.isFloor) floor++;
+      if (c.userData && c.userData.isAxes) axes++;
+    });
+  return { floor, axes };
+};
+window.__labelAudit = function () {
+  const p = (m) => (m ? { x: m.position.x, z: m.position.z } : null);
+  return { front: p(labelMeshes.front), rear: p(labelMeshes.rear), left: p(labelMeshes.left), right: p(labelMeshes.right) };
+};
+
 window.__cargoViewerTestProbe = function () {
   const mesh = pickMeshes[0];
   if (!mesh || !camera || !renderer) return null;
