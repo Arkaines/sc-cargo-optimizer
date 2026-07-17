@@ -413,12 +413,17 @@ function buildAxisLabels() {
   rear.position.set(midX, 0, minZ - margin);
   contentGroup.add(rear);
 
+  // Gauche/Droite sont décalées d'une DEMI-LARGEUR d'étiquette en plus de la
+  // marge : posées comme Avant/Arrière (au centre, à ±margin), leur largeur —
+  // dimensionnée sur le grand axe du vaisseau — mordait sur un vaisseau étroit
+  // et long (ex. l'épine du Caterpillar). Avec ce décalage, leur BORD intérieur
+  // affleure le bloc (à ±margin) au lieu de le chevaucher.
   const left = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(1, currentOrientation, currentMirror)]), labelWidth);
-  left.position.set(totalWidth + margin, 0, midZ);
+  left.position.set(totalWidth + margin + labelWidth / 2, 0, midZ);
   contentGroup.add(left);
 
   const right = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(3, currentOrientation, currentMirror)]), labelWidth);
-  right.position.set(minX - margin, 0, midZ);
+  right.position.set(minX - margin - labelWidth / 2, 0, midZ);
   contentGroup.add(right);
 
   labelMeshes = { front, rear, left, right };
@@ -873,6 +878,24 @@ let dragTarget = null;
 let dragMoved = false;
 let dragGrabOffsetA = 0;
 let dragGrabOffsetB = 0;
+// Mode « tout déplacer » (bouton de l'éditeur admin, voir js/app.js) : un
+// glisser translate TOUTES les grilles ensemble en gardant leurs écarts, au
+// lieu de ne bouger que celle saisie. moveAllStart mémorise, au début du
+// geste, l'origine de chaque module sur les 2 axes mobiles — on applique
+// ensuite à tous le même delta que celui du module saisi (l'ancre), depuis
+// ces origines de départ (pas cran par cran, pour éviter toute dérive).
+let layoutMoveAll = false;
+let moveAllStart = null;
+let moveAllAnchor = null;
+window.setCargoLayoutMoveAll = function setCargoLayoutMoveAll(on) {
+  layoutMoveAll = !!on;
+};
+
+// Demi-dimension d'un module le long d'un axe ("x"/"y"/"z") — l'écart entre
+// le centre de la boîte de collision et l'origine (coin) du module.
+function halfOnAxis(dims, axis) {
+  return (axis === "x" ? dims.dx : axis === "y" ? dims.dy : dims.dz) / 2;
+}
 
 // Aimante une coordonnée sur la grille de 1,25 m, SANS borne : X et Z sont
 // libres. Les borner à >= 0 (ce que faisait l'ancienne version pour les trois
@@ -920,6 +943,25 @@ function onLayoutPointerDown(event) {
   // mobiles seulement — pour que la grille ne saute pas sous le curseur.
   dragGrabOffsetA = dragHitPoint[dragAxes.a] - (dragTarget.position[dragAxes.a] - halfOf[dragAxes.a]);
   dragGrabOffsetB = dragHitPoint[dragAxes.b] - (dragTarget.position[dragAxes.b] - halfOf[dragAxes.b]);
+
+  // Mode « tout déplacer » : on fige l'origine de départ de chaque module sur
+  // les 2 axes mobiles, plus celle de l'ancre saisie (pour en déduire le delta).
+  if (layoutMoveAll) {
+    moveAllStart = pickMeshes.map((m) => ({
+      mesh: m,
+      wireframe: m.userData.wireframe,
+      a0: m.position[dragAxes.a] - halfOnAxis(m.userData.dims, dragAxes.a),
+      b0: m.position[dragAxes.b] - halfOnAxis(m.userData.dims, dragAxes.b),
+    }));
+    moveAllAnchor = {
+      a0: dragTarget.position[dragAxes.a] - halfOf[dragAxes.a],
+      b0: dragTarget.position[dragAxes.b] - halfOf[dragAxes.b],
+    };
+  } else {
+    moveAllStart = null;
+    moveAllAnchor = null;
+  }
+
   controls.enabled = false; // le geste ne doit pas bouger la caméra
   // Prévient l'app du module visé, pour que l'éditeur admin puisse le
   // sélectionner même sans glisser (un simple clic).
@@ -943,26 +985,77 @@ function onLayoutPointerMove(event) {
   const currentA = dragTarget.position[dragAxes.a] - halfOf[dragAxes.a];
   const currentB = dragTarget.position[dragAxes.b] - halfOf[dragAxes.b];
   if (originA !== currentA || originB !== currentB) dragMoved = true;
+
+  if (layoutMoveAll && moveAllStart && moveAllAnchor) {
+    // On aime le DELTA (pas la position de chaque module) : la reconstruction
+    // auto place les modules avec un espacement de 1,5 m, non multiple de
+    // 1,25 m, donc leurs origines sont hors grille. Aimanter chaque module
+    // séparément les arrondirait différemment et casserait la rigidité du bloc.
+    // En n'aimantant que le delta et en l'ajoutant tel quel, chaque module
+    // garde exactement son écart d'origine — le bloc reste rigide.
+    let deltaA = snapToUnit(dragHitPoint[dragAxes.a] - dragGrabOffsetA - moveAllAnchor.a0);
+    let deltaB = snapToUnit(dragHitPoint[dragAxes.b] - dragGrabOffsetB - moveAllAnchor.b0);
+    // Sur la verticale, on borne le delta pour que le module le plus bas
+    // s'arrête au sol (Y=0), sans déformer le bloc. Axes horizontaux libres.
+    if (dragAxes.a === "y") deltaA = Math.max(deltaA, -Math.min(...moveAllStart.map((s) => s.a0)));
+    if (dragAxes.b === "y") deltaB = Math.max(deltaB, -Math.min(...moveAllStart.map((s) => s.b0)));
+    if (deltaA !== 0 || deltaB !== 0) dragMoved = true;
+    moveAllStart.forEach((s) => {
+      const na = s.a0 + deltaA;
+      const nb = s.b0 + deltaB;
+      s.wireframe.position[dragAxes.a] = na;
+      s.wireframe.position[dragAxes.b] = nb;
+      s.mesh.position[dragAxes.a] = na + halfOnAxis(s.mesh.userData.dims, dragAxes.a);
+      s.mesh.position[dragAxes.b] = nb + halfOnAxis(s.mesh.userData.dims, dragAxes.b);
+    });
+    return;
+  }
+
   dragTarget.position[dragAxes.a] = originA + halfOf[dragAxes.a];
   dragTarget.position[dragAxes.b] = originB + halfOf[dragAxes.b];
   dragTarget.userData.wireframe.position[dragAxes.a] = originA;
   dragTarget.userData.wireframe.position[dragAxes.b] = originB;
 }
 
+// Enregistre l'ORIGINE (coin) d'un module — les mêmes coordonnées que
+// worldPos[0]/[1]/[2] au rendu, pas le centre de la boîte de collision.
+function persistDraggedMesh(mesh) {
+  const { dx, dy, dz } = mesh.userData.dims;
+  const originX = snapToUnit(mesh.position.x - dx / 2);
+  const originY = snapFloor(mesh.position.y - dy / 2);
+  const originZ = snapToUnit(mesh.position.z - dz / 2);
+  if (typeof window.persistCargoModulePosition === "function") {
+    window.persistCargoModulePosition(mesh.userData.moduleKey, originX, originY, originZ);
+  }
+}
+
+// Enregistre l'origine EXACTE d'un module, sans ré-aimanter — pour le mode
+// « tout déplacer » : le bloc a bougé d'un delta déjà aimanté, chaque module
+// gardant son écart d'origine (souvent hors grille, voir la reconstruction
+// auto). Re-snapper ici les désalignerait entre eux.
+function persistMeshExact(mesh) {
+  const { dx, dy, dz } = mesh.userData.dims;
+  if (typeof window.persistCargoModulePosition === "function") {
+    window.persistCargoModulePosition(
+      mesh.userData.moduleKey,
+      mesh.position.x - dx / 2,
+      mesh.position.y - dy / 2,
+      mesh.position.z - dz / 2
+    );
+  }
+}
+
 function onLayoutPointerUp() {
   if (editingLayout && dragTarget && dragMoved) {
-    const { dx, dy, dz } = dragTarget.userData.dims;
-    // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
-    // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
-    const originX = snapToUnit(dragTarget.position.x - dx / 2);
-    const originY = snapFloor(dragTarget.position.y - dy / 2);
-    const originZ = snapToUnit(dragTarget.position.z - dz / 2);
-    if (typeof window.persistCargoModulePosition === "function") {
-      window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originY, originZ);
-    }
+    // Mode « tout déplacer » : chaque module a bougé, on les enregistre tous
+    // sans ré-aimanter (rigidité). Sinon, on aimante le seul module glissé.
+    if (layoutMoveAll && moveAllStart) moveAllStart.forEach((s) => persistMeshExact(s.mesh));
+    else persistDraggedMesh(dragTarget);
   }
   dragTarget = null;
   dragMoved = false;
+  moveAllStart = null;
+  moveAllAnchor = null;
   controls.enabled = true;
 }
 

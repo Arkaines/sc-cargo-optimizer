@@ -2344,6 +2344,7 @@ const ADMIN_GRID_MAX_BOX_SIZES = [1, 2, 4, 8, 16, 24, 32];
 let adminGridDraft = null; // [{ name, dimensions, capacity, maxContainerSize, position }]
 let adminGridShipName = null;
 let adminGridSelected = null; // le nom du module sélectionné
+let adminGridMoveAll = false; // mode « tout déplacer » (voir toggleAdminGridMoveAll)
 
 // La capacité n'est JAMAIS saisie : c'est le volume en cellules SCU.
 // Vérifié sur les 284 soutes FleetYards, 284/284 sans exception.
@@ -2446,6 +2447,25 @@ function rotateAdminGridModule() {
   applyAdminGridSize();
 }
 
+// Bascule le mode « tout déplacer » : quand il est actif, un glisser dans la
+// vue 3D translate TOUTES les grilles ensemble (voir setCargoLayoutMoveAll dans
+// js/cargo-viewer.js), pour recaler l'ensemble d'un bloc sans bouger chaque
+// grille une par une. Le bouton reflète l'état (libellé + classe active).
+function setAdminGridMoveAll(on) {
+  adminGridMoveAll = !!on;
+  if (typeof setCargoLayoutMoveAll === "function") setCargoLayoutMoveAll(adminGridMoveAll);
+  const btn = document.getElementById("admin-grid-moveall-btn");
+  if (btn) {
+    btn.textContent = t(adminGridMoveAll ? "adminGridMoveAllBtnActive" : "adminGridMoveAllBtn");
+    btn.classList.toggle("btn-primary", adminGridMoveAll);
+    btn.classList.toggle("btn-secondary", !adminGridMoveAll);
+  }
+}
+
+function toggleAdminGridMoveAll() {
+  setAdminGridMoveAll(!adminGridMoveAll);
+}
+
 function enterAdminGridEdit() {
   const ship = getSelectedShip();
   if (!ship) return;
@@ -2481,6 +2501,7 @@ function enterAdminGridEdit() {
 
   document.getElementById("admin-grid-edit-btn").style.display = "none";
   if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(true);
+  setAdminGridMoveAll(false); // toujours repartir en mode « une grille »
   setAdminGridEditUI(true);
   // « Ranger le cargo » écrase la scène 3D (grille FleetYards + caisses) et
   // referait passer tout glisser suivant pour une position de brouillon
@@ -2491,6 +2512,7 @@ function enterAdminGridEdit() {
 }
 
 function exitAdminGridEdit() {
+  setAdminGridMoveAll(false);
   adminGridDraft = null;
   adminGridShipName = null;
   adminGridSelected = null;
@@ -3468,6 +3490,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindEvent("admin-grid-remove-btn", "click", removeAdminGridModule);
   bindEvent("admin-grid-publish-btn", "click", publishAdminGrid);
   bindEvent("admin-grid-rotate-btn", "click", rotateAdminGridModule);
+  bindEvent("admin-grid-moveall-btn", "click", toggleAdminGridMoveAll);
   ["admin-grid-cx", "admin-grid-cy", "admin-grid-cz", "admin-grid-mcs"].forEach((id) => {
     bindEvent(id, "change", applyAdminGridSize);
   });
