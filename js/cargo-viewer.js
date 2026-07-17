@@ -55,8 +55,11 @@ let currentOrientation = 0;
 let currentMirror = false;
 // Mode « éditer la disposition » (voir js/app.js:enterCargoLayoutEdit) : le
 // joueur glisse les grilles à leur vraie place. Pendant ce mode on masque les
-// caisses, on bloque la rotation caméra (vue de dessus) et on ne recadre
-// jamais la caméra, pour que la vue reste stable d'un glisser à l'autre.
+// caisses et on ne recadre jamais la caméra, pour que la vue reste stable d'un
+// glisser à l'autre. La rotation LIBRE est bloquée, mais les 6 vues préréglées
+// restent disponibles : c'est par elles qu'on choisit le plan de glisser (vue
+// de dessus -> le sol, vue avant/de côté -> la hauteur), et les garder franches
+// est ce qui rend l'axe dominant non ambigu (voir pickDragAxes).
 let editingLayout = false;
 // Boîtes de collision invisibles (une par module) : les caissons sont des
 // fils de fer (LineSegments), très mauvaises cibles au raycasting. Recréées
