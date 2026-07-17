@@ -748,10 +748,9 @@ td {
 th {
   color: var(--muted);
   font-weight: 600;
-}
-
-tbody tr:nth-child(even) {
-  background: color-mix(in srgb, var(--panel-border) 18%, transparent);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .toolbar {
@@ -799,9 +798,6 @@ tbody tr:nth-child(even) {
   border-bottom: 1px solid var(--panel-border);
 }
 
-.company-card:nth-child(even) {
-  background: color-mix(in srgb, var(--panel-border) 18%, transparent);
-}
 
 .company-name {
   font-size: 0.9rem;
