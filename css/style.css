@@ -1,38 +1,42 @@
-/* Palette de marque "Arkaine Heinlein" : navy fonce #183661, navy moyen
-   #1c4b82, corail #dd6b4d, gris-bleu clair #dae1e7, cyan #4dbfdd. */
+/* Palette "Cockpit HUD" : quasi-noir #0c0f16, panneaux #141821, accent
+   unique corail #ff7a52 (rouge/danger et vert/succès restent des teintes
+   séparées, jamais confondues avec l'accent). Voir
+   docs/superpowers/specs/2026-07-17-cockpit-hud-redesign-design.md pour
+   les ratios de contraste vérifiés. */
 :root {
   color-scheme: dark;
-  --bg: #183661;
-  --panel: #1c4b82;
-  --panel-border: #3568a8;
-  --text: #dae1e7;
-  --muted: #adc0d7; /* contraste WCAG AA (4.5:1+) vérifié sur --bg ET --panel, pas seulement --bg */
-  --accent: #dd6b4d;
-  --accent-cyan: #4dbfdd;
-  --accent-2: #7ee787;
-  --danger: #ff6b6b;
+  --bg: #0c0f16;
+  --panel: #141821;
+  --panel-border: #2a2f38;
+  --text: #dbe4ea;
+  --muted: #8a95a0;
+  --accent: #ff7a52;
+  --success: #6bcf7a;
+  --danger: #ff5568;
   --warning: #e0a030;
-  --input-bg: #12294a;
-  --btn-secondary-bg: #24487a;
-  --on-accent: #ffffff;
-  --heading-font: "Oswald", "Segoe UI", system-ui, sans-serif;
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --input-bg: #0c0f16;
+  --input-border: #3a4048;
+  --btn-secondary-bg: #232833;
+  --on-accent: #160800;
+  --heading-font: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --body-font: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--body-font);
   line-height: 1.5; /* le défaut navigateur (~1.2) tassait le texte des libellés/indices sur tout le site */
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #dae1e7;
-  --panel: #f0f3f6;
-  --panel-border: #b9c4d1;
-  --text: #16294a;
-  --muted: #4d5c74; /* léger renfoncement pour une marge de sécurité au-dessus de 4.5:1, l'original était juste à la limite */
-  --accent: #c85a3f;
-  --accent-cyan: #0f6e8c;
-  --accent-2: #187a41;
-  --danger: #b5271f;
-  --warning: #93600a;
-  --input-bg: #e4e9ee;
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --panel-border: #c7cfd6;
+  --text: #141821;
+  --muted: #5c6470;
+  --accent: #a83f22;
+  --success: #167a2e;
+  --danger: #b32036;
+  --warning: #8a5a0a;
+  --input-bg: #f7f9fb;
+  --input-border: #a9b4bd;
   --btn-secondary-bg: #cdd6e0;
   --on-accent: #ffffff;
 }
@@ -98,14 +102,14 @@ body {
   cursor: pointer;
   padding: 0 0.75rem;
   flex: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 6px rgba(2, 3, 5, 0.25);
   transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
 #theme-toggle:hover,
 #lang-toggle:hover {
   filter: brightness(1.1);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 10px rgba(2, 3, 5, 0.3);
 }
 
 #theme-toggle:active,
@@ -128,7 +132,7 @@ body {
 }
 
 .fan-disclaimer a {
-  color: var(--accent-cyan);
+  color: var(--accent);
 }
 
 header {
@@ -181,7 +185,7 @@ header {
   font-weight: 700;
   cursor: pointer;
   padding: 0 0.9rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 6px rgba(2, 3, 5, 0.25);
   transition: filter 0.15s ease;
 }
 
@@ -284,7 +288,7 @@ aside#side-panel {
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 1.1rem 1.25rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
 }
 
 .side-block h2 {
@@ -387,7 +391,7 @@ main {
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 1.1rem 1.25rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
 }
 
 details {
@@ -395,7 +399,7 @@ details {
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 1.5rem 1.75rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
 }
 
 details > summary {
@@ -530,8 +534,8 @@ select {
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 25%, transparent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 /* Répartition 45 / 45 / 10 entre Nom, Donneur de mission et Récompense :
@@ -583,7 +587,7 @@ button:hover {
 button:focus-visible,
 .tab-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 40%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 button:active {
@@ -866,7 +870,7 @@ tbody tr:nth-child(even) {
 }
 
 .company-lock-btn.locked {
-  background: var(--accent-2);
+  background: var(--success);
 }
 
 .company-lock-btn:disabled {
@@ -947,7 +951,7 @@ tbody tr:nth-child(even) {
 }
 
 .cargo-ok {
-  color: var(--accent-2);
+  color: var(--success);
   font-weight: 600;
 }
 
@@ -1016,7 +1020,7 @@ tbody tr:nth-child(even) {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
   flex: 1 1 340px;
   min-width: 280px;
 }
@@ -1041,7 +1045,7 @@ tbody tr:nth-child(even) {
 .cargo-step-info h3 {
   margin: 0 0 0.5rem;
   font-size: 1.1rem;
-  color: var(--accent-cyan);
+  color: var(--accent);
   font-family: var(--heading-font);
   letter-spacing: 0.01em;
 }
@@ -1100,7 +1104,7 @@ tbody tr:nth-child(even) {
 .route-total {
   font-size: 1.05rem;
   font-weight: 700;
-  color: var(--accent-2);
+  color: var(--success);
   font-family: var(--heading-font);
   letter-spacing: 0.01em;
 }
@@ -1133,7 +1137,7 @@ tbody tr:nth-child(even) {
 }
 
 .route-load {
-  color: var(--accent-cyan);
+  color: var(--accent);
   font-weight: 400;
   font-size: 0.85rem;
 }
@@ -1210,7 +1214,7 @@ tbody tr:nth-child(even) {
 }
 
 .action-dropoff {
-  color: var(--accent-2);
+  color: var(--success);
 }
 
 .route-cargo-row {
@@ -1245,11 +1249,11 @@ tbody tr:nth-child(even) {
 }
 
 .route-cargo-btn-full {
-  border: 1px solid var(--accent-2);
-  color: var(--accent-2);
+  border: 1px solid var(--success);
+  color: var(--success);
 }
 .route-cargo-btn-full.active {
-  background: var(--accent-2);
+  background: var(--success);
   color: var(--bg);
 }
 
