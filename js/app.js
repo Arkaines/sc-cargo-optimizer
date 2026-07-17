@@ -38,6 +38,7 @@ function defaultState() {
     fleetyardsSyncedAt: null,
     shipAccessFaces: {},
     cargoViewerOrientation: {},
+    cargoViewerMirror: {},
     dataSchemaVersion: DATA_SCHEMA_VERSION,
   };
 }
@@ -126,6 +127,7 @@ function loadState() {
       fleetyardsSyncedAt: parsed.fleetyardsSyncedAt || null,
       shipAccessFaces: parsed.shipAccessFaces || {},
       cargoViewerOrientation: parsed.cargoViewerOrientation || {},
+      cargoViewerMirror: parsed.cargoViewerMirror || {},
       dataSchemaVersion: parsed.dataSchemaVersion || 0,
     };
   } catch (e) {
@@ -1001,15 +1003,34 @@ function getShipAccessFaces(shipName) {
   return (shipName && state.shipAccessFaces[shipName]) || null;
 }
 
-// Orientation Avant/Arrière/Gauche/Droite de la vue 3D (0-3, par pas de 90°,
-// voir js/cargo-viewer.js:currentOrientation) : FleetYards ne donne parfois
-// aucune position réelle pour les modules de soute (ex. Ironclad), la
-// disposition affichée est alors une reconstruction à partir des noms de
-// hardpoint — une supposition que seul le joueur peut confirmer ou corriger.
-// Mémorisée par vaisseau (comme shipAccessFaces ci-dessus) : un vaisseau mal
-// orienté une fois reste corrigé pour les prochaines fois.
+// Orientation Avant/Arrière/Gauche/Droite de la vue 3D : rotation (0-3, par
+// pas de 90°) + miroir (voir js/cargo-viewer.js:currentOrientation/
+// currentMirror) — FleetYards ne donne parfois aucune position réelle pour
+// les modules de soute (ex. Ironclad), la disposition affichée est alors
+// une reconstruction à partir des noms de hardpoint — une supposition que
+// seul le joueur peut confirmer ou corriger. La rotation seule ne couvre
+// que 4 des 8 façons dont l'étiquetage peut être faux (elle ne peut pas
+// échanger gauche/droite en laissant avant/arrière fixes, par exemple) —
+// le miroir couvre les 4 autres. Mémorisées par vaisseau (comme
+// shipAccessFaces ci-dessus) : un vaisseau mal orienté une fois reste
+// corrigé pour les prochaines fois.
 function getCargoViewerOrientation(shipName) {
   return (shipName && state.cargoViewerOrientation[shipName]) || 0;
+}
+
+function getCargoViewerMirror(shipName) {
+  return !!(shipName && state.cargoViewerMirror[shipName]);
+}
+
+// N'appelle jamais renderCargoStepView()/renderCargoViewer3D (qui vide et
+// reconstruit toute la scène, caméra comprise) : seule
+// window.updateCargoViewerOrientation touche à l'étiquetage, pour que
+// tourner/mirer ne fasse jamais sauter l'angle de vue ou le zoom que le
+// joueur a mis en place à la souris (voir js/cargo-viewer.js:
+// buildAxisLabels pour le détail de ce découplage).
+function applyCargoViewerOrientation(ship) {
+  if (typeof updateCargoViewerOrientation !== "function") return;
+  updateCargoViewerOrientation(getCargoViewerOrientation(ship.name), getCargoViewerMirror(ship.name));
 }
 
 function rotateCargoViewerOrientation() {
@@ -1018,7 +1039,15 @@ function rotateCargoViewerOrientation() {
   const current = getCargoViewerOrientation(ship.name);
   state.cargoViewerOrientation[ship.name] = (current + 1) % 4;
   saveState();
-  renderCargoStepView();
+  applyCargoViewerOrientation(ship);
+}
+
+function mirrorCargoViewerOrientation() {
+  const ship = getSelectedShip();
+  if (!ship) return;
+  state.cargoViewerMirror[ship.name] = !getCargoViewerMirror(ship.name);
+  saveState();
+  applyCargoViewerOrientation(ship);
 }
 
 function renderShipAccessFaces() {
@@ -2114,7 +2143,8 @@ function renderCargoStepView() {
   const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop >= stepIndex);
   const ship = getSelectedShip();
   const orientation = ship ? getCargoViewerOrientation(ship.name) : 0;
-  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present, orientation);
+  const mirror = ship ? getCargoViewerMirror(ship.name) : false;
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present, orientation, mirror);
 }
 
 // Calcule et affiche le rangement des marchandises des missions incluses
@@ -3130,6 +3160,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("optimize-btn").addEventListener("click", runOptimize);
   document.getElementById("pack-cargo-btn").addEventListener("click", runCargoPacking);
   document.getElementById("cargo-viewer-rotate-btn").addEventListener("click", rotateCargoViewerOrientation);
+  document.getElementById("cargo-viewer-mirror-btn").addEventListener("click", mirrorCargoViewerOrientation);
   document.getElementById("cargo-step-prev").addEventListener("click", () => {
     if (!cargoPackState || cargoPackState.stepIndex <= 0) return;
     cargoPackState.stepIndex -= 1;

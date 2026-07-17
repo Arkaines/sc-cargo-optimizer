@@ -12,8 +12,9 @@
 // reconstruite à partir de ces mots-clés (voir parsePositionHint) ; (3)
 // vraiment aucune info -> rangée plate, comme avant. Cette reconstruction
 // reste une supposition, pas une donnée exacte : le joueur peut corriger
-// l'étiquetage avant/arrière/gauche/droite (bouton "Tourner", voir
-// currentOrientation) sans que la géométrie affichée ne bouge.
+// l'étiquetage avant/arrière/gauche/droite (boutons "Tourner"/"Miroir", voir
+// currentOrientation/currentMirror) sans que la géométrie affichée ne bouge,
+// et sans perdre l'angle de vue/zoom en cours (voir buildAxisLabels).
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -35,15 +36,28 @@ let sceneBounds = null;
 // renderCargoViewer3D) : ne recadrer que quand ça change réellement de
 // taille (nouveau vaisseau), pas à chaque navigation d'étape.
 let lastFrameKey = null;
-// Rotation courante des étiquettes Avant/Arrière/Gauche/Droite (0-3, par pas
-// de 90°) — mémorisée ici pour que setCargoViewerView (déclenchée par les
-// boutons "Vue avant/etc", séparément de renderCargoViewer3D) sache vers
-// quelle direction physique de la scène pointer. Voir rotateForLabel/
-// labelForPhysSlot ci-dessous : la géométrie ne bouge jamais, seule
-// l'étiquette affichée à chaque coin tourne — c'est le joueur qui connaît la
-// vraie orientation du vaisseau (aucune donnée FleetYards là-dessus), donc
-// le réglage vient de js/app.js (bouton "Tourner", state.cargoViewerOrientation).
+// Rotation (0-3, par pas de 90°) et miroir (false/true) courants des
+// étiquettes Avant/Arrière/Gauche/Droite — mémorisés ici pour que
+// setCargoViewerView (déclenchée par les boutons "Vue avant/etc",
+// séparément de renderCargoViewer3D) sache vers quelle direction physique
+// de la scène pointer. Voir labelForPhysSlot ci-dessous : la géométrie ne
+// bouge jamais, seule l'étiquette affichée à chaque coin change — c'est le
+// joueur qui connaît la vraie orientation du vaisseau (aucune donnée
+// FleetYards là-dessus), donc le réglage vient de js/app.js (boutons
+// "Tourner"/"Miroir", state.cargoViewerOrientation/cargoViewerMirror). Les
+// deux combinés couvrent les 8 symétries d'un carré (rotation seule ne
+// couvre que 4 des 8 : elle ne peut pas, par exemple, échanger gauche/
+// droite en laissant avant/arrière en place — un vrai miroir, pas une
+// rotation).
 let currentOrientation = 0;
+let currentMirror = false;
+// Métriques et repères des 4 étiquettes du dernier rendu complet (voir
+// renderCargoViewer3D) : permettent à updateCargoViewerOrientation de
+// reconstruire seulement le texte des étiquettes sans toucher au reste de
+// la scène (caissons, caisses, caméra) — voir ce commentaire plus bas pour
+// pourquoi ce découplage est nécessaire.
+let lastLabelMetrics = null;
+let labelMeshes = { front: null, rear: null, left: null, right: null };
 
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
 // que la même mission garde toujours la même couleur d'un rendu à l'autre.
@@ -168,13 +182,21 @@ function parsePositionHint(name) {
 // ci-dessus) : la géométrie affichée ne bouge pas, seule l'étiquette à
 // chaque coin change, ainsi que la direction visée par les boutons "Vue
 // avant/etc" (voir setCargoViewerView).
+// mirror applique une vraie réflexion (échange gauche/droite en laissant
+// avant/arrière fixes, avant composition avec la rotation) : combinée aux 4
+// rotations, elle donne accès aux 8 symétries du carré, pas seulement aux 4
+// rotations pures. Une rotation seule ne peut jamais reproduire un miroir
+// (ex. "avant est en fait à droite mais arrière est resté arrière" n'est
+// atteignable par aucune des 4 rotations, seulement par un miroir).
 const AXIS_PHYS_SLOTS = ["front", "left", "rear", "right"];
-function labelForPhysSlot(slotIndex, rotation) {
-  return AXIS_PHYS_SLOTS[(slotIndex + rotation) % 4];
+function labelForPhysSlot(slotIndex, rotation, mirror) {
+  const reflected = mirror ? (4 - slotIndex) % 4 : slotIndex;
+  return AXIS_PHYS_SLOTS[(reflected + rotation) % 4];
 }
-function physSlotForLabel(label, rotation) {
+function physSlotForLabel(label, rotation, mirror) {
   const base = AXIS_PHYS_SLOTS.indexOf(label);
-  return (base - rotation + 4) % 4;
+  const target = (base - rotation + 4) % 4;
+  return mirror ? (4 - target) % 4 : target;
 }
 
 function ensureScene(container) {
@@ -228,18 +250,79 @@ function clearContent() {
     if (obj.geometry) obj.geometry.dispose();
     if (obj.material) obj.material.dispose();
   }
+  labelMeshes = { front: null, rear: null, left: null, right: null };
 }
+
+function disposeLabelMesh(mesh) {
+  if (!mesh) return;
+  contentGroup.remove(mesh);
+  if (mesh.geometry) mesh.geometry.dispose();
+  if (mesh.material) {
+    if (mesh.material.map) mesh.material.map.dispose();
+    mesh.material.dispose();
+  }
+}
+
+const AXIS_I18N_KEYS = { front: "axisFront", rear: "axisRear", left: "axisLeft", right: "axisRight" };
+
+// (Re)construit les 4 étiquettes de repère à partir des métriques d'un
+// rendu complet (voir lastLabelMetrics) et de l'orientation courante
+// (currentOrientation/currentMirror) — appelée par renderCargoViewer3D
+// (premier rendu) ET par updateCargoViewerOrientation (un clic sur
+// "Tourner"/"Miroir", voir plus bas) : SEULES les 4 étiquettes sont
+// détruites/recréées ici, jamais les caissons/caisses/la caméra, pour que
+// changer l'orientation ne perturbe jamais la vue que le joueur a mise en
+// place (zoom, angle) à la souris.
+function buildAxisLabels() {
+  if (!lastLabelMetrics) return;
+  const { midX, midZ, maxDz, totalWidth, margin, labelWidth } = lastLabelMetrics;
+  disposeLabelMesh(labelMeshes.front);
+  disposeLabelMesh(labelMeshes.rear);
+  disposeLabelMesh(labelMeshes.left);
+  disposeLabelMesh(labelMeshes.right);
+
+  const front = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(0, currentOrientation, currentMirror)]), labelWidth);
+  front.position.set(midX, 0, maxDz + margin);
+  contentGroup.add(front);
+
+  const rear = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(2, currentOrientation, currentMirror)]), labelWidth);
+  rear.position.set(midX, 0, -margin);
+  contentGroup.add(rear);
+
+  const left = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(1, currentOrientation, currentMirror)]), labelWidth);
+  left.position.set(totalWidth + margin, 0, midZ);
+  contentGroup.add(left);
+
+  const right = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(3, currentOrientation, currentMirror)]), labelWidth);
+  right.position.set(-margin, 0, midZ);
+  contentGroup.add(right);
+
+  labelMeshes = { front, rear, left, right };
+}
+
+// Change l'orientation (bouton "Tourner"/"Miroir", voir js/app.js) sans
+// jamais toucher aux caissons/caisses affichés ni à la caméra : ne
+// recalcule QUE le texte des 4 étiquettes, à partir des métriques du
+// dernier rendu complet. C'est le chemin normal pour ces boutons (pas
+// renderCargoViewer3D, qui vide et reconstruit toute la scène) — voir
+// buildAxisLabels ci-dessus pour pourquoi ce découplage est nécessaire.
+window.updateCargoViewerOrientation = function updateCargoViewerOrientation(rotation, mirror) {
+  currentOrientation = ((rotation || 0) % 4 + 4) % 4;
+  currentMirror = !!mirror;
+  buildAxisLabels();
+};
 
 // holds : [{ name, dimensions:{x,y,z}, capacity, maxContainerSize }]
 // placements : [{ module, position:[x,y,z], size:[x,y,z], box:{scu}, entry:{mission,commodity} }]
-// rotation : 0-3, réglage joueur (voir currentOrientation ci-dessus et
-// state.cargoViewerOrientation dans js/app.js) — ne change aucune position
-// de module, seulement quelle étiquette Avant/Arrière/Gauche/Droite tombe
-// sur quel coin de la scène.
-window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rotation) {
+// rotation/mirror : réglage joueur (voir currentOrientation/currentMirror
+// ci-dessus et state.cargoViewerOrientation/cargoViewerMirror dans
+// js/app.js) — ne change aucune position de module, seulement quelle
+// étiquette Avant/Arrière/Gauche/Droite tombe sur quel coin de la scène.
+window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rotation, mirror) {
   const container = document.getElementById("cargo-viewer-3d");
   if (!container) return;
   currentOrientation = ((rotation || 0) % 4 + 4) % 4;
+  currentMirror = !!mirror;
   ensureScene(container);
   clearContent();
 
@@ -424,16 +507,17 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
 
   // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : les 4
   // emplacements physiques ci-dessous (coin +Z, +X, -Z, -X) sont fixes,
-  // seule l'étiquette qui y est affichée dépend de currentOrientation (voir
-  // labelForPhysSlot plus haut) — un joueur qui sait que ce n'est pas la
-  // bonne orientation clique "Tourner" (voir js/app.js) sans que la scène ne
-  // bouge. À rotation nulle : Avant = +Z ; en repère main droite avec l'axe Y
-  // vers le haut, faire face à +Z met la droite du côté -X et la gauche du
-  // côté +X (règle de la main droite, pas l'inverse) — d'où gauche posée du
-  // côté totalWidth+margin ci-dessous. Un essai d'inversion (Avant/Droite et
-  // Arrière/Gauche) basé sur une seule comparaison visuelle (Caterpillar) a
-  // été tenté puis annulé : le vrai problème du Caterpillar était la
-  // rotation de module ignorée (voir rotateFlatDimensions dans
+  // seule l'étiquette qui y est affichée dépend de currentOrientation/
+  // currentMirror (voir labelForPhysSlot plus haut) — un joueur qui sait que
+  // ce n'est pas la bonne orientation clique "Tourner"/"Miroir" (voir
+  // js/app.js) sans que la scène ne bouge (voir buildAxisLabels). À
+  // rotation nulle et sans miroir : Avant = +Z ; en repère main droite avec
+  // l'axe Y vers le haut, faire face à +Z met la droite du côté -X et la
+  // gauche du côté +X (règle de la main droite, pas l'inverse) — d'où
+  // gauche posée du côté totalWidth+margin ci-dessous. Un essai d'inversion
+  // (Avant/Droite et Arrière/Gauche) basé sur une seule comparaison visuelle
+  // (Caterpillar) a été tenté puis annulé : le vrai problème du Caterpillar
+  // était la rotation de module ignorée (voir rotateFlatDimensions dans
   // js/fleetyards.js, déjà corrigé), pas cette convention — l'inversion
   // cassait l'orientation du Raft, qui n'a aucune rotation de module et
   // n'avait donc pas besoin d'y être touché.
@@ -444,19 +528,8 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   const sceneScale = Math.max(totalWidth, maxDz, maxDy, 1);
   const margin = sceneScale * 0.12;
   const labelWidth = Math.max(0.6, sceneScale * 0.3);
-  const AXIS_I18N_KEYS = { front: "axisFront", rear: "axisRear", left: "axisLeft", right: "axisRight" };
-  const slotFront = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(0, currentOrientation)]), labelWidth);
-  slotFront.position.set(midX, 0, maxDz + margin);
-  contentGroup.add(slotFront);
-  const slotRear = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(2, currentOrientation)]), labelWidth);
-  slotRear.position.set(midX, 0, -margin);
-  contentGroup.add(slotRear);
-  const slotLeft = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(1, currentOrientation)]), labelWidth);
-  slotLeft.position.set(totalWidth + margin, 0, midZ);
-  contentGroup.add(slotLeft);
-  const slotRight = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(3, currentOrientation)]), labelWidth);
-  slotRight.position.set(-margin, 0, midZ);
-  contentGroup.add(slotRight);
+  lastLabelMetrics = { midX, midZ, maxDz, totalWidth, margin, labelWidth };
+  buildAxisLabels();
 
   // Ne recadre la caméra que si la scène a changé de taille (nouveau
   // vaisseau) — pas à chaque navigation d'étape (voir cargo-step-prev/next
@@ -498,7 +571,7 @@ function setCargoViewerView(view) {
   if (view === "top") camera.position.set(midX, midY + distance, midZ);
   else if (view === "bottom") camera.position.set(midX, midY - distance, midZ);
   else {
-    const slot = physSlotForLabel(view, currentOrientation);
+    const slot = physSlotForLabel(view, currentOrientation, currentMirror);
     const slotCameraPos = [
       [midX, midY, midZ + distance],
       [midX + distance, midY, midZ],
@@ -512,11 +585,18 @@ function setCargoViewerView(view) {
 }
 window.setCargoViewerView = setCargoViewerView;
 
-document.querySelectorAll(".btn-view-sm").forEach((btn) => {
+// [data-view] exclut les boutons "Tourner"/"Miroir" (js/app.js) : ils
+// partagent la classe .btn-view-sm pour le style (même rangée de boutons
+// compacts) mais n'ont pas de vue préréglée à cadrer -- sans ce filtre, un
+// clic dessus appelait aussi setCargoViewerView(undefined), qui retombait
+// dans la branche générique et déplaçait la caméra vers une position
+// arbitraire (bug constaté : "Tourner" semblait réinitialiser la vue 3D).
+document.querySelectorAll(".btn-view-sm[data-view]").forEach((btn) => {
   btn.addEventListener("click", () => setCargoViewerView(btn.dataset.view));
 });
 
 window.clearCargoViewer3D = function clearCargoViewer3D() {
   clearContent();
   lastFrameKey = null;
+  lastLabelMetrics = null;
 };

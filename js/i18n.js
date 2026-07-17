@@ -177,6 +177,9 @@ const TRANSLATIONS = {
     rotateOrientationBtn: "Tourner",
     rotateOrientationHint:
       "FleetYards ne donne pas toujours la vraie position des soutes : si l'avant/arrière/gauche/droite affiché ne correspond pas au vaisseau, clique pour tourner l'étiquetage par pas de 90°.",
+    mirrorOrientationBtn: "Miroir",
+    mirrorOrientationHint:
+      "Si tourner ne suffit pas (ex. l'avant affiché correspond en fait à la droite du vaisseau), clique pour inverser l'étiquetage en miroir — combinable avec Tourner pour couvrir tous les cas.",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -381,6 +384,9 @@ const TRANSLATIONS = {
     rotateOrientationBtn: "Rotate",
     rotateOrientationHint:
       "FleetYards doesn't always report the real position of cargo holds: if the shown front/rear/left/right doesn't match the ship, click to rotate the labeling in 90° steps.",
+    mirrorOrientationBtn: "Mirror",
+    mirrorOrientationHint:
+      "If rotating isn't enough (e.g. the shown front is actually the ship's right), click to mirror the labeling — combine with Rotate to cover every case.",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",
