@@ -1149,15 +1149,17 @@ function setCargoLayoutEditUI(editing) {
 // entrant, sans quoi ils restent visibles par-dessus l'éditeur admin et
 // #pack-cargo-btn reste bloqué (désactivé par enterAdminGridEdit) tant que
 // l'admin n'a pas trouvé « Fermer sans publier » — voir revue finale 2a,
-// finding A. On mémorise donc si le joueur était en cours d'édition perso à
-// l'entrée, pour restaurer EXACTEMENT cet état (via setCargoLayoutEditUI) à
-// la sortie plutôt que de rendre ces boutons inconditionnellement visibles.
+// finding A. À la sortie, on rend la main à l'état NON éditant, sans mémoriser
+// si le joueur était en édition perso en entrant : exitAdminGridEdit appelle
+// déjà setCargoLayoutEditing(false) (le glisser est coupé) et renderCargoStepView()
+// juste après réaffiche « Éditer »/« Tourner »/« Miroir ». Restaurer l'UI
+// d'édition perso ici afficherait « Terminer » et « Réinitialiser » à côté
+// d'« Éditer » alors que plus rien ne glisse — voir revue finale 2a. Re-cliquer
+// « Éditer la disposition » coûte un clic et repart d'un état cohérent.
 // #admin-grid-close-btn (« Fermer sans publier ») est l'unique sortie de
 // l'éditeur admin.
-let adminGridPlayerEditWasOpen = false;
 function setAdminGridEditUI(editing) {
   if (editing) {
-    adminGridPlayerEditWasOpen = document.getElementById("cargo-viewer-edit-done-btn").style.display !== "none";
     document.getElementById("cargo-viewer-edit-btn").style.display = "none";
     document.getElementById("cargo-viewer-rotate-btn").style.display = "none";
     document.getElementById("cargo-viewer-mirror-btn").style.display = "none";
@@ -1165,7 +1167,7 @@ function setAdminGridEditUI(editing) {
     document.getElementById("cargo-viewer-reset-layout-btn").style.display = "none";
     document.getElementById("cargo-edit-hint").style.display = "none";
   } else {
-    setCargoLayoutEditUI(adminGridPlayerEditWasOpen);
+    setCargoLayoutEditUI(false);
   }
 }
 
