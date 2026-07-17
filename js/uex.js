@@ -103,12 +103,22 @@ async function syncUexCompanies() {
   return mapped;
 }
 
-// Seuls les vaisseaux canoniques (hors variantes peinture/édition) spatiaux
-// (hors véhicules terrestres) avec une capacité cargo non nulle sont retenus.
+// Vaisseaux spatiaux (hors véhicules terrestres) avec une capacité cargo non
+// nulle. Un vaisseau non canonique (id_parent différent de son propre id)
+// n'est gardé que si son SCU diffère de celui de son vaisseau de base : ça
+// distingue une vraie variante à cargo distinct (ex. Ironclad Assault,
+// Freelancer MAX) d'une variante purement peinture/édition qui partage le
+// même SCU que le vaisseau de base (celle-là reste exclue).
 async function syncUexShips() {
   const vehicles = await uexGet("vehicles");
+  const byId = new Map(vehicles.map((v) => [v.id, v]));
   const mapped = vehicles
-    .filter((v) => v.id === v.id_parent && !v.is_ground_vehicle && v.scu > 0)
+    .filter((v) => {
+      if (v.is_ground_vehicle || !(v.scu > 0)) return false;
+      if (v.id === v.id_parent) return true;
+      const parent = byId.get(v.id_parent);
+      return parent ? v.scu !== parent.scu : true;
+    })
     .map((v) => ({ name: v.name, scu: v.scu, company: v.company_name || "" }));
   state.uexShips = mapped;
   saveState();
