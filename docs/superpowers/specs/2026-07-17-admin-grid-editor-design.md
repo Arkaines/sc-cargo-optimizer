@@ -1,5 +1,11 @@
 # Socle des grilles Supabase + éditeur admin — conception (Brique 2a)
 
+> **Statut : valide, implémentation en pause (2 tâches sur 6 faites).**
+> Voir le plan `docs/superpowers/plans/2026-07-17-admin-grid-editor.md` et le journal `.superpowers/sdd/progress.md`.
+> - **Fait** : tâche 1 (le SQL, `docs/supabase/admin-grid-editor.sql` — documentation, jamais exécutée) et tâche 2 (récupération des grilles + statut admin, qui dégrade vers `{}` / `false` tant que les tables n'existent pas). **Aucun changement de comportement n'a été livré aux joueurs.**
+> - **Reste** : tâches 3 à 6 (résolveur `getShipHolds` et détachement FleetYards, verrouillage non-admin, l'éditeur, la publication).
+> - **Pourquoi la pause** : bascule envisagée vers une V2 à backend. **Cette V2 est abandonnée** (voir `2026-07-17-v2-protected-backend-design.md`) — on reste sur GitHub Pages en statique, donc **ce document redevient pleinement valide et reprenable en l'état**.
+
 **Statut : à implémenter.** Brique 2a d'un chantier en deux parties :
 - **2a (ce document)** : le socle (grilles dans Supabase, détachement de FleetYards) + l'éditeur de grilles réservé au mainteneur.
 - **2b** : le crowdsourcing (propositions des joueurs, notification Discord, onglet de revue, porte de sortie) — voir `2026-07-17-crowdsourced-cargo-grids-design.md`, qui s'appuie sur ce socle.

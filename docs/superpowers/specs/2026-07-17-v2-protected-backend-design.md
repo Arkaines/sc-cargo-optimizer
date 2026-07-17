@@ -1,6 +1,22 @@
 # V2 — backend protégé : conception d'architecture
 
-**Statut : conception validée, à découper en briques (voir §8).** Ce document est le cadre d'architecture ; chaque brique aura son propre spec/plan.
+> # ⛔ ABANDONNÉ — NE PAS IMPLÉMENTER
+>
+> **Décision de l'utilisateur, le 2026-07-17, le jour même de la rédaction : on reste sur GitHub Pages, en site statique. Cette V2 ne sera pas construite.**
+>
+> Le document est conservé pour la trace du raisonnement, pas comme une feuille de route. **Rien ici ne doit être implémenté.**
+>
+> **Pourquoi l'abandon** — une fois le coût réel posé, le rapport bénéfice/prix ne tenait pas pour un outil de fan non commercial :
+> - un coût récurrent **à vie**, à la charge de l'auteur (CIG interdit de monétiser) ;
+> - **le hors-ligne meurt** et un compte devient obligatoire pour calculer ;
+> - une **dépendance opérationnelle** (VPS en panne = plus aucun calcul), alors que la V1 statique ne tombe jamais ;
+> - et surtout : **l'interface serait restée publique de toute façon** (§2) — l'objectif « qu'on ne me vole pas mon travail » n'était donc satisfait qu'en partie.
+>
+> **Ce qui protège le projet à la place** : la licence **propriétaire tous droits réservés** (voir `LICENSE`), qui fonctionne sur un dépôt public. Le code reste lisible — le copier, le réutiliser ou le redistribuer est interdit.
+>
+> **Conséquences actées** : le dépôt **reste public** (GitHub Pages n'est gratuit qu'ainsi) ; le passage en privé est écarté avec cette V2 ; l'architecture statique est conservée. La brique 2a (`2026-07-17-admin-grid-editor-design.md`), gelée uniquement à cause de cette V2, **redevient valide et reprenable telle quelle**.
+
+**Statut historique (au moment de la rédaction) :** conception validée, à découper en briques (voir §8). Ce document était le cadre d'architecture ; chaque brique aurait eu son propre spec/plan.
 
 ## 1. Objectif et motivation
 
