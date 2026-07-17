@@ -174,6 +174,9 @@ const TRANSLATIONS = {
     axisRear: "Arrière",
     axisLeft: "Gauche",
     axisRight: "Droite",
+    rotateOrientationBtn: "Tourner",
+    rotateOrientationHint:
+      "FleetYards ne donne pas toujours la vraie position des soutes : si l'avant/arrière/gauche/droite affiché ne correspond pas au vaisseau, clique pour tourner l'étiquetage par pas de 90°.",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -375,6 +378,9 @@ const TRANSLATIONS = {
     axisRear: "Rear",
     axisLeft: "Left",
     axisRight: "Right",
+    rotateOrientationBtn: "Rotate",
+    rotateOrientationHint:
+      "FleetYards doesn't always report the real position of cargo holds: if the shown front/rear/left/right doesn't match the ship, click to rotate the labeling in 90° steps.",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",
@@ -446,5 +452,8 @@ function applyStaticTranslations() {
   });
   document.querySelectorAll("[data-i18n-alt]").forEach((el) => {
     el.alt = t(el.dataset.i18nAlt);
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    el.title = t(el.dataset.i18nTitle);
   });
 }

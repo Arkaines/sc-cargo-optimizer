@@ -2,14 +2,18 @@
 // Vue 3D interactive du rangement de cargo (module ES, contrairement au
 // reste de l'appli en scripts classiques — Three.js n'est plus distribué
 // qu'en modules) : un vaisseau réparti en plusieurs modules de soute (voir
-// js/fleetyards.js) est affiché comme une rangée de caissons filaires, avec
-// les caisses effectivement rangées (voir js/cargo-packing.js) dedans en
-// solide, coloré par mission. Les positions/offsets bruts de FleetYards ne
-// permettent pas de recomposer fidèlement l'agencement réel du vaisseau
-// (plusieurs modules partagent le même offset), donc chaque module est
-// affiché côte à côte plutôt que dans une disposition supposée exacte —
-// honnête sur ce qu'on sait vraiment, tout en restant utile pour visualiser
-// le contenu de chaque module et le faire tourner à la souris.
+// js/fleetyards.js) est affiché en caissons filaires, avec les caisses
+// effectivement rangées (voir js/cargo-packing.js) dedans en solide, coloré
+// par mission. Trois niveaux de disposition selon ce que FleetYards fournit
+// pour ce vaisseau : (1) offset réel et fiable (unique parmi les modules du
+// vaisseau, ex. Hull B) -> position exacte ; (2) pas d'offset fiable mais le
+// nom du hardpoint donne au moins un indice avant/arrière/gauche/droite/
+// haut/bas (ex. Ironclad, qui n'a AUCUN offset FleetYards du tout) -> grille
+// reconstruite à partir de ces mots-clés (voir parsePositionHint) ; (3)
+// vraiment aucune info -> rangée plate, comme avant. Cette reconstruction
+// reste une supposition, pas une donnée exacte : le joueur peut corriger
+// l'étiquetage avant/arrière/gauche/droite (bouton "Tourner", voir
+// currentOrientation) sans que la géométrie affichée ne bouge.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -31,6 +35,15 @@ let sceneBounds = null;
 // renderCargoViewer3D) : ne recadrer que quand ça change réellement de
 // taille (nouveau vaisseau), pas à chaque navigation d'étape.
 let lastFrameKey = null;
+// Rotation courante des étiquettes Avant/Arrière/Gauche/Droite (0-3, par pas
+// de 90°) — mémorisée ici pour que setCargoViewerView (déclenchée par les
+// boutons "Vue avant/etc", séparément de renderCargoViewer3D) sache vers
+// quelle direction physique de la scène pointer. Voir rotateForLabel/
+// labelForPhysSlot ci-dessous : la géométrie ne bouge jamais, seule
+// l'étiquette affichée à chaque coin tourne — c'est le joueur qui connaît la
+// vraie orientation du vaisseau (aucune donnée FleetYards là-dessus), donc
+// le réglage vient de js/app.js (bouton "Tourner", state.cargoViewerOrientation).
+let currentOrientation = 0;
 
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
 // que la même mission garde toujours la même couleur d'un rendu à l'autre.
@@ -122,6 +135,48 @@ function makeAxisLabel(text, width) {
   return mesh;
 }
 
+// Quand un module n'a pas d'offset FleetYards fiable (voir hasReliableOffset
+// dans renderCargoViewer3D), son nom de hardpoint encode presque toujours sa
+// position ("hardpoint_cargogrid_front_left", "..._secure_rear_right"...) :
+// ces mots-clés servent à reconstruire une vraie grille avant/arrière ×
+// gauche/droite × haut/bas plutôt que d'aligner tous les modules en une
+// rangée plate qui ne ressemble à rien pour un vaisseau comme l'Ironclad
+// (aucun offset FleetYards du tout, alors qu'il a de vraies baies
+// avant/arrière/gauche/droite). z/x/y valent -1/0/1 (aucun mot-clé reconnu
+// pour cet axe = 0, au milieu) ; recognized est faux quand rien n'a été
+// reconnu sur aucun axe, auquel cas le module retombe sur l'ancienne rangée
+// plate (voir plus bas).
+function parsePositionHint(name) {
+  const n = (name || "").toLowerCase();
+  let z = 0;
+  if (n.includes("front") || n.includes("fore") || n.includes("nose")) z = 1;
+  else if (n.includes("rear") || n.includes("aft") || n.includes("back")) z = -1;
+  let x = 0;
+  if (n.includes("left")) x = 1;
+  else if (n.includes("right")) x = -1;
+  let y = 0;
+  if (n.includes("top") || n.includes("upper")) y = 1;
+  else if (n.includes("bottom") || n.includes("lower")) y = -1;
+  return { z, x, y, recognized: z !== 0 || x !== 0 || y !== 0 };
+}
+
+// Les 4 étiquettes de repère à plat, dans l'ordre où elles occupent les 4
+// coins de la scène à rotation nulle : indice i -> direction physique
+// +Z, +X, -Z, -X respectivement (voir les positions de makeAxisLabel plus
+// bas). Un joueur qui connaît le vrai vaisseau peut cliquer "Tourner" pour
+// décaler cette correspondance de 1 à 3 crans de 90° (voir currentOrientation
+// ci-dessus) : la géométrie affichée ne bouge pas, seule l'étiquette à
+// chaque coin change, ainsi que la direction visée par les boutons "Vue
+// avant/etc" (voir setCargoViewerView).
+const AXIS_PHYS_SLOTS = ["front", "left", "rear", "right"];
+function labelForPhysSlot(slotIndex, rotation) {
+  return AXIS_PHYS_SLOTS[(slotIndex + rotation) % 4];
+}
+function physSlotForLabel(label, rotation) {
+  const base = AXIS_PHYS_SLOTS.indexOf(label);
+  return (base - rotation + 4) % 4;
+}
+
 function ensureScene(container) {
   if (renderer) return;
 
@@ -177,9 +232,14 @@ function clearContent() {
 
 // holds : [{ name, dimensions:{x,y,z}, capacity, maxContainerSize }]
 // placements : [{ module, position:[x,y,z], size:[x,y,z], box:{scu}, entry:{mission,commodity} }]
-window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
+// rotation : 0-3, réglage joueur (voir currentOrientation ci-dessus et
+// state.cargoViewerOrientation dans js/app.js) — ne change aucune position
+// de module, seulement quelle étiquette Avant/Arrière/Gauche/Droite tombe
+// sur quel coin de la scène.
+window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rotation) {
   const container = document.getElementById("cargo-viewer-3d");
   if (!container) return;
+  currentOrientation = ((rotation || 0) % 4 + 4) % 4;
   ensureScene(container);
   clearContent();
 
@@ -220,10 +280,17 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
     dx: hold.dimensions.x,
     dy: hold.dimensions.z,
     dz: hold.dimensions.y,
+    hint: parsePositionHint(hold.name),
   }));
 
   const positioned = layout.filter((l) => hasReliableOffset(l.hold));
-  const fallback = layout.filter((l) => !hasReliableOffset(l.hold));
+  const remaining = layout.filter((l) => !hasReliableOffset(l.hold));
+  // Modules sans offset fiable mais dont le nom donne au moins un indice de
+  // position (voir parsePositionHint) : reconstruits en grille. Le reste
+  // (vraiment aucune info directionnelle) retombe sur l'ancienne rangée
+  // plate, inchangée.
+  const fallbackGrid = remaining.filter((l) => l.hint.recognized);
+  const fallbackRow = remaining.filter((l) => !l.hint.recognized);
 
   // Modules à offset fiable : position réelle (même échange y/z que les
   // dimensions, x reste x).
@@ -232,14 +299,64 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
     l.worldPos = [o.x, o.z, o.y];
   });
 
-  // Modules sans offset exploitable : rangée de repli, placée juste après
-  // l'ensemble des modules déjà positionnés réellement pour ne pas les
-  // chevaucher.
-  let fallbackOffsetX = positioned.reduce((max, l) => Math.max(max, l.worldPos[0] + l.dx), 0);
-  if (positioned.length && fallback.length) fallbackOffsetX += MODULE_GAP;
-  fallback.forEach((l) => {
-    l.worldPos = [fallbackOffsetX, 0, 0];
-    fallbackOffsetX += l.dx + MODULE_GAP;
+  // Base commune aux deux replis : juste après l'ensemble des modules déjà
+  // positionnés réellement, pour ne pas les chevaucher.
+  let fallbackBaseX = positioned.reduce((max, l) => Math.max(max, l.worldPos[0] + l.dx), 0);
+  if (positioned.length && (fallbackGrid.length || fallbackRow.length)) fallbackBaseX += MODULE_GAP;
+
+  if (fallbackGrid.length) {
+    // Ordre de construction avant/arrière (colonnes Z) et gauche/droite
+    // (colonnes X) tel que l'avant (+Z) et la gauche (+X) se retrouvent aux
+    // plus grandes coordonnées — cohérent avec les étiquettes plus bas
+    // (Avant posée à maxDz+margin, Gauche à totalWidth+margin). On construit
+    // donc en partant d'arrière/droite (coordonnée 0) vers avant/gauche.
+    const zBuildOrder = [-1, 0, 1];
+    const xBuildOrder = [-1, 0, 1];
+    // Largeur de chaque colonne X et profondeur de chaque rangée Z, calculées
+    // une fois sur tout le vaisseau pour une grille régulière (pas de case
+    // qui déborde sur la rangée/colonne suivante).
+    const colWidth = new Map();
+    const rowDepth = new Map();
+    fallbackGrid.forEach((l) => {
+      colWidth.set(l.hint.x, Math.max(colWidth.get(l.hint.x) || 0, l.dx));
+      rowDepth.set(l.hint.z, Math.max(rowDepth.get(l.hint.z) || 0, l.dz));
+    });
+    const colStart = new Map();
+    let cx = 0;
+    xBuildOrder.forEach((x) => {
+      if (!colWidth.has(x)) return;
+      colStart.set(x, cx);
+      cx += colWidth.get(x) + MODULE_GAP;
+    });
+    const rowStart = new Map();
+    let rz = 0;
+    zBuildOrder.forEach((z) => {
+      if (!rowDepth.has(z)) return;
+      rowStart.set(z, rz);
+      rz += rowDepth.get(z) + MODULE_GAP;
+    });
+    // Plusieurs modules peuvent partager exactement la même case (ex. deux
+    // soutes "secure" du même côté sans indice haut/bas) : empilées à la
+    // verticale, bas -> milieu -> haut, pour rester distinctes.
+    const yBuildOrder = [-1, 0, 1];
+    const cellStackY = new Map();
+    fallbackGrid
+      .slice()
+      .sort((a, b) => yBuildOrder.indexOf(a.hint.y) - yBuildOrder.indexOf(b.hint.y))
+      .forEach((l) => {
+        const cellKey = `${l.hint.z}|${l.hint.x}`;
+        const stackedY = cellStackY.get(cellKey) || 0;
+        l.worldPos = [fallbackBaseX + colStart.get(l.hint.x), stackedY, rowStart.get(l.hint.z)];
+        cellStackY.set(cellKey, stackedY + l.dy + MODULE_GAP);
+      });
+    fallbackBaseX += cx;
+    if (fallbackRow.length) fallbackBaseX += MODULE_GAP;
+  }
+
+  // Modules sans aucun indice exploitable : rangée de repli, comme avant.
+  fallbackRow.forEach((l) => {
+    l.worldPos = [fallbackBaseX, 0, 0];
+    fallbackBaseX += l.dx + MODULE_GAP;
   });
 
   // Ramène tout à des coordonnées positives (les offsets réels peuvent
@@ -305,18 +422,21 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   const midY = maxDy / 2;
   const midZ = maxDz / 2;
 
-  // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : un simple
-  // repère d'orientation pour ce rendu (pas l'avant/arrière réel du
-  // vaisseau, inconnu — voir le commentaire en tête de fichier). Avant = +Z :
-  // en repère main droite avec l'axe Y vers le haut, faire face à +Z met la
-  // droite du côté -X et la gauche du côté +X (règle de la main droite,
-  // pas l'inverse) — d'où gauche posée du côté totalWidth+margin ci-dessous.
-  // Un essai d'inversion (Avant/Droite et Arrière/Gauche) basé sur une seule
-  // comparaison visuelle (Caterpillar) a été tenté puis annulé : le vrai
-  // problème du Caterpillar était la rotation de module ignorée (voir
-  // rotateFlatDimensions dans js/fleetyards.js, déjà corrigé), pas cette
-  // convention — l'inversion cassait l'orientation du Raft, qui n'a aucune
-  // rotation de module et n'avait donc pas besoin d'y être touché.
+  // Étiquettes Avant/Arrière/Gauche/Droite en bordure de la scène : les 4
+  // emplacements physiques ci-dessous (coin +Z, +X, -Z, -X) sont fixes,
+  // seule l'étiquette qui y est affichée dépend de currentOrientation (voir
+  // labelForPhysSlot plus haut) — un joueur qui sait que ce n'est pas la
+  // bonne orientation clique "Tourner" (voir js/app.js) sans que la scène ne
+  // bouge. À rotation nulle : Avant = +Z ; en repère main droite avec l'axe Y
+  // vers le haut, faire face à +Z met la droite du côté -X et la gauche du
+  // côté +X (règle de la main droite, pas l'inverse) — d'où gauche posée du
+  // côté totalWidth+margin ci-dessous. Un essai d'inversion (Avant/Droite et
+  // Arrière/Gauche) basé sur une seule comparaison visuelle (Caterpillar) a
+  // été tenté puis annulé : le vrai problème du Caterpillar était la
+  // rotation de module ignorée (voir rotateFlatDimensions dans
+  // js/fleetyards.js, déjà corrigé), pas cette convention — l'inversion
+  // cassait l'orientation du Raft, qui n'a aucune rotation de module et
+  // n'avait donc pas besoin d'y être touché.
   // Proportionnelles à la taille réelle de la scène affichée : une marge/
   // taille fixe écraserait un petit vaisseau (soute de 2-3 m) sous des
   // étiquettes démesurées, ou serait à peine visible pour un gros vaisseau
@@ -324,18 +444,19 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
   const sceneScale = Math.max(totalWidth, maxDz, maxDy, 1);
   const margin = sceneScale * 0.12;
   const labelWidth = Math.max(0.6, sceneScale * 0.3);
-  const front = makeAxisLabel(t("axisFront"), labelWidth);
-  front.position.set(midX, 0, maxDz + margin);
-  contentGroup.add(front);
-  const rear = makeAxisLabel(t("axisRear"), labelWidth);
-  rear.position.set(midX, 0, -margin);
-  contentGroup.add(rear);
-  const left = makeAxisLabel(t("axisLeft"), labelWidth);
-  left.position.set(totalWidth + margin, 0, midZ);
-  contentGroup.add(left);
-  const right = makeAxisLabel(t("axisRight"), labelWidth);
-  right.position.set(-margin, 0, midZ);
-  contentGroup.add(right);
+  const AXIS_I18N_KEYS = { front: "axisFront", rear: "axisRear", left: "axisLeft", right: "axisRight" };
+  const slotFront = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(0, currentOrientation)]), labelWidth);
+  slotFront.position.set(midX, 0, maxDz + margin);
+  contentGroup.add(slotFront);
+  const slotRear = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(2, currentOrientation)]), labelWidth);
+  slotRear.position.set(midX, 0, -margin);
+  contentGroup.add(slotRear);
+  const slotLeft = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(1, currentOrientation)]), labelWidth);
+  slotLeft.position.set(totalWidth + margin, 0, midZ);
+  contentGroup.add(slotLeft);
+  const slotRight = makeAxisLabel(t(AXIS_I18N_KEYS[labelForPhysSlot(3, currentOrientation)]), labelWidth);
+  slotRight.position.set(-margin, 0, midZ);
+  contentGroup.add(slotRight);
 
   // Ne recadre la caméra que si la scène a changé de taille (nouveau
   // vaisseau) — pas à chaque navigation d'étape (voir cargo-step-prev/next
@@ -368,15 +489,25 @@ function setCargoViewerView(view) {
   const midZ = (minZ + maxZ) / 2;
   const distance = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 6) * 1.6;
   controls.target.set(midX, midY, midZ);
-  // Cohérent avec les étiquettes ci-dessus (Avant = +Z, Gauche = +X) : la
-  // "vue gauche" place la caméra du côté gauche (+X) pour regarder vers le
-  // vaisseau depuis ce côté.
-  if (view === "front") camera.position.set(midX, midY, midZ + distance);
-  else if (view === "rear") camera.position.set(midX, midY, midZ - distance);
-  else if (view === "left") camera.position.set(midX + distance, midY, midZ);
-  else if (view === "right") camera.position.set(midX - distance, midY, midZ);
-  else if (view === "top") camera.position.set(midX, midY + distance, midZ);
+  // Haut/bas ne dépendent pas de la rotation (toujours autour de l'axe
+  // vertical). Pour avant/arrière/gauche/droite, on cherche d'abord quel
+  // emplacement physique (+Z/+X/-Z/-X) porte actuellement cette étiquette
+  // (voir physSlotForLabel et currentOrientation plus haut) — un clic sur
+  // "Vue avant" doit toujours regarder ce qui est affiché "Avant" à l'écran,
+  // même après un clic sur "Tourner".
+  if (view === "top") camera.position.set(midX, midY + distance, midZ);
   else if (view === "bottom") camera.position.set(midX, midY - distance, midZ);
+  else {
+    const slot = physSlotForLabel(view, currentOrientation);
+    const slotCameraPos = [
+      [midX, midY, midZ + distance],
+      [midX + distance, midY, midZ],
+      [midX, midY, midZ - distance],
+      [midX - distance, midY, midZ],
+    ];
+    const pos = slotCameraPos[slot];
+    if (pos) camera.position.set(pos[0], pos[1], pos[2]);
+  }
   controls.update();
 }
 window.setCargoViewerView = setCargoViewerView;

@@ -25,6 +25,7 @@ function defaultState() {
     fleetyardsCargoHolds: {},
     fleetyardsSyncedAt: null,
     shipAccessFaces: {},
+    cargoViewerOrientation: {},
   };
 }
 
@@ -111,6 +112,7 @@ function loadState() {
       fleetyardsCargoHolds: parsed.fleetyardsCargoHolds || {},
       fleetyardsSyncedAt: parsed.fleetyardsSyncedAt || null,
       shipAccessFaces: parsed.shipAccessFaces || {},
+      cargoViewerOrientation: parsed.cargoViewerOrientation || {},
     };
   } catch (e) {
     return defaultState();
@@ -983,6 +985,26 @@ const ACCESS_FACE_KEYS = ["back", "front", "left", "right", "top", "bottom"];
 
 function getShipAccessFaces(shipName) {
   return (shipName && state.shipAccessFaces[shipName]) || null;
+}
+
+// Orientation Avant/Arrière/Gauche/Droite de la vue 3D (0-3, par pas de 90°,
+// voir js/cargo-viewer.js:currentOrientation) : FleetYards ne donne parfois
+// aucune position réelle pour les modules de soute (ex. Ironclad), la
+// disposition affichée est alors une reconstruction à partir des noms de
+// hardpoint — une supposition que seul le joueur peut confirmer ou corriger.
+// Mémorisée par vaisseau (comme shipAccessFaces ci-dessus) : un vaisseau mal
+// orienté une fois reste corrigé pour les prochaines fois.
+function getCargoViewerOrientation(shipName) {
+  return (shipName && state.cargoViewerOrientation[shipName]) || 0;
+}
+
+function rotateCargoViewerOrientation() {
+  const ship = getSelectedShip();
+  if (!ship) return;
+  const current = getCargoViewerOrientation(ship.name);
+  state.cargoViewerOrientation[ship.name] = (current + 1) % 4;
+  saveState();
+  renderCargoStepView();
 }
 
 function renderShipAccessFaces() {
@@ -2076,7 +2098,9 @@ function renderCargoStepView() {
   // l'arrivée à l'étape de déchargement, obligeant à revenir en arrière
   // pour la voir encore sur la grille.
   const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop >= stepIndex);
-  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present);
+  const ship = getSelectedShip();
+  const orientation = ship ? getCargoViewerOrientation(ship.name) : 0;
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present, orientation);
 }
 
 // Calcule et affiche le rangement des marchandises des missions incluses
@@ -3091,6 +3115,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("optimize-btn").addEventListener("click", runOptimize);
   document.getElementById("pack-cargo-btn").addEventListener("click", runCargoPacking);
+  document.getElementById("cargo-viewer-rotate-btn").addEventListener("click", rotateCargoViewerOrientation);
   document.getElementById("cargo-step-prev").addEventListener("click", () => {
     if (!cargoPackState || cargoPackState.stepIndex <= 0) return;
     cargoPackState.stepIndex -= 1;
