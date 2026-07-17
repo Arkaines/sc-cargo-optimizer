@@ -756,8 +756,8 @@ function onLayoutPointerUp() {
   const { dx, dz } = dragTarget.userData.dims;
   // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
   // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
-  const originX = dragTarget.position.x - dx / 2;
-  const originZ = dragTarget.position.z - dz / 2;
+  const originX = snapToUnit(dragTarget.position.x - dx / 2);
+  const originZ = snapToUnit(dragTarget.position.z - dz / 2);
   if (typeof window.persistCargoModulePosition === "function") {
     window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originZ);
   }
