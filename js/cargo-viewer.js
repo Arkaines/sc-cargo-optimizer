@@ -58,6 +58,10 @@ let currentMirror = false;
 // caisses, on bloque la rotation caméra (vue de dessus) et on ne recadre
 // jamais la caméra, pour que la vue reste stable d'un glisser à l'autre.
 let editingLayout = false;
+// Boîtes de collision invisibles (une par module) : les caissons sont des
+// fils de fer (LineSegments), très mauvaises cibles au raycasting. Recréées
+// à chaque rendu en mode édition, libérées par clearContent().
+let pickMeshes = [];
 // Métriques et repères des 4 étiquettes du dernier rendu complet (voir
 // renderCargoViewer3D) : permettent à updateCargoViewerOrientation de
 // reconstruire seulement le texte des étiquettes sans toucher au reste de
@@ -283,6 +287,7 @@ function clearContent() {
     if (obj.material) obj.material.dispose();
   }
   labelMeshes = { front: null, rear: null, left: null, right: null };
+  pickMeshes = [];
 }
 
 function disposeLabelMesh(mesh) {
@@ -554,6 +559,21 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     wireframe.position.set(worldPos[0], worldPos[1], worldPos[2]);
     contentGroup.add(wireframe);
 
+    if (editingLayout) {
+      // Cube invisible aux dimensions du module, centré (le caisson, lui, est
+      // positionné sur son coin/origine) — c'est la cible du raycaster.
+      const pick = new THREE.Mesh(
+        new THREE.BoxGeometry(dx, dy, dz),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      pick.position.set(worldPos[0] + dx / 2, worldPos[1] + dy / 2, worldPos[2] + dz / 2);
+      pick.userData.moduleKey = moduleKey(hold, displayHolds);
+      pick.userData.wireframe = wireframe;
+      pick.userData.dims = { dx, dy, dz };
+      contentGroup.add(pick);
+      pickMeshes.push(pick);
+    }
+
     // Caisses rangées dans ce module (même échange y/z que ci-dessus : les
     // caisses sont calculées par js/cargo-packing.js dans le repère natif
     // x/y/z du hold, position/size gardent donc cet ordre jusqu'ici).
@@ -677,11 +697,91 @@ function setCargoViewerView(view) {
 }
 window.setCargoViewerView = setCargoViewerView;
 
+// --- Glisser-déposer d'une grille (mode édition) -------------------------
+// Le curseur est projeté sur le plan du sol (Y=0) ; le module suit, aimanté
+// sur 1 SCU (UNIT = 1,25 m) et borné à >= 0 pour que tous les modules restent
+// en coordonnées positives (voir la surcharge dans renderCargoViewer3D).
+const dragGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const dragRaycaster = new THREE.Raycaster();
+const dragPointerNdc = new THREE.Vector2();
+const dragHitPoint = new THREE.Vector3();
+let dragTarget = null;
+let dragGrabOffsetX = 0;
+let dragGrabOffsetZ = 0;
+
+function snapToUnit(v) {
+  return Math.max(0, Math.round(v / UNIT) * UNIT);
+}
+
+function updateDragPointer(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  dragPointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  dragPointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  dragRaycaster.setFromCamera(dragPointerNdc, camera);
+}
+
+function onLayoutPointerDown(event) {
+  if (!editingLayout) return;
+  updateDragPointer(event);
+  const hits = dragRaycaster.intersectObjects(pickMeshes, false);
+  if (!hits.length) return;
+  dragTarget = hits[0].object;
+  if (!dragRaycaster.ray.intersectPlane(dragGroundPlane, dragHitPoint)) {
+    dragTarget = null;
+    return;
+  }
+  // Décalage entre le point saisi et l'origine du module, pour que la grille
+  // ne saute pas sous le curseur au premier mouvement.
+  const { dx, dz } = dragTarget.userData.dims;
+  dragGrabOffsetX = dragHitPoint.x - (dragTarget.position.x - dx / 2);
+  dragGrabOffsetZ = dragHitPoint.z - (dragTarget.position.z - dz / 2);
+  controls.enabled = false; // le geste ne doit pas bouger la caméra
+}
+
+function onLayoutPointerMove(event) {
+  if (!editingLayout || !dragTarget) return;
+  updateDragPointer(event);
+  if (!dragRaycaster.ray.intersectPlane(dragGroundPlane, dragHitPoint)) return;
+  const { dx, dz } = dragTarget.userData.dims;
+  const originX = snapToUnit(dragHitPoint.x - dragGrabOffsetX);
+  const originZ = snapToUnit(dragHitPoint.z - dragGrabOffsetZ);
+  dragTarget.position.x = originX + dx / 2;
+  dragTarget.position.z = originZ + dz / 2;
+  dragTarget.userData.wireframe.position.x = originX;
+  dragTarget.userData.wireframe.position.z = originZ;
+}
+
+function onLayoutPointerUp() {
+  if (!editingLayout || !dragTarget) return;
+  const { dx, dz } = dragTarget.userData.dims;
+  // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
+  // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
+  const originX = dragTarget.position.x - dx / 2;
+  const originZ = dragTarget.position.z - dz / 2;
+  if (typeof window.persistCargoModulePosition === "function") {
+    window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originZ);
+  }
+  dragTarget = null;
+  controls.enabled = true;
+}
+
 window.setCargoLayoutEditing = function setCargoLayoutEditing(on) {
   editingLayout = !!on;
-  if (!controls) return;
+  if (!controls || !renderer) return;
   controls.enableRotate = !editingLayout;
-  if (editingLayout) setCargoViewerView("top");
+  const el = renderer.domElement;
+  if (editingLayout) {
+    el.addEventListener("pointerdown", onLayoutPointerDown);
+    el.addEventListener("pointermove", onLayoutPointerMove);
+    window.addEventListener("pointerup", onLayoutPointerUp);
+    setCargoViewerView("top");
+  } else {
+    el.removeEventListener("pointerdown", onLayoutPointerDown);
+    el.removeEventListener("pointermove", onLayoutPointerMove);
+    window.removeEventListener("pointerup", onLayoutPointerUp);
+    dragTarget = null;
+    controls.enabled = true;
+  }
 };
 
 // [data-view] exclut les boutons "Tourner"/"Miroir" (js/app.js) : ils
