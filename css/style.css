@@ -525,9 +525,12 @@ details[open] > *:not(summary) {
 
 label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
   color: var(--muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
 }
 
 input,
