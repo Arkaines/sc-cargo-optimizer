@@ -41,6 +41,11 @@ function defaultState() {
     cargoViewerOrientation: {},
     cargoViewerMirror: {},
     cargoViewerLayout: {},
+    // Emplacements réservés à des véhicules garés, PAR JOUEUR (jamais publié) :
+    // { [ship]: { [moduleKey]: [ {x0,y0,sx,sy,vid}, ... ] } }, en cellules du
+    // repère packing. Passé tel quel à simulateRoutePacking (brique A′), qui
+    // ignore vid. Voir getShipReservations.
+    cargoReservations: {},
     // Grilles publiées (Supabase, table ship_layouts) : { [ship]: {grid, orientation, mirror} }.
     // Cache local relu à chaque synchro, comme fleetyardsCargoHolds.
     approvedShipGrids: {},
@@ -134,6 +139,7 @@ function loadState() {
       cargoViewerOrientation: parsed.cargoViewerOrientation || {},
       cargoViewerMirror: parsed.cargoViewerMirror || {},
       cargoViewerLayout: parsed.cargoViewerLayout || {},
+      cargoReservations: parsed.cargoReservations || {},
       approvedShipGrids: parsed.approvedShipGrids || {},
       dataSchemaVersion: parsed.dataSchemaVersion || 0,
     };
@@ -1012,6 +1018,16 @@ const ACCESS_FACE_KEYS = ["back", "front", "left", "right", "top", "bottom"];
 
 function getShipAccessFaces(shipName) {
   return (shipName && state.shipAccessFaces[shipName]) || null;
+}
+
+// Emplacements réservés à des véhicules garés pour ce vaisseau, PAR JOUEUR :
+// { [moduleKey]: [ {x0,y0,sx,sy,vid}, ... ] }. Passé tel quel comme 5e argument
+// de simulateRoutePacking (brique A′), qui indexe par moduleKey et ignore vid.
+// {} si aucun -> le rangement se comporte comme avant (rétrocompat brique A′).
+// Jamais publié (donnée perso, pas une grille officielle) — synchronisé via
+// CLOUD_SYNCED_KEYS comme cargoViewerLayout.
+function getShipReservations(shipName) {
+  return (shipName && state.cargoReservations[shipName]) || {};
 }
 
 // Orientation Avant/Arrière/Gauche/Droite de la vue 3D : rotation (0-3, par
@@ -2633,7 +2649,7 @@ function runCargoPacking() {
     return;
   }
 
-  const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length, getShipAccessFaces(ship.name));
+  const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length, getShipAccessFaces(ship.name), getShipReservations(ship.name));
   cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: 0, shipName: ship.name };
   renderCargoPackStatus();
   renderCargoStepView();

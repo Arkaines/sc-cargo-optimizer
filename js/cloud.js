@@ -27,6 +27,7 @@ const CLOUD_SYNCED_KEYS = [
   "cargoViewerOrientation",
   "cargoViewerMirror",
   "cargoViewerLayout",
+  "cargoReservations",
 ];
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
