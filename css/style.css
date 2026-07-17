@@ -283,10 +283,21 @@ aside#side-panel {
   gap: 1rem;
 }
 
+/* Motif "coin coupé" façon panneau HUD — réservé aux 5 panneaux de
+   contenu primaires (formulaire/action principale). Jamais sur des
+   éléments interactifs répétés/petits (boutons, cellules de tableau,
+   champs de saisie) : une coupe de 12px déformerait leur contenu. Voir
+   le plan d'implémentation pour les 18 autres border-radius du site
+   (aplatis ou laissés circulaires/pilule selon leur nature). */
+.cut-corner {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  border-radius: 0 !important;
+}
+
 .side-block {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 1.1rem 1.25rem;
   box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
 }
@@ -389,7 +400,7 @@ main {
 .tabs {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 1.1rem 1.25rem;
   box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
 }
@@ -916,7 +927,7 @@ tbody tr:nth-child(even) {
 
 .access-faces-fieldset {
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 0.4rem 0.75rem;
   margin: 0;
   display: flex;
@@ -977,7 +988,7 @@ tbody tr:nth-child(even) {
   flex: 2 1 480px;
   min-width: 0;
   border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--input-bg);
   overflow: hidden;
 }
@@ -1019,7 +1030,7 @@ tbody tr:nth-child(even) {
   padding: 1.1rem 1.25rem;
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: 0 2px 10px rgba(2, 3, 5, 0.18);
   flex: 1 1 340px;
   min-width: 280px;
