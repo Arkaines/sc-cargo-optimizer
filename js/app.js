@@ -2177,7 +2177,9 @@ function renderCargoStepView() {
   const ship = getSelectedShip();
   const orientation = ship ? getCargoViewerOrientation(ship.name) : 0;
   const mirror = ship ? getCargoViewerMirror(ship.name) : false;
-  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, present, orientation, mirror);
+  const savedLayout = ship ? getCargoViewerLayout(ship.name) : {};
+  if (typeof renderCargoViewer3D === "function")
+    renderCargoViewer3D(holds, present, orientation, mirror, savedLayout);
 }
 
 // Calcule et affiche le rangement des marchandises des missions incluses

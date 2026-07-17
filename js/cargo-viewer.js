@@ -188,6 +188,19 @@ function trailingIndex(name) {
   return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
 }
 
+// Clé stable d'un module pour la disposition manuelle (voir
+// state.cargoViewerLayout dans js/app.js). Le nom du hardpoint suffit ; on ne
+// suffixe "#<i>" que si ce nom apparaît plusieurs fois parmi les modules
+// AFFICHÉS (cas théorique — les noms FleetYards observés sont distincts, y
+// compris module_01..04), pour que deux homonymes ne partagent pas la même
+// position mémorisée.
+function moduleKey(hold, displayHolds) {
+  const name = hold.name || "";
+  const sameName = displayHolds.filter((h) => (h.name || "") === name);
+  if (sameName.length <= 1) return name;
+  return `${name}#${sameName.indexOf(hold)}`;
+}
+
 // Les 4 étiquettes de repère à plat, dans l'ordre où elles occupent les 4
 // coins de la scène à rotation nulle : indice i -> direction physique
 // +Z, +X, -Z, -X respectivement (voir les positions de makeAxisLabel plus
@@ -332,7 +345,11 @@ window.updateCargoViewerOrientation = function updateCargoViewerOrientation(rota
 // ci-dessus et state.cargoViewerOrientation/cargoViewerMirror dans
 // js/app.js) — ne change aucune position de module, seulement quelle
 // étiquette Avant/Arrière/Gauche/Droite tombe sur quel coin de la scène.
-window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rotation, mirror) {
+// savedLayout : map { [moduleKey]: {x, z} } des grilles que le joueur a
+// placées à la main pour ce vaisseau (state.cargoViewerLayout, js/app.js),
+// ou {}. Nommé savedLayout et pas layout : `layout` est déjà le tableau
+// local des modules affichés, plus bas dans cette fonction.
+window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rotation, mirror, savedLayout) {
   const container = document.getElementById("cargo-viewer-3d");
   if (!container) return;
   currentOrientation = ((rotation || 0) % 4 + 4) % 4;
@@ -494,6 +511,27 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   layout.forEach((l) => {
     l.worldPos[0] -= minX;
     l.worldPos[2] -= minZ;
+  });
+
+  // Surcharge manuelle du joueur (state.cargoViewerLayout, voir js/app.js) :
+  // écrase x/z des grilles qu'il a glissées, par-dessus la reconstruction
+  // auto. Partielle : un module absent de la map garde sa position auto.
+  // Y (worldPos[1]) inchangé — v1 au sol.
+  // APRÈS la normalisation ci-dessus, volontairement : la normalisation est
+  // une translation de tous les modules ; appliquer la surcharge avant
+  // re-décalerait au rendu suivant une position tout juste enregistrée (ce
+  // qu'on mémorise ne serait pas ce qu'on récupère). Ici la valeur mémorisée
+  // est exactement la valeur dessinée — aller-retour stable. Les positions
+  // enregistrées sont bornées à >= 0 au glisser (voir onPointerUp), donc tout
+  // reste en coordonnées positives et le calcul des bornes/étiquettes qui
+  // suit (sceneBounds suppose une origine à 0) reste valide.
+  const overrides = savedLayout || {};
+  layout.forEach((l) => {
+    const custom = overrides[moduleKey(l.hold, displayHolds)];
+    if (custom) {
+      l.worldPos[0] = custom.x;
+      l.worldPos[2] = custom.z;
+    }
   });
 
   let maxDy = 0;
