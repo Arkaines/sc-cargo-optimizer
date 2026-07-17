@@ -1019,6 +1019,25 @@ th {
   flex-wrap: wrap;
 }
 
+/* Les champs de taille tiennent sur UNE ligne. Sans ça, les règles globales
+   (input,select { width:100% } et label { display:block }) font de chaque
+   champ un item flex pleine largeur : la ligne se plie en huit, l'éditeur
+   mange ~440 px de haut et repousse la vue 3D hors de l'écran — ce qui a
+   déjà valu de croire les contrôles absents alors qu'ils étaient plus bas. */
+.admin-grid-row label {
+  display: inline;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.admin-grid-row input[type="number"] {
+  width: 4.5rem;
+}
+
+.admin-grid-row select {
+  width: auto;
+}
+
 .btn-view-sm {
   padding: 0.35rem 0.7rem;
   font-size: 0.8rem;
