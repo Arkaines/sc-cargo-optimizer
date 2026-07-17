@@ -184,7 +184,7 @@ const TRANSLATIONS = {
     editLayoutDoneBtn: "Terminer",
     resetLayoutBtn: "Réinitialiser la disposition",
     editLayoutHint:
-      "Glisse chaque grille à sa vraie place sur le vaisseau (aimantage sur 1 SCU = 1,25 m). La vue est bloquée de dessus et les caisses sont masquées pendant l'édition.",
+      "Glisse chaque grille à sa vraie place (aimantage sur 1 SCU = 1,25 m). Tu déplaces dans le plan que tu regardes : en vue de dessus au sol, en vue avant ou de côté tu règles la hauteur. Change de vue avec les boutons ci-dessous.",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -396,7 +396,7 @@ const TRANSLATIONS = {
     editLayoutDoneBtn: "Done",
     resetLayoutBtn: "Reset layout",
     editLayoutHint:
-      "Drag each grid to its real place on the ship (snaps to 1 SCU = 1.25 m). The view is locked top-down and crates are hidden while editing.",
+      "Drag each grid to its real place (snaps to 1 SCU = 1.25 m). You move within the plane you are looking at: top view moves it along the floor, front or side view sets its height. Switch views with the buttons below.",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",

@@ -1097,8 +1097,8 @@ window.resetCargoViewerLayout = function resetCargoViewerLayout() {
 
 // Bascule l'interface du visualiseur entre usage normal et mode édition de
 // la disposition : en édition, seuls « Terminer » et « Réinitialiser » ont
-// du sens (les vues/rotation/miroir sont masquées, la vue est bloquée de
-// dessus par setCargoLayoutEditing).
+// du sens (rotation/miroir sont masqués ; les boutons de vue préréglée
+// restent visibles, c'est ainsi qu'on choisit le plan de glisser-déposer).
 function setCargoLayoutEditUI(editing) {
   document.getElementById("cargo-viewer-edit-btn").style.display = editing ? "none" : "";
   document.getElementById("cargo-viewer-edit-done-btn").style.display = editing ? "" : "none";
@@ -1106,9 +1106,6 @@ function setCargoLayoutEditUI(editing) {
   document.getElementById("cargo-edit-hint").style.display = editing ? "" : "none";
   document.getElementById("cargo-viewer-rotate-btn").style.display = editing ? "none" : "";
   document.getElementById("cargo-viewer-mirror-btn").style.display = editing ? "none" : "";
-  document.querySelectorAll(".cargo-viewer-controls .btn-view-sm[data-view]").forEach((b) => {
-    b.style.display = editing ? "none" : "";
-  });
 }
 
 function enterCargoLayoutEdit() {

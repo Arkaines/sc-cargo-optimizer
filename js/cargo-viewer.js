@@ -722,14 +722,32 @@ window.setCargoViewerView = setCargoViewerView;
 // Le curseur est projeté sur le plan du sol (Y=0) ; le module suit, aimanté
 // sur 1 SCU (UNIT = 1,25 m) et borné à >= 0 pour que tous les modules restent
 // en coordonnées positives (voir la surcharge dans renderCargoViewer3D).
-const dragGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// Le glisser se fait dans le plan qu'on REGARDE : vu de dessus on déplace au
+// sol (X/Z), vu de face ou de côté on déplace en hauteur (Y) + un axe
+// horizontal. Sans ça, la hauteur serait inéditable — vue de dessus, un
+// changement de hauteur est invisible. La rotation libre étant désactivée en
+// édition, la caméra est toujours sur l'une des 6 vues préréglées, donc
+// l'axe dominant est franc et le plan jamais ambigu.
+const dragPlane = new THREE.Plane();
+// Axes déplacés selon la normale du plan : "y" -> X/Z, "z" -> X/Y, "x" -> Z/Y.
+let dragAxes = { normal: "y", a: "x", b: "z" };
+
+function pickDragAxes() {
+  const dir = new THREE.Vector3().subVectors(controls.target, camera.position);
+  const ax = Math.abs(dir.x);
+  const ay = Math.abs(dir.y);
+  const az = Math.abs(dir.z);
+  if (ay >= ax && ay >= az) return { normal: "y", a: "x", b: "z" }; // dessus/dessous
+  if (az >= ax) return { normal: "z", a: "x", b: "y" }; // avant/arrière
+  return { normal: "x", a: "z", b: "y" }; // gauche/droite
+}
 const dragRaycaster = new THREE.Raycaster();
 const dragPointerNdc = new THREE.Vector2();
 const dragHitPoint = new THREE.Vector3();
 let dragTarget = null;
 let dragMoved = false;
-let dragGrabOffsetX = 0;
-let dragGrabOffsetZ = 0;
+let dragGrabOffsetA = 0;
+let dragGrabOffsetB = 0;
 
 function snapToUnit(v) {
   return Math.max(0, Math.round(v / UNIT) * UNIT);
@@ -749,32 +767,42 @@ function onLayoutPointerDown(event) {
   if (!hits.length) return;
   dragTarget = hits[0].object;
   dragMoved = false;
-  if (!dragRaycaster.ray.intersectPlane(dragGroundPlane, dragHitPoint)) {
+  dragAxes = pickDragAxes();
+  // Plan passant par la position COURANTE du module (pas par l'origine du
+  // monde) : un module déjà surélevé par la reconstruction auto est loin du
+  // plan Y=0, et le rayon y croiserait bien à côté — décalage de préhension
+  // faussé, la grille sauterait au premier mouvement.
+  const n = dragAxes.normal;
+  const normalVec = new THREE.Vector3(n === "x" ? 1 : 0, n === "y" ? 1 : 0, n === "z" ? 1 : 0);
+  dragPlane.setFromNormalAndCoplanarPoint(normalVec, dragTarget.position);
+  if (!dragRaycaster.ray.intersectPlane(dragPlane, dragHitPoint)) {
     dragTarget = null;
     return;
   }
-  // Décalage entre le point saisi et l'origine du module, pour que la grille
-  // ne saute pas sous le curseur au premier mouvement.
-  const { dx, dz } = dragTarget.userData.dims;
-  dragGrabOffsetX = dragHitPoint.x - (dragTarget.position.x - dx / 2);
-  dragGrabOffsetZ = dragHitPoint.z - (dragTarget.position.z - dz / 2);
+  const dims = dragTarget.userData.dims;
+  const halfOf = { x: dims.dx / 2, y: dims.dy / 2, z: dims.dz / 2 };
+  // Décalage entre le point saisi et l'origine du module, sur les 2 axes
+  // mobiles seulement — pour que la grille ne saute pas sous le curseur.
+  dragGrabOffsetA = dragHitPoint[dragAxes.a] - (dragTarget.position[dragAxes.a] - halfOf[dragAxes.a]);
+  dragGrabOffsetB = dragHitPoint[dragAxes.b] - (dragTarget.position[dragAxes.b] - halfOf[dragAxes.b]);
   controls.enabled = false; // le geste ne doit pas bouger la caméra
 }
 
 function onLayoutPointerMove(event) {
   if (!editingLayout || !dragTarget) return;
   updateDragPointer(event);
-  if (!dragRaycaster.ray.intersectPlane(dragGroundPlane, dragHitPoint)) return;
-  const { dx, dz } = dragTarget.userData.dims;
-  const originX = snapToUnit(dragHitPoint.x - dragGrabOffsetX);
-  const originZ = snapToUnit(dragHitPoint.z - dragGrabOffsetZ);
-  const currentOriginX = dragTarget.position.x - dx / 2;
-  const currentOriginZ = dragTarget.position.z - dz / 2;
-  if (originX !== currentOriginX || originZ !== currentOriginZ) dragMoved = true;
-  dragTarget.position.x = originX + dx / 2;
-  dragTarget.position.z = originZ + dz / 2;
-  dragTarget.userData.wireframe.position.x = originX;
-  dragTarget.userData.wireframe.position.z = originZ;
+  if (!dragRaycaster.ray.intersectPlane(dragPlane, dragHitPoint)) return;
+  const dims = dragTarget.userData.dims;
+  const halfOf = { x: dims.dx / 2, y: dims.dy / 2, z: dims.dz / 2 };
+  const originA = snapToUnit(dragHitPoint[dragAxes.a] - dragGrabOffsetA);
+  const originB = snapToUnit(dragHitPoint[dragAxes.b] - dragGrabOffsetB);
+  const currentA = dragTarget.position[dragAxes.a] - halfOf[dragAxes.a];
+  const currentB = dragTarget.position[dragAxes.b] - halfOf[dragAxes.b];
+  if (originA !== currentA || originB !== currentB) dragMoved = true;
+  dragTarget.position[dragAxes.a] = originA + halfOf[dragAxes.a];
+  dragTarget.position[dragAxes.b] = originB + halfOf[dragAxes.b];
+  dragTarget.userData.wireframe.position[dragAxes.a] = originA;
+  dragTarget.userData.wireframe.position[dragAxes.b] = originB;
 }
 
 function onLayoutPointerUp() {
