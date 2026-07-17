@@ -1075,7 +1075,12 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
         // module qui contient déjà la cargaison d'un autre contrat, pour
         // garder chaque contrat groupé plutôt que mélangé avec d'autres.
         if (!placed) {
-          const isCompatible = (m) => m.activeBoxes.length === 0 || m.activeBoxes.every((a) => a.missionId === missionId);
+          // Un obstacle réservé (véhicule garé, missionId absent) ne rend PAS un
+          // module « occupé par un autre contrat » : il est neutre vis-à-vis du
+          // regroupement, d'où `a.reserved ||`. Sans ça, un module réservé mais
+          // par ailleurs vide serait trié comme s'il appartenait à autrui.
+          const isCompatible = (m) =>
+            m.activeBoxes.length === 0 || m.activeBoxes.every((a) => a.reserved || a.missionId === missionId);
           const byFreeSpace = modules
             .slice()
             .filter((m) => !(m.hold.maxContainerSize && b.box.scu > m.hold.maxContainerSize))
