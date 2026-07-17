@@ -185,15 +185,21 @@ function parsePositionHint(name) {
   return { z, x, y, recognized: z !== 0 || x !== 0 || y !== 0 };
 }
 
-// Indice numérique de fin de nom ("hardpoint_cargogrid_module_03" -> 3),
-// pour ordonner les baies répétées et numérotées d'un vaisseau-colonne (ex.
-// les 4 baies du Caterpillar) dans leur ordre réel plutôt qu'au hasard de
-// l'ordre de l'API FleetYards. Un module sans numéro (ex. "nose") revient
-// après les numérotés dans cet ordre secondaire, mais son indice avant/
-// arrière (front) le fait passer devant, à l'avant (voir le tri de la
-// colonne de repli plus bas).
-function trailingIndex(name) {
-  const m = (name || "").match(/(\d+)\s*$/);
+// Numéro de baie porté par un nom de hardpoint, pour ordonner les baies
+// répétées et numérotées d'un vaisseau-colonne (ex. le Caterpillar) dans
+// leur ordre réel plutôt qu'au hasard de l'ordre de l'API FleetYards.
+// On prend le DERNIER nombre du nom, où qu'il soit, et pas seulement un
+// nombre en fin de nom : les annexes d'une baie sont suffixées
+// ("module_01" mais aussi "module_01_ladder", "module_01_walkway"), donc
+// chercher un nombre en fin de nom les renvoyait toutes à l'infini, en vrac
+// et détachées de leur baie. Avec le dernier nombre, elles partagent
+// l'indice de leur baie et restent groupées avec elle.
+// Un module sans aucun numéro (ex. "nose") reste à l'infini, donc après les
+// numérotés dans cet ordre secondaire — mais son indice avant/arrière
+// (front) le fait passer devant, à l'avant (voir le tri de la colonne de
+// repli plus bas).
+function moduleIndex(name) {
+  const m = (name || "").match(/(\d+)(?!.*\d)/);
   return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
 }
 
@@ -371,22 +377,28 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   ensureScene(container);
   clearContent();
 
-  // FleetYards détaille parfois la soute d'un vaisseau en plusieurs petits
-  // modules structurels annexes (échelle, passerelle, accès nez...) en plus
-  // des vraies baies de cargo — tous comptent pour le rangement, mais les
-  // afficher rend la vue illisible et ils ne correspondent à aucune vraie
-  // grille de rangement dans le jeu. On les masque par leur NOM de hardpoint
-  // (ladder/walkway/access/stair...), pas par un seuil de capacité :
-  // l'ancien seuil « au moins 25 % de la plus grosse baie » cachait à tort
-  // les vraies petites soutes sécurisées de l'Ironclad (5 grilles de 8 SCU,
-  // face à des baies principales de 720) alors que ce sont de vrais
-  // emplacements de rangement, pas des éléments de structure. Un module qui
-  // contient effectivement une caisse à cette étape est toujours affiché,
-  // quoi qu'il arrive (filet de sécurité).
-  const STRUCTURAL_NAME_RE = /ladder|walkway|catwalk|stair|access|corridor|ramp|elevator|\blift\b/i;
-  const displayHolds = holds.filter(
-    (h) => !STRUCTURAL_NAME_RE.test(h.name || "") || placements.some((p) => p.module === h)
-  );
+  // On affiche TOUTES les soutes, sans exception : chaque entrée que
+  // FleetYards renvoie a une capacité réelle, compte dans la capacité totale
+  // du vaisseau, et sert effectivement au rangement (js/cargo-packing.js
+  // reçoit `holds` en entier). En cacher une revient à masquer de la place
+  // de cargo que le joueur a le droit d'utiliser — et où une caisse peut
+  // déjà se trouver.
+  //
+  // Deux filtres successifs ont été essayés ici, tous deux faux :
+  //  - un seuil de capacité (« au moins 25 % de la plus grosse baie ») :
+  //    cachait les 5 vraies soutes sécurisées de l'Ironclad (8 SCU face à
+  //    des baies de 720) ;
+  //  - un filtre par nom de hardpoint (ladder/walkway/access...) : sur le
+  //    Caterpillar il cachait 9 soutes sur 14, soit 132 SCU. Ces échelles et
+  //    passerelles ne sont PAS de la structure décorative : les 14 soutes
+  //    totalisent 576 SCU, exactement la capacité officielle du Caterpillar
+  //    (voir data/ships.js) — ce sont de vraies grilles utilisables.
+  //
+  // La disposition reconstruite reste une supposition, mais le joueur peut
+  // désormais corriger chaque grille à la main (« Éditer la disposition »),
+  // ce qui est la bonne réponse à une vue chargée — pas le fait de cacher
+  // des grilles réelles.
+  const displayHolds = holds;
 
   // FleetYards.net fournit parfois la vraie position relative de chaque
   // module (offset). Pour un vaisseau comme le Hull B, les 16 modules ont
@@ -505,7 +517,7 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   // parcourant la colonne dans l'ordre inverse.
   const rowFrontToBack = fallbackRow
     .slice()
-    .sort((a, b) => b.hint.z - a.hint.z || trailingIndex(a.hold.name) - trailingIndex(b.hold.name));
+    .sort((a, b) => b.hint.z - a.hint.z || moduleIndex(a.hold.name) - moduleIndex(b.hold.name));
   const rowWidth = rowFrontToBack.reduce((max, l) => Math.max(max, l.dx), 0);
   let rowZ = 0;
   rowFrontToBack
