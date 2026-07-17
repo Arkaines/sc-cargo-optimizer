@@ -794,28 +794,43 @@ function placeInBestModule(candidateModules, box, dropoffStop, idealDepthForModu
 // canStackOn/hasValidSupport, `<= undefined` renvoie false -> refus sûr. La
 // réservation étant pleine hauteur, aucune cellule n'existe au-dessus d'elle,
 // donc ce cas ne se produit pas — la sentinelle est une ceinture-bretelle.
+// Clé désambiguïsée d'un module — RÉPLIQUE EXACTE de moduleKey dans
+// js/cargo-viewer.js (module ES, non importable ici). Les deux côtés (rendu et
+// rangement) doivent la calculer identiquement pour un même `holds`, sinon une
+// réservation posée sur une soute ne serait pas retrouvée par le packer. À
+// garder synchronisée avec le visualiseur (duplication assumée, cf. CLAUDE.md).
+function moduleKey(hold, holds) {
+  const name = hold.name || "";
+  const sameName = holds.filter((h) => (h.name || "") === name);
+  if (sameName.length <= 1) return name;
+  return `${name}#${sameName.indexOf(hold)}`;
+}
+
 const RESERVED_CELL = { reserved: true };
 
-// Valide et normalise la réservation d'un module. Renvoie { x0, y0, sx, sy }
-// (empreinte en cellules sur les axes 0 et 1) ou null si absente/invalide.
-// Le packer ne fait jamais confiance à son entrée : une empreinte hors module,
-// de taille nulle/négative, ou non entière, est ignorée (traitée comme absente)
-// plutôt que de faire planter le rangement.
-function resolveReservation(reservations, hold, cellDims) {
-  if (!reservations) return null;
-  const r = reservations[hold.name];
-  if (!r) return null;
-  const { x0, y0, sx, sy } = r;
-  // Entier fini, sans dépendre de `Number` (le contexte vm du harnais de test
-  // n'expose que { Object, Math, Array, String } comme variables globales —
-  // `Number.isInteger` n'y est pas garanti). `v * 0 === 0` est vrai seulement
-  // pour un nombre fini (Infinity*0 et NaN*0 valent NaN) ; `Math.floor(v) === v`
-  // exige l'entier. N'utilise que typeof, l'arithmétique et Math : toujours dispo.
+// Valide et normalise la LISTE de réservations d'un module (une empreinte par
+// véhicule garé). Lue sous la clé désambiguïsée moduleKey (soutes homonymes
+// indépendantes). Renvoie un tableau des empreintes valides ({x0,y0,sx,sy}) ;
+// [] si aucune. Le packer ne fait jamais confiance à son entrée : une empreinte
+// hors module, de taille nulle/négative, ou non entière, est écartée (pas de
+// plantage). Une valeur non-tableau (clé absente, forme inattendue) -> [].
+function resolveReservations(reservations, hold, holds, cellDims) {
+  if (!reservations) return [];
+  const list = reservations[moduleKey(hold, holds)];
+  if (!Array.isArray(list)) return [];
+  // Entier fini sans dépendre de `Number` (contexte vm restreint) : `v*0===0`
+  // écarte Infinity/NaN, `Math.floor(v)===v` exige l'entier.
   const isCell = (v) => typeof v === "number" && v * 0 === 0 && Math.floor(v) === v;
-  if (![x0, y0, sx, sy].every(isCell)) return null;
-  if (sx < 1 || sy < 1 || x0 < 0 || y0 < 0) return null;
-  if (x0 + sx > cellDims[0] || y0 + sy > cellDims[1]) return null;
-  return { x0, y0, sx, sy };
+  const out = [];
+  for (const r of list) {
+    if (!r) continue;
+    const { x0, y0, sx, sy } = r;
+    if (![x0, y0, sx, sy].every(isCell)) continue;
+    if (sx < 1 || sy < 1 || x0 < 0 || y0 < 0) continue;
+    if (x0 + sx > cellDims[0] || y0 + sy > cellDims[1]) continue;
+    out.push({ x0, y0, sx, sy });
+  }
+  return out;
 }
 
 function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reservations) {
@@ -845,13 +860,12 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
     // vers les axes réels de CE module (voir accessibleFaceAxes) — réutilisé
     // pour toutes les caisses de ce module.
     module.faceAxes = accessibleFaceAxes(accessFaces, module);
-    // Zone réservée à un véhicule garé (brique A) : obstacle permanent pleine
-    // hauteur. On pré-marque ses cellules (rien ne s'y range) ET on l'injecte
-    // dans activeBoxes comme obstacle qui ne part jamais (dropoffStop=Infinity),
-    // pour la garde dure d'accès de findBestPosition/tryStackOnExisting.
-    const reservation = resolveReservation(reservations, h, cellDims);
-    if (reservation) {
-      const { x0, y0, sx, sy } = reservation;
+    // Zones réservées à des véhicules garés (brique A′) : 0..N obstacles
+    // permanents pleine hauteur par module. Chacun pré-marque ses cellules
+    // (rien ne s'y range) ET s'injecte dans activeBoxes comme obstacle qui ne
+    // part jamais (dropoffStop=Infinity), pour la garde dure d'accès de
+    // findBestPosition/tryStackOnExisting (inchangée : elle fait some(reserved)).
+    resolveReservations(reservations, h, holds, cellDims).forEach(({ x0, y0, sx, sy }) => {
       const size = [sx, sy, cellDims[2]];
       markPlaced(module.grid, [x0, y0, 0], size, RESERVED_CELL);
       // Pas de mise à jour de usedCells : ce compteur suit les caisses rangées,
@@ -862,7 +876,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
         dropoffStop: Infinity, // jamais retiré (aucun step === Infinity)
         reserved: true,
       });
-    }
+    });
     return module;
   });
   const shipMaxContainerSize = holds.reduce((max, h) => Math.max(max, h.maxContainerSize || 32), 1);

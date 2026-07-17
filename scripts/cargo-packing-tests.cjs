@@ -742,7 +742,7 @@ test("reserved: crate never occupies a reserved cell", () => {
   const ctx = loadCargoPacking();
   const holds = [{ name: "bay", dimensions: { x: 6.25, y: 6.25, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
   const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
-  const reservations = { bay: { x0: 0, y0: 0, sx: 2, sy: 2 } };
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 2, sy: 2 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
   r.placements.forEach((p) => {
     assert.ok(!overlapsReserved(p, 0, 0, 2, 2), "un placement recouvre la zone réservée");
@@ -757,7 +757,7 @@ test("reserved: whole module reserved -> nothing placed there", () => {
     { name: "free", dimensions: { x: 2.5, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 },
   ];
   const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
-  const reservations = { full: { x0: 0, y0: 0, sx: 2, sy: 2 } };
+  const reservations = { full: [{ x0: 0, y0: 0, sx: 2, sy: 2 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
   const inFull = r.placements.filter((p) => p.module.name === "full");
   assert.strictEqual(inFull.length, 0, "une caisse s'est placée dans le module entièrement réservé");
@@ -771,10 +771,10 @@ test("reserved: invalid reservation is ignored", () => {
   const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
   const base = ctx.simulateRoutePacking(entries, holds, 2);
   const bad = [
-    { bay: { x0: 0, y0: 0, sx: 99, sy: 1 } }, // déborde
-    { bay: { x0: 0, y0: 0, sx: 0, sy: 1 } }, // taille nulle
-    { bay: { x0: 0, y0: 0, sx: 1.5, sy: 1 } }, // non entier
-    { bay: { x0: -1, y0: 0, sx: 1, sy: 1 } }, // négatif
+    { bay: [{ x0: 0, y0: 0, sx: 99, sy: 1 }] }, // déborde
+    { bay: [{ x0: 0, y0: 0, sx: 0, sy: 1 }] }, // taille nulle
+    { bay: [{ x0: 0, y0: 0, sx: 1.5, sy: 1 }] }, // non entier
+    { bay: [{ x0: -1, y0: 0, sx: 1, sy: 1 }] }, // négatif
   ];
   bad.forEach((reservations) => {
     const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
@@ -800,7 +800,7 @@ test("reserved: nothing stacks on the reserved column", () => {
   const holds = [{ name: "bay", dimensions: { x: 2.5, y: 1.25, z: 2.5 }, capacity: 999, maxContainerSize: 32 }];
   // Beaucoup de petites caisses : sans réservation certaines s'empilent (z>0).
   const entries = [{ quantity: 4, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
-  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 1, sy: 1 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
   r.placements.forEach((p) => {
     assert.ok(!overlapsReserved(p, 0, 0, 1, 1), "une caisse occupe la colonne réservée (empilée ou non)");
@@ -811,7 +811,7 @@ test("reserved: the parked-vehicle obstacle is never a reported conflict", () =>
   const ctx = loadCargoPacking();
   const holds = [{ name: "bay", dimensions: { x: 3.75, y: 1.25, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
   const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
-  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 1, sy: 1 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
   r.conflicts.forEach((c) => assert.ok(c.entry, "un conflit sans entry = l'obstacle réservé a fui dans les conflits"));
 });
@@ -832,7 +832,7 @@ test("reserved: hard barrier — nothing placed behind the vehicle (single face)
   const holds = [{ name: "bay", dimensions: { x: 1.25, y: 5.0, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
   const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
   const accessFaces = { back: true }; // clé réelle (voir moduleFaceAxes) ; défaut aussi = { back:true }
-  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 1, sy: 1 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 2, accessFaces, reservations);
   // La seule caisse ne peut être ni dans la réservation ni derrière : non placée.
   assert.strictEqual(r.placements.length, 0, "une caisse a été placée derrière le véhicule");
@@ -850,7 +850,7 @@ test("reserved: an unblocked access face still allows placement", () => {
   // ET "front" (far, coord max). La réservation à la profondeur 0 ne bloque pas
   // depuis "front" -> une caisse en profondeur 1..3 reste atteignable.
   const accessFaces = { back: true, front: true };
-  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 1, sy: 1 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 2, accessFaces, reservations);
   assert.strictEqual(r.placements.length, 1, "la caisse devrait être atteignable par la face non bloquée");
   assert.ok(!overlapsReserved(r.placements[0], 0, 0, 1, 1));
@@ -869,12 +869,68 @@ test("reserved: a reservation that blocks nobody leaves packing unchanged", () =
   // Réservation dans un coin éloigné où rien ne se serait de toute façon placé
   // et qui ne borde aucune caisse posée (à ajuster si le placement de base
   // l'atteint : la choisir hors des cellules réellement occupées par `base`).
-  const reservations = { bay: { x0: 0, y0: 1, sx: 1, sy: 1 } };
+  const reservations = { bay: [{ x0: 0, y0: 1, sx: 1, sy: 1 }] };
   const r = ctx.simulateRoutePacking(entries, holds, 4, undefined, reservations);
   const occupied = base.placements.some((p) => overlapsReserved(p, 0, 1, 1, 1));
   assert.ok(!occupied, "cas de test mal choisi : la réservation touche une caisse du rangement de base");
   assert.deepStrictEqual(r.placements.map((p) => p.position), base.placements.map((p) => p.position));
   assert.strictEqual(r.conflicts.length, base.conflicts.length);
+});
+
+// ===== Brique A′ : clé moduleKey + liste par module ======================
+
+// Deux empreintes disjointes dans un même module : aucune caisse ne les occupe.
+test("reserved A': two footprints in one module are both excluded", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 6.25, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 1, sy: 1 }, { x0: 4, y0: 1, sx: 1, sy: 1 }] };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  r.placements.forEach((p) => {
+    assert.ok(!overlapsReserved(p, 0, 0, 1, 1), "caisse dans la 1re empreinte réservée");
+    assert.ok(!overlapsReserved(p, 4, 1, 1, 1), "caisse dans la 2e empreinte réservée");
+  });
+});
+
+// Soutes homonymes indépendantes : réserver "bay#1" ne touche pas "bay" (index 0).
+test("reserved A': homonymous holds are keyed independently", () => {
+  const ctx = loadCargoPacking();
+  const holds = [
+    { name: "bay", dimensions: { x: 2.5, y: 1.25, z: 1.25 }, capacity: 999, maxContainerSize: 32 },
+    { name: "bay", dimensions: { x: 2.5, y: 1.25, z: 1.25 }, capacity: 999, maxContainerSize: 32 },
+  ];
+  const entries = [{ quantity: 2, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  // Réservation UNIQUEMENT sur le 2e hold (clé "bay#1").
+  const reservations = { "bay#1": [{ x0: 0, y0: 0, sx: 2, sy: 1 }] };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  // Le 2e hold (index 1) est entièrement réservé -> aucune caisse ; tout va au 1er.
+  // On distingue les deux holds homonymes par identité d'objet du hold placé.
+  const inSecond = r.placements.filter((p) => p.module === holds[1]);
+  assert.strictEqual(inSecond.length, 0, "une caisse a atterri dans le hold réservé bay#1");
+});
+
+// Liste vide et clé absente : identiques à sans réservation.
+test("reserved A': empty list and missing key behave like no reservation", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 2.5, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 2, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const base = ctx.simulateRoutePacking(entries, holds, 2);
+  const empty = ctx.simulateRoutePacking(entries, holds, 2, undefined, { bay: [] });
+  const missing = ctx.simulateRoutePacking(entries, holds, 2, undefined, { other: [{ x0: 0, y0: 0, sx: 1, sy: 1 }] });
+  assert.deepStrictEqual(empty.placements.map((p) => p.position), base.placements.map((p) => p.position));
+  assert.deepStrictEqual(missing.placements.map((p) => p.position), base.placements.map((p) => p.position));
+});
+
+// Une empreinte invalide dans une liste par ailleurs valide : seule la valide s'applique.
+test("reserved A': an invalid footprint in a list is skipped, valid ones apply", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 6.25, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const reservations = { bay: [{ x0: 0, y0: 0, sx: 99, sy: 1 }, { x0: 0, y0: 0, sx: 1, sy: 1 }] };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, undefined, reservations);
+  // La bonne (0,0,1,1) est exclue ; la mauvaise est ignorée (pas de plantage).
+  r.placements.forEach((p) => assert.ok(!overlapsReserved(p, 0, 0, 1, 1)));
+  assert.strictEqual(r.placements.length, 1, "la caisse doit se placer ailleurs, pas disparaître");
 });
 
 let failed = 0;
