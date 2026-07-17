@@ -844,8 +844,12 @@ window.setCargoViewerView = setCargoViewerView;
 // positions de TOUS les modules, y compris ceux placés par la
 // reconstruction automatique. Rien d'autre ne les expose.
 window.getResolvedCargoGrid = function getResolvedCargoGrid() {
+  const holds = lastResolvedLayout.map((l) => l.hold);
   return lastResolvedLayout.map((l) => ({
     name: l.hold.name,
+    // Clé désambiguïsée IDENTIQUE à celle du packer (brique A′) : indispensable
+    // pour que la réservation stockée soit retrouvée module par module.
+    moduleKey: moduleKey(l.hold, holds),
     dimensions: { x: l.hold.dimensions.x, y: l.hold.dimensions.y, z: l.hold.dimensions.z },
     capacity: l.hold.capacity,
     maxContainerSize: l.hold.maxContainerSize,

@@ -1030,6 +1030,50 @@ function getShipReservations(shipName) {
   return (shipName && state.cargoReservations[shipName]) || {};
 }
 
+// Convertit une grille virtuelle (véhicule) posée LIBREMENT dans la vue 3D en
+// réservations par module, dans le repère du packer. Le piège est l'échange
+// Y/Z du visualiseur (voir renderCargoViewer3D) : le SOL de la vue est le plan
+// (viewer-X, viewer-Z) = (packing-x axe 0, packing-y axe 1). On calcule
+// l'intersection de l'empreinte monde du véhicule avec le rectangle de sol de
+// CHAQUE module, puis on la ramène en cellules locales de ce module. Un module
+// n'est pas forcément aligné sur la grille (MODULE_GAP=1.5), d'où l'arrondi.
+// vx, vz : coin monde du véhicule sur viewer-X / viewer-Z (mètres).
+// sxCells, syCells : taille du véhicule en cellules (axe 0, axe 1).
+// resolvedGrid : sortie de getResolvedCargoGrid() (avec moduleKey).
+// Retour : [ { moduleKey, x0, y0, sx, sy } ] par module réellement recouvert.
+function resolveVehicleReservations(vx, vz, sxCells, syCells, resolvedGrid) {
+  const U = UNIT_M;
+  const vx1 = vx + sxCells * U;
+  const vz1 = vz + syCells * U;
+  const out = [];
+  (resolvedGrid || []).forEach((m) => {
+    const wx = m.position.x;
+    const wz = m.position.z;
+    const wx1 = wx + m.dimensions.x; // dim.x le long de viewer-X
+    const wz1 = wz + m.dimensions.y; // dim.y le long de viewer-Z
+    const ix0 = Math.max(vx, wx);
+    const ix1 = Math.min(vx1, wx1);
+    const iz0 = Math.max(vz, wz);
+    const iz1 = Math.min(vz1, wz1);
+    if (ix1 - ix0 <= 1e-6 || iz1 - iz0 <= 1e-6) return; // pas d'intersection réelle
+    const cellsX = Math.max(1, Math.round(m.dimensions.x / U));
+    const cellsY = Math.max(1, Math.round(m.dimensions.y / U));
+    let x0 = Math.round((ix0 - wx) / U);
+    let y0 = Math.round((iz0 - wz) / U);
+    let sx = Math.round((ix1 - ix0) / U);
+    let sy = Math.round((iz1 - iz0) / U);
+    // Borne dans la grille du module ; un chevauchement < 1 cellule après
+    // arrondi (le véhicule n'effleure qu'un liseré) est ignoré.
+    x0 = Math.max(0, Math.min(x0, cellsX - 1));
+    y0 = Math.max(0, Math.min(y0, cellsY - 1));
+    sx = Math.min(Math.max(sx, 0), cellsX - x0);
+    sy = Math.min(Math.max(sy, 0), cellsY - y0);
+    if (sx < 1 || sy < 1) return;
+    out.push({ moduleKey: m.moduleKey, x0, y0, sx, sy });
+  });
+  return out;
+}
+
 // Orientation Avant/Arrière/Gauche/Droite de la vue 3D : rotation (0-3, par
 // pas de 90°) + miroir (voir js/cargo-viewer.js:currentOrientation/
 // currentMirror) — FleetYards ne donne parfois aucune position réelle pour
