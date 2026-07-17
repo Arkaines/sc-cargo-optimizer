@@ -219,3 +219,39 @@ function initCloudSync() {
     }
   });
 }
+
+// =========================================================================
+// Grilles de cargo publiées (table ship_layouts) et statut admin.
+// Lecture publique : marche même sans compte. Toute erreur (tables pas
+// encore créées, hors-ligne...) est avalée et rend une valeur neutre —
+// l'app doit continuer exactement comme avant si Supabase n'est pas là.
+// =========================================================================
+async function fetchApprovedShipGrids() {
+  if (!sb) return {};
+  try {
+    const { data, error } = await sb.from("ship_layouts").select("ship_name, grid, orientation, mirror");
+    if (error) throw error;
+    const byShip = {};
+    (data || []).forEach((row) => {
+      byShip[row.ship_name] = { grid: row.grid, orientation: row.orientation || 0, mirror: !!row.mirror };
+    });
+    return byShip;
+  } catch (err) {
+    console.warn("Grilles publiées indisponibles :", err.message);
+    return {};
+  }
+}
+
+// Le client ne fait que DEMANDER s'il est admin, pour afficher l'éditeur.
+// L'autorité est la RLS : un non-admin qui forcerait true côté client se
+// ferait refuser toute écriture par la base.
+async function fetchIsAdmin() {
+  if (!sb || !cloudUserId) return false;
+  try {
+    const { data, error } = await sb.from("admins").select("user_id").eq("user_id", cloudUserId).maybeSingle();
+    if (error) throw error;
+    return !!data;
+  } catch (err) {
+    return false;
+  }
+}

@@ -40,6 +40,9 @@ function defaultState() {
     cargoViewerOrientation: {},
     cargoViewerMirror: {},
     cargoViewerLayout: {},
+    // Grilles publiées (Supabase, table ship_layouts) : { [ship]: {grid, orientation, mirror} }.
+    // Cache local relu à chaque synchro, comme fleetyardsCargoHolds.
+    approvedShipGrids: {},
     dataSchemaVersion: DATA_SCHEMA_VERSION,
   };
 }
@@ -130,6 +133,7 @@ function loadState() {
       cargoViewerOrientation: parsed.cargoViewerOrientation || {},
       cargoViewerMirror: parsed.cargoViewerMirror || {},
       cargoViewerLayout: parsed.cargoViewerLayout || {},
+      approvedShipGrids: parsed.approvedShipGrids || {},
       dataSchemaVersion: parsed.dataSchemaVersion || 0,
     };
   } catch (e) {
@@ -143,6 +147,10 @@ let state = loadState();
 // mission" (null quand le formulaire sert à en créer une nouvelle) — voir
 // startEditMission/cancelEditMission.
 let editingMissionId = null;
+// Rempli au chargement depuis Supabase (voir fetchIsAdmin) — jamais persisté :
+// un cache local ne doit pas pouvoir accorder l'admin. Ne sert qu'à afficher
+// l'éditeur ; l'autorité reste la RLS côté base.
+let isAdminUser = false;
 // Taille maximum de caisse reconnue par le dernier import OCR passé en revue
 // dans le formulaire "Nouvelle mission" (pas de champ de formulaire dédié :
 // portée jusqu'à la soumission via cette variable, comme editingMissionId).
@@ -3348,6 +3356,15 @@ async function runFullSync() {
     saveState();
 
     await syncFleetyardsCargoHolds();
+
+    // Grilles publiées + statut admin. Après FleetYards : une grille publiée
+    // le remplace (voir getShipHolds), donc elle doit être lue en dernier.
+    if (typeof fetchApprovedShipGrids === "function") {
+      state.approvedShipGrids = await fetchApprovedShipGrids();
+      saveState();
+    }
+    if (typeof fetchIsAdmin === "function") isAdminUser = await fetchIsAdmin();
+
     renderShipCapacity();
   } catch (err) {
     console.error("Sync automatique échouée :", err);
