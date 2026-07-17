@@ -2222,11 +2222,48 @@ function renderCargoStepView() {
   // pour la voir encore sur la grille.
   const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop >= stepIndex);
   const shipName = getCargoViewerShipName();
-  const orientation = shipName ? getCargoViewerOrientation(shipName) : 0;
-  const mirror = shipName ? getCargoViewerMirror(shipName) : false;
-  const savedLayout = shipName ? getCargoViewerLayout(shipName) : {};
+  // Priorité : grille publiée (positions exactes) > disposition perso
+  // (surcharge partielle) > reconstruction auto. Une grille publiée fait
+  // autorité et remplace le placement perso du joueur.
+  const publishedGrid = shipName ? state.approvedShipGrids[shipName] : null;
+  const publishedPositions = shipName ? getPublishedGridPositions(shipName) : null;
+  const orientation = publishedGrid ? publishedGrid.orientation : shipName ? getCargoViewerOrientation(shipName) : 0;
+  const mirror = publishedGrid ? publishedGrid.mirror : shipName ? getCargoViewerMirror(shipName) : false;
+  const savedLayout = publishedPositions || (shipName ? getCargoViewerLayout(shipName) : {});
   if (typeof renderCargoViewer3D === "function")
     renderCargoViewer3D(holds, present, orientation, mirror, savedLayout);
+}
+
+// Soutes du vaisseau : grille publiée (Supabase) d'abord, FleetYards ensuite.
+// C'est ICI que se fait le détachement — un vaisseau publié n'utilise plus du
+// tout les données FleetYards. On ne branche pas ça dans js/fleetyards.js :
+// ce fichier ne parle que de FleetYards, y mêler Supabase brouillerait une
+// frontière nette.
+function getShipHolds(shipName) {
+  const published = shipName && state.approvedShipGrids[shipName];
+  if (published && Array.isArray(published.grid) && published.grid.length) {
+    return published.grid.map((m) => ({
+      name: m.name,
+      dimensions: m.dimensions,
+      capacity: m.capacity,
+      maxContainerSize: m.maxContainerSize,
+    }));
+  }
+  return typeof getShipCargoHolds === "function" ? getShipCargoHolds(shipName) : null;
+}
+
+// Positions exactes d'une grille publiée, sous la forme attendue par la
+// surcharge du visualiseur ({ [nom de module]: {x,y,z} }). Une grille publiée
+// porte une position pour CHAQUE module : la reconstruction automatique est
+// alors entièrement remplacée, le visualiseur ne devine plus rien.
+function getPublishedGridPositions(shipName) {
+  const published = shipName && state.approvedShipGrids[shipName];
+  if (!published || !Array.isArray(published.grid)) return null;
+  const byName = {};
+  published.grid.forEach((m) => {
+    if (m.position) byName[m.name] = { x: m.position.x, y: m.position.y, z: m.position.z };
+  });
+  return byName;
 }
 
 // Calcule et affiche le rangement des marchandises des missions incluses
@@ -2248,7 +2285,7 @@ function runCargoPacking() {
     return;
   }
 
-  const holds = typeof getShipCargoHolds === "function" ? getShipCargoHolds(ship.name) : null;
+  const holds = getShipHolds(ship.name);
   if (!holds || !holds.length) {
     status.textContent = t("cargoPackNoData");
     if (typeof clearCargoViewer3D === "function") clearCargoViewer3D();
