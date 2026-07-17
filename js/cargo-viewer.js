@@ -53,6 +53,11 @@ let lastFrameKey = null;
 // rotation).
 let currentOrientation = 0;
 let currentMirror = false;
+// Mode « éditer la disposition » (voir js/app.js:enterCargoLayoutEdit) : le
+// joueur glisse les grilles à leur vraie place. Pendant ce mode on masque les
+// caisses, on bloque la rotation caméra (vue de dessus) et on ne recadre
+// jamais la caméra, pour que la vue reste stable d'un glisser à l'autre.
+let editingLayout = false;
 // Métriques et repères des 4 étiquettes du dernier rendu complet (voir
 // renderCargoViewer3D) : permettent à updateCargoViewerOrientation de
 // reconstruire seulement le texte des étiquettes sans toucher au reste de
@@ -552,34 +557,37 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     // Caisses rangées dans ce module (même échange y/z que ci-dessus : les
     // caisses sont calculées par js/cargo-packing.js dans le repère natif
     // x/y/z du hold, position/size gardent donc cet ordre jusqu'ici).
-    placements
-      .filter((p) => p.module === hold)
-      .forEach((p) => {
-        const sx = p.size[0] * UNIT;
-        const sy = p.size[2] * UNIT;
-        const sz = p.size[1] * UNIT;
-        const px = p.position[0];
-        const py = p.position[2];
-        const pz = p.position[1];
-        const geom = new THREE.BoxGeometry(sx * 0.94, sy * 0.94, sz * 0.94); // léger retrait visuel entre caisses
-        const mat = new THREE.MeshStandardMaterial({
-          color: colorForMission(p.entry.mission ? p.entry.mission.id : 0),
-        });
-        const mesh = new THREE.Mesh(geom, mat);
-        mesh.position.set(
-          worldPos[0] + px * UNIT + sx / 2,
-          worldPos[1] + py * UNIT + sy / 2,
-          worldPos[2] + pz * UNIT + sz / 2
-        );
-        contentGroup.add(mesh);
+    // Caisses masquées en mode édition : on place des modules, elles ne font
+    // qu'encombrer la vue de dessus.
+    if (!editingLayout)
+      placements
+        .filter((p) => p.module === hold)
+        .forEach((p) => {
+          const sx = p.size[0] * UNIT;
+          const sy = p.size[2] * UNIT;
+          const sz = p.size[1] * UNIT;
+          const px = p.position[0];
+          const py = p.position[2];
+          const pz = p.position[1];
+          const geom = new THREE.BoxGeometry(sx * 0.94, sy * 0.94, sz * 0.94); // léger retrait visuel entre caisses
+          const mat = new THREE.MeshStandardMaterial({
+            color: colorForMission(p.entry.mission ? p.entry.mission.id : 0),
+          });
+          const mesh = new THREE.Mesh(geom, mat);
+          mesh.position.set(
+            worldPos[0] + px * UNIT + sx / 2,
+            worldPos[1] + py * UNIT + sy / 2,
+            worldPos[2] + pz * UNIT + sz / 2
+          );
+          contentGroup.add(mesh);
 
-        const edges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geom),
-          new THREE.LineBasicMaterial({ color: 0x0c0f16 })
-        );
-        edges.position.copy(mesh.position);
-        contentGroup.add(edges);
-      });
+          const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geom),
+            new THREE.LineBasicMaterial({ color: 0x0c0f16 })
+          );
+          edges.position.copy(mesh.position);
+          contentGroup.add(edges);
+        });
   });
 
   sceneBounds = { minX: 0, maxX: totalWidth, minY: 0, maxY: maxDy, minZ: 0, maxZ: maxDz };
@@ -619,7 +627,9 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   // à chaque clic alors que le contenu affiché change juste d'une étape à
   // l'autre pour le même vaisseau.
   const frameKey = `${totalWidth.toFixed(2)}|${maxDy.toFixed(2)}|${maxDz.toFixed(2)}`;
-  if (frameKey !== lastFrameKey) {
+  // En édition, les bornes bougent à chaque glisser : recadrer ferait sauter
+  // la vue de dessus que le joueur vient de poser.
+  if (!editingLayout && frameKey !== lastFrameKey) {
     // La scène n'est pas toujours une rangée longue et fine (les modules à
     // offset réel, voir plus haut, peuvent former un vrai volume 3D presque
     // cubique, ex. Hull B) : la distance de la caméra doit tenir compte des
@@ -666,6 +676,13 @@ function setCargoViewerView(view) {
   controls.update();
 }
 window.setCargoViewerView = setCargoViewerView;
+
+window.setCargoLayoutEditing = function setCargoLayoutEditing(on) {
+  editingLayout = !!on;
+  if (!controls) return;
+  controls.enableRotate = !editingLayout;
+  if (editingLayout) setCargoViewerView("top");
+};
 
 // [data-view] exclut les boutons "Tourner"/"Miroir" (js/app.js) : ils
 // partagent la classe .btn-view-sm pour le style (même rangée de boutons

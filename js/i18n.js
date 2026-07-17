@@ -180,6 +180,11 @@ const TRANSLATIONS = {
     mirrorOrientationBtn: "Miroir",
     mirrorOrientationHint:
       "Si tourner ne suffit pas (ex. l'avant affiché correspond en fait à la droite du vaisseau), clique pour inverser l'étiquetage en miroir — combinable avec Tourner pour couvrir tous les cas.",
+    editLayoutBtn: "Éditer la disposition",
+    editLayoutDoneBtn: "Terminer",
+    resetLayoutBtn: "Réinitialiser la disposition",
+    editLayoutHint:
+      "Glisse chaque grille à sa vraie place sur le vaisseau (aimantage sur 1 SCU = 1,25 m). La vue est bloquée de dessus et les caisses sont masquées pendant l'édition.",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -387,6 +392,11 @@ const TRANSLATIONS = {
     mirrorOrientationBtn: "Mirror",
     mirrorOrientationHint:
       "If rotating isn't enough (e.g. the shown front is actually the ship's right), click to mirror the labeling — combine with Rotate to cover every case.",
+    editLayoutBtn: "Edit layout",
+    editLayoutDoneBtn: "Done",
+    resetLayoutBtn: "Reset layout",
+    editLayoutHint:
+      "Drag each grid to its real place on the ship (snaps to 1 SCU = 1.25 m). The view is locked top-down and crates are hidden while editing.",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",

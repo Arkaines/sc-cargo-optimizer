@@ -1083,6 +1083,36 @@ window.resetCargoViewerLayout = function resetCargoViewerLayout() {
   renderCargoStepView();
 };
 
+// Bascule l'interface du visualiseur entre usage normal et mode édition de
+// la disposition : en édition, seuls « Terminer » et « Réinitialiser » ont
+// du sens (les vues/rotation/miroir sont masquées, la vue est bloquée de
+// dessus par setCargoLayoutEditing).
+function setCargoLayoutEditUI(editing) {
+  document.getElementById("cargo-viewer-edit-btn").style.display = editing ? "none" : "";
+  document.getElementById("cargo-viewer-edit-done-btn").style.display = editing ? "" : "none";
+  document.getElementById("cargo-viewer-reset-layout-btn").style.display = editing ? "" : "none";
+  document.getElementById("cargo-edit-hint").style.display = editing ? "" : "none";
+  document.getElementById("cargo-viewer-rotate-btn").style.display = editing ? "none" : "";
+  document.getElementById("cargo-viewer-mirror-btn").style.display = editing ? "none" : "";
+  document.querySelectorAll(".cargo-viewer-controls .btn-view-sm[data-view]").forEach((b) => {
+    b.style.display = editing ? "none" : "";
+  });
+}
+
+function enterCargoLayoutEdit() {
+  if (typeof setCargoLayoutEditing !== "function") return;
+  setCargoLayoutEditing(true);
+  setCargoLayoutEditUI(true);
+  renderCargoStepView();
+}
+
+function exitCargoLayoutEdit() {
+  if (typeof setCargoLayoutEditing !== "function") return;
+  setCargoLayoutEditing(false);
+  setCargoLayoutEditUI(false);
+  renderCargoStepView();
+}
+
 function renderShipAccessFaces() {
   const ship = getSelectedShip();
   const faces = (ship && getShipAccessFaces(ship.name)) || DEFAULT_ACCESS_FACES;
@@ -3217,6 +3247,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("pack-cargo-btn").addEventListener("click", runCargoPacking);
   document.getElementById("cargo-viewer-rotate-btn").addEventListener("click", rotateCargoViewerOrientation);
   document.getElementById("cargo-viewer-mirror-btn").addEventListener("click", mirrorCargoViewerOrientation);
+  document.getElementById("cargo-viewer-edit-btn").addEventListener("click", enterCargoLayoutEdit);
+  document.getElementById("cargo-viewer-edit-done-btn").addEventListener("click", exitCargoLayoutEdit);
+  document.getElementById("cargo-viewer-reset-layout-btn").addEventListener("click", resetCargoViewerLayout);
   document.getElementById("cargo-step-prev").addEventListener("click", () => {
     if (!cargoPackState || cargoPackState.stepIndex <= 0) return;
     cargoPackState.stepIndex -= 1;

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="css/style.css?v=20260717-r19" />
+<link rel="stylesheet" href="css/style.css?v=20260717-r20" />
 <script>
   (function () {
     var saved = localStorage.getItem("sc-cargo-optimizer-theme");
@@ -229,6 +229,7 @@
       <div class="cargo-viewer-row">
         <div id="cargo-viewer-panel" class="cargo-viewer-panel cut-corner" style="display:none;">
           <div id="cargo-viewer-3d"></div>
+          <p id="cargo-edit-hint" class="hint" style="display:none;" data-i18n="editLayoutHint"></p>
           <div class="cargo-viewer-controls">
             <button type="button" class="btn-secondary btn-view-sm" data-view="front" data-i18n="viewFrontBtn"></button>
             <button type="button" class="btn-secondary btn-view-sm" data-view="rear" data-i18n="viewRearBtn"></button>
@@ -238,6 +239,9 @@
             <button type="button" class="btn-secondary btn-view-sm" data-view="bottom" data-i18n="viewBottomBtn"></button>
             <button type="button" id="cargo-viewer-rotate-btn" class="btn-secondary btn-view-sm" data-i18n="rotateOrientationBtn" data-i18n-title="rotateOrientationHint"></button>
             <button type="button" id="cargo-viewer-mirror-btn" class="btn-secondary btn-view-sm" data-i18n="mirrorOrientationBtn" data-i18n-title="mirrorOrientationHint"></button>
+            <button type="button" id="cargo-viewer-edit-btn" class="btn-secondary btn-view-sm" data-i18n="editLayoutBtn" data-i18n-title="editLayoutHint"></button>
+            <button type="button" id="cargo-viewer-edit-done-btn" class="btn-primary btn-view-sm" style="display:none;" data-i18n="editLayoutDoneBtn"></button>
+            <button type="button" id="cargo-viewer-reset-layout-btn" class="btn-danger btn-view-sm" style="display:none;" data-i18n="resetLayoutBtn"></button>
           </div>
         </div>
         <div id="cargo-step-nav" class="cargo-step-nav cut-corner" style="display:none;">
@@ -285,27 +289,27 @@
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.7"></script>
-<script src="js/i18n.js?v=20260717-r19"></script>
-<script src="data/locations.js?v=20260717-r19"></script>
-<script src="data/location-aliases.js?v=20260717-r19"></script>
-<script src="data/commodity-aliases.js?v=20260717-r19"></script>
-<script src="data/commodities.js?v=20260717-r19"></script>
-<script src="data/companies.js?v=20260717-r19"></script>
-<script src="data/ships.js?v=20260717-r19"></script>
-<script src="data/distances.js?v=20260717-r19"></script>
-<script src="data/scwiki-locations.js?v=20260717-r19"></script>
-<script src="data/location-planets.js?v=20260717-r19"></script>
-<script src="data/mission-reputation.js?v=20260717-r19"></script>
-<script src="data/mission-reputation-by-title.js?v=20260717-r19"></script>
-<script src="data/mission-title-aliases.js?v=20260717-r19"></script>
-<script src="data/faction-reputation-ladders.js?v=20260717-r19"></script>
-<script src="js/uex.js?v=20260717-r19"></script>
-<script src="js/scwiki.js?v=20260717-r19"></script>
-<script src="js/fleetyards.js?v=20260717-r19"></script>
-<script src="js/cargo-packing.js?v=20260717-r19"></script>
-<script src="js/ocr.js?v=20260717-r19"></script>
-<script src="js/cloud.js?v=20260717-r19"></script>
-<script src="js/app.js?v=20260717-r19"></script>
+<script src="js/i18n.js?v=20260717-r20"></script>
+<script src="data/locations.js?v=20260717-r20"></script>
+<script src="data/location-aliases.js?v=20260717-r20"></script>
+<script src="data/commodity-aliases.js?v=20260717-r20"></script>
+<script src="data/commodities.js?v=20260717-r20"></script>
+<script src="data/companies.js?v=20260717-r20"></script>
+<script src="data/ships.js?v=20260717-r20"></script>
+<script src="data/distances.js?v=20260717-r20"></script>
+<script src="data/scwiki-locations.js?v=20260717-r20"></script>
+<script src="data/location-planets.js?v=20260717-r20"></script>
+<script src="data/mission-reputation.js?v=20260717-r20"></script>
+<script src="data/mission-reputation-by-title.js?v=20260717-r20"></script>
+<script src="data/mission-title-aliases.js?v=20260717-r20"></script>
+<script src="data/faction-reputation-ladders.js?v=20260717-r20"></script>
+<script src="js/uex.js?v=20260717-r20"></script>
+<script src="js/scwiki.js?v=20260717-r20"></script>
+<script src="js/fleetyards.js?v=20260717-r20"></script>
+<script src="js/cargo-packing.js?v=20260717-r20"></script>
+<script src="js/ocr.js?v=20260717-r20"></script>
+<script src="js/cloud.js?v=20260717-r20"></script>
+<script src="js/app.js?v=20260717-r20"></script>
 <script type="importmap">
 {
   "imports": {
@@ -314,7 +318,7 @@
   }
 }
 </script>
-<script type="module" src="js/cargo-viewer.js?v=20260717-r19"></script>
+<script type="module" src="js/cargo-viewer.js?v=20260717-r20"></script>
 <footer class="site-footer">
   <a href="terms.html">Conditions d'utilisation</a>
   <span aria-hidden="true">·</span>
