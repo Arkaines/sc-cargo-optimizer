@@ -255,3 +255,20 @@ async function fetchIsAdmin() {
     return false;
   }
 }
+
+// Publie la grille d'un vaisseau. La RLS refuse cet upsert à quiconque n'est
+// pas dans la table admins — c'est elle qui fait autorité, pas l'interface.
+async function publishShipGrid(shipName, grid, orientation, mirror) {
+  if (!sb) return false;
+  try {
+    const { error } = await sb.from("ship_layouts").upsert(
+      { ship_name: shipName, grid, orientation: orientation || 0, mirror: !!mirror, updated_at: new Date().toISOString() },
+      { onConflict: "ship_name" }
+    );
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    alert(t("adminGridPublishFailed", { msg: err.message }));
+    return false;
+  }
+}

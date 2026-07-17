@@ -2444,6 +2444,22 @@ function removeAdminGridModule() {
   renderAdminGridEditor();
 }
 
+async function publishAdminGrid() {
+  if (!adminGridDraft || !adminGridShipName) return;
+  if (!adminGridDraft.length) {
+    alert(t("adminGridEmpty"));
+    return;
+  }
+  if (!confirm(t("adminGridPublishConfirm", { ship: adminGridShipName }))) return;
+  const ok = await publishShipGrid(adminGridShipName, adminGridDraft, 0, false);
+  if (!ok) return;
+  // Reflète tout de suite le résultat sans attendre la prochaine synchro.
+  state.approvedShipGrids[adminGridShipName] = { grid: adminGridDraft, orientation: 0, mirror: false };
+  saveState();
+  alert(t("adminGridPublished", { ship: adminGridShipName }));
+  exitAdminGridEdit();
+}
+
 // Calcule et affiche le rangement des marchandises des missions incluses
 // dans les vraies soutes du vaisseau sélectionné (données FleetYards.net,
 // voir js/fleetyards.js), en respectant l'ordre réel de récupération/
@@ -3332,6 +3348,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("admin-grid-close-btn").addEventListener("click", exitAdminGridEdit);
   document.getElementById("admin-grid-add-btn").addEventListener("click", addAdminGridModule);
   document.getElementById("admin-grid-remove-btn").addEventListener("click", removeAdminGridModule);
+  document.getElementById("admin-grid-publish-btn").addEventListener("click", publishAdminGrid);
   ["admin-grid-cx", "admin-grid-cy", "admin-grid-cz", "admin-grid-mcs"].forEach((id) => {
     document.getElementById(id).addEventListener("change", applyAdminGridSize);
   });

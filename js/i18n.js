@@ -200,6 +200,11 @@ const TRANSLATIONS = {
     adminGridMaxBox: "Caisse max (SCU)",
     adminGridCapacity: "Capacité : {scu} SCU",
     adminGridSelectFirst: "Sélectionne d'abord une grille.",
+    adminGridEmpty: "La grille est vide — ajoute au moins une grille avant de publier.",
+    adminGridPublishConfirm:
+      "Publier cette grille pour « {ship} » ? Elle remplacera la grille actuelle pour TOUS les joueurs.",
+    adminGridPublished: "Grille publiée pour « {ship} ».",
+    adminGridPublishFailed: "Échec de la publication : {msg}",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -427,6 +432,11 @@ const TRANSLATIONS = {
     adminGridMaxBox: "Max box (SCU)",
     adminGridCapacity: "Capacity: {scu} SCU",
     adminGridSelectFirst: "Select a grid first.",
+    adminGridEmpty: "The grid is empty — add at least one grid before publishing.",
+    adminGridPublishConfirm:
+      "Publish this grid for \"{ship}\"? It will replace the current grid for EVERY player.",
+    adminGridPublished: "Grid published for \"{ship}\".",
+    adminGridPublishFailed: "Publishing failed: {msg}",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",
