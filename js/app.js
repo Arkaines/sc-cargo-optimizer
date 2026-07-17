@@ -17,7 +17,7 @@ const UNIT_M = 1.25; // 1 cellule SCU = 1,25 m (doit rester égal à UNIT dans j
 // l'ancienne synchro expire. Un changement de valeur ici force une
 // resynchronisation complète au prochain chargement, quel que soit l'âge de
 // la dernière synchro.
-const DATA_SCHEMA_VERSION = 2;
+const DATA_SCHEMA_VERSION = 3;
 
 function defaultState() {
   return {
@@ -1130,6 +1130,22 @@ function setCargoLayoutEditUI(editing) {
   document.getElementById("cargo-viewer-edit-done-btn").style.display = editing ? "" : "none";
   document.getElementById("cargo-viewer-reset-layout-btn").style.display = editing ? "" : "none";
   document.getElementById("cargo-edit-hint").style.display = editing ? "" : "none";
+  document.getElementById("cargo-viewer-rotate-btn").style.display = editing ? "none" : "";
+  document.getElementById("cargo-viewer-mirror-btn").style.display = editing ? "none" : "";
+}
+
+// Équivalent de setCargoLayoutEditUI, mais pour L'ÉDITEUR ADMIN — ne doit
+// JAMAIS afficher #cargo-viewer-edit-done-btn ni #cargo-viewer-reset-layout-btn :
+// ces deux boutons pilotent la disposition PERSO du joueur
+// (state.cargoViewerLayout / exitCargoLayoutEdit / resetCargoViewerLayout),
+// sans aucun rapport avec adminGridDraft. Les emprunter à
+// setCargoLayoutEditUI (comme avant) laissait « Terminer » sortir de
+// l'édition sans fermer #admin-grid-panel (état bâtard) et « Réinitialiser »
+// effacer silencieusement la disposition perso de l'admin — voir revue
+// finale 2a, finding #4. #admin-grid-close-btn (« Fermer sans publier »)
+// est l'unique sortie de l'éditeur admin.
+function setAdminGridEditUI(editing) {
+  document.getElementById("cargo-viewer-edit-btn").style.display = editing ? "none" : "";
   document.getElementById("cargo-viewer-rotate-btn").style.display = editing ? "none" : "";
   document.getElementById("cargo-viewer-mirror-btn").style.display = editing ? "none" : "";
 }
@@ -2395,7 +2411,12 @@ function enterAdminGridEdit() {
 
   document.getElementById("admin-grid-edit-btn").style.display = "none";
   if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(true);
-  setCargoLayoutEditUI(true);
+  setAdminGridEditUI(true);
+  // « Ranger le cargo » écrase la scène 3D (grille FleetYards + caisses) et
+  // referait passer tout glisser suivant pour une position de brouillon
+  // admin issue d'un rendu qui n'est pas le sien — voir revue finale 2a,
+  // finding #5. Réactivé dans exitAdminGridEdit.
+  document.getElementById("pack-cargo-btn").disabled = true;
   renderAdminGridEditor();
 }
 
@@ -2405,7 +2426,8 @@ function exitAdminGridEdit() {
   adminGridSelected = null;
   document.getElementById("admin-grid-panel").style.display = "none";
   if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(false);
-  setCargoLayoutEditUI(false);
+  setAdminGridEditUI(false);
+  document.getElementById("pack-cargo-btn").disabled = false;
   renderCargoStepView();
   renderAdminGridEntry();
 }
@@ -2451,10 +2473,22 @@ async function publishAdminGrid() {
     return;
   }
   if (!confirm(t("adminGridPublishConfirm", { ship: adminGridShipName }))) return;
-  const ok = await publishShipGrid(adminGridShipName, adminGridDraft, 0, false);
+  // Décision du mainteneur (revue finale 2a, finding #6) : on publie
+  // l'orientation/miroir RÉELS du vaisseau — ceux que l'admin a réglés avec
+  // Tourner/Miroir avant d'ouvrir l'éditeur — et non 0/false en dur. C'est ce
+  // qu'exige le spec §117 (« Orientation/miroir : ceux de la grille publiée
+  // s'appliquent ») et ce qui rend les colonnes orientation/mirror de
+  // ship_layouts autre chose que des colonnes mortes. L'éditeur lui-même
+  // n'expose pas Tourner/Miroir (hors scope) : on republie donc ce qui était
+  // déjà réglé sur ce vaisseau, ce qui permet aussi de corriger un mauvais
+  // étiquetage en republiant après avoir tourné/miroité.
+  const orientation = getCargoViewerOrientation(adminGridShipName);
+  const mirror = getCargoViewerMirror(adminGridShipName);
+  const ok = await publishShipGrid(adminGridShipName, adminGridDraft, orientation, mirror);
   if (!ok) return;
-  // Reflète tout de suite le résultat sans attendre la prochaine synchro.
-  state.approvedShipGrids[adminGridShipName] = { grid: adminGridDraft, orientation: 0, mirror: false };
+  // Reflète tout de suite le résultat sans attendre la prochaine synchro —
+  // mêmes valeurs que celles envoyées, pas 0/false.
+  state.approvedShipGrids[adminGridShipName] = { grid: adminGridDraft, orientation, mirror };
   saveState();
   alert(t("adminGridPublished", { ship: adminGridShipName }));
   exitAdminGridEdit();
@@ -2467,6 +2501,9 @@ async function publishAdminGrid() {
 // seule fenêtre naviguable arrêt par arrêt (voir renderCargoStepView),
 // démarrant sur le premier arrêt du trajet.
 function runCargoPacking() {
+  // Garde-fou en plus de la désactivation du bouton (voir enterAdminGridEdit) :
+  // un rangement pendant l'édition admin écraserait la scène du brouillon.
+  if (adminGridDraft) return;
   const status = document.getElementById("cargo-pack-status");
   status.className = "hint";
   cargoPackState = null;
@@ -2541,6 +2578,7 @@ function renderAll() {
   renderHistoryTable();
   renderCompaniesTab();
   renderBrokenElevatorsList();
+  renderAdminGridEntry();
   document.getElementById("route-result").innerHTML = "";
 }
 
@@ -3612,6 +3650,7 @@ async function runFullSync() {
       saveState();
     }
     if (typeof fetchIsAdmin === "function") isAdminUser = await fetchIsAdmin();
+    renderAdminGridEntry();
 
     renderShipCapacity();
   } catch (err) {

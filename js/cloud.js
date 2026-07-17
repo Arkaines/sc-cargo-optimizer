@@ -201,6 +201,17 @@ function initCloudSync() {
     cloudUserId = session && session.user ? session.user.id : null;
     if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && cloudUserId) {
       reconcileOnSignIn();
+      // cloudUserId n'existe qu'à partir d'ici : fetchIsAdmin() lu plus tôt
+      // (ex. depuis runFullSync au chargement) a pu répondre false faute de
+      // cloudUserId encore posé. On revérifie donc explicitement à la
+      // connexion, sinon un mainteneur qui se connecte après le chargement
+      // de la page reste isAdminUser = false jusqu'à la prochaine synchro.
+      if (typeof fetchIsAdmin === "function") {
+        fetchIsAdmin().then((admin) => {
+          isAdminUser = admin;
+          if (typeof renderAdminGridEntry === "function") renderAdminGridEntry();
+        });
+      }
     }
   });
 
