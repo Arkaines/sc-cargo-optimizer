@@ -122,7 +122,11 @@ Vaisseau **sans** grille publiée : comportement actuel inchangé (placement per
 
 **Accès** : au chargement, si connecté, l'app lit sa ligne dans `admins` → `state.isAdmin`. L'éditeur n'apparaît que pour un admin. Ce n'est qu'un confort d'affichage : la RLS refuse de toute façon les écritures d'un non-admin.
 
-**Entrée** : un bouton **« Éditer la grille (admin) »** dans le panneau du visualiseur, à côté des contrôles existants. Il réutilise le mode édition de la Brique 1 (vue préréglée, caisses masquées, glisser dans le plan regardé) et y ajoute les contrôles d'admin.
+**Entrée** : un bouton **« Éditer la grille (admin) »** dans l'onglet « Optimisation du cargo », près du sélecteur de vaisseau — **pas** dans le panneau du visualiseur.
+
+La raison est structurante : le panneau du visualiseur est masqué tant qu'aucun rangement n'est calculé (`renderCargoStepView` le cache si `cargoPackState` est nul). Or **on édite le vaisseau, pas la cargaison** : l'admin doit pouvoir corriger la grille d'un vaisseau sans avoir créé la moindre mission — et ce sera le cas normal pour un vaisseau que FleetYards ignore, où il n'y a rien à ranger. Ouvrir l'éditeur **force donc l'affichage du visualiseur** et y rend le brouillon, indépendamment de `cargoPackState`.
+
+**Ce qui est rendu** : l'éditeur affiche le **brouillon de grille** (`adminGridDraft`), pas un rangement — donc `renderCargoViewer3D(brouillon, [], orientation, mirror, positionsDuBrouillon)` avec **zéro caisse**. Le mode édition de la Brique 1 est réutilisé tel quel pour le glisser (vue préréglée, glisser dans le plan regardé, donc hauteur comprise) ; l'éditeur y ajoute ses contrôles.
 
 **Amorçage** : à l'ouverture, la grille éditée part de — dans l'ordre — la grille publiée si elle existe, sinon les soutes FleetYards résolues (dimensions + positions reconstruites), sinon une grille vide. Le mainteneur corrige donc à partir de l'existant plutôt que de repartir de zéro, et un vaisseau inconnu de FleetYards démarre vide.
 
