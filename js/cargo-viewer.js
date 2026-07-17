@@ -76,7 +76,7 @@ function makeModuleWireframe(dx, dy, dz) {
 
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(dx, dy, dz)),
-    new THREE.LineBasicMaterial({ color: 0x4dbfdd })
+    new THREE.LineBasicMaterial({ color: 0xff7a52 })
   );
   edges.position.set(dx / 2, dy / 2, dz / 2);
   group.add(edges);
@@ -87,7 +87,7 @@ function makeModuleWireframe(dx, dy, dz) {
   gridGeom.setAttribute("position", new THREE.Float32BufferAttribute(gridPositions, 3));
   const grid = new THREE.LineSegments(
     gridGeom,
-    new THREE.LineBasicMaterial({ color: 0x4dbfdd, transparent: true, opacity: 0.25 })
+    new THREE.LineBasicMaterial({ color: 0xff7a52, transparent: true, opacity: 0.25 })
   );
   group.add(grid);
 
@@ -126,7 +126,7 @@ function ensureScene(container) {
   if (renderer) return;
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x12141a);
+  scene.background = new THREE.Color(0x0c0f16);
 
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
   camera.position.set(10, 10, 16);
@@ -293,7 +293,7 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements) {
 
         const edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(geom),
-          new THREE.LineBasicMaterial({ color: 0x12141a })
+          new THREE.LineBasicMaterial({ color: 0x0c0f16 })
         );
         edges.position.copy(mesh.position);
         contentGroup.add(edges);
