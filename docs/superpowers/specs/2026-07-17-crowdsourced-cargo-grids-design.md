@@ -1,6 +1,19 @@
 # Grilles de cargo communautaires (proposition + modération) — conception
 
-**Statut : à implémenter.** Brique 2 du chantier commencé avec le placement manuel (`2026-07-17-manual-cargo-grid-placement-design.md`, livré : placement perso au glisser, x/y/z, aimanté 1 SCU, mémorisé par vaisseau et synchronisé sur le compte).
+**Statut : à implémenter APRÈS la Brique 2a.** Ce document est la **Brique 2b** ; il s'appuie sur le socle défini et livré par `2026-07-17-admin-grid-editor-design.md` (Brique 2a).
+
+> **Découpage (décision utilisateur, après rédaction initiale de ce document).**
+> L'éditeur de grille réservé au mainteneur a été ramené dans le périmètre et placé **avant** le crowdsourcing : les grilles de l'Ironclad et du Caterpillar sont fausses aujourd'hui, et l'éditeur permet de les corriger pour tous immédiatement, sans attendre de proposition. Le crowdsourcing sert ensuite à passer à l'échelle.
+>
+> **Ce qui a donc migré vers la Brique 2a et n'est PLUS défini ici** (ce document ne les redéfinit pas, il les consomme) :
+> - les tables `admins` et `ship_layouts` et leur RLS ;
+> - la forme de la grille (`grid` jsonb), y compris `capacity` **dérivée** des dimensions (vérifié 284/284) et `maxContainerSize` parmi 1/2/4/8/16/24/32 ;
+> - la récupération des grilles publiées (`state.approvedShipGrids`), le résolveur `getShipHolds` et le détachement de FleetYards ;
+> - le verrouillage des contrôles d'édition pour les non-admins.
+>
+> **Ce que cette brique 2b ajoute** : la table `layout_submissions`, les RPC `approve_submission`/`reject_submission`, le trigger de notification Discord, le bouton « Proposer cette disposition », l'onglet de revue admin, et la porte de sortie « Proposer une correction » (qui lève le verrou introduit en 2a).
+
+Prérequis livré : `2026-07-17-manual-cargo-grid-placement-design.md` (placement perso au glisser, x/y/z, aimanté 1 SCU, mémorisé par vaisseau et synchronisé sur le compte).
 
 ## Contexte et objectif
 
