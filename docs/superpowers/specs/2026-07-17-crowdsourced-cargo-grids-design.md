@@ -163,8 +163,18 @@ L'onglet n'est qu'un confort : la RLS refuse les écritures d'un non-admin même
 - **Vérification navigateur (headless)** : verrouillage (boutons masqués quand une grille validée existe), porte de sortie (« Proposer une correction » déverrouille et amorce depuis la grille validée), priorité (grille validée > perso > auto), et que `getResolvedCargoGrid()` renvoie bien **tous** les modules avec des positions.
 - **Limite honnête** : la partie Supabase (RLS, RPC, trigger Discord) **ne peut pas être testée côté développement** — pas d'accès au projet. Elle se valide au premier essai réel du mainteneur. Le SQL sera fourni prêt à exécuter, et le code client dégradera proprement si les tables n'existent pas encore (pas de grille validée = comportement actuel).
 
-## 11. Ce que le mainteneur doit faire
+## 11. Livraison du SQL et gestion des secrets
 
-1. Exécuter le SQL fourni (tables, RLS, RPC, trigger, `pg_net`).
-2. Y insérer **son `user_id`** dans `admins`.
-3. Y coller **son URL de webhook Discord** dans la fonction du trigger.
+**Décision (utilisateur)** : le mainteneur exécute le SQL lui-même dans l'éditeur SQL de Supabase. Aucun accès à son projet n'est donné au développement — ni clé `service_role`, ni mot de passe Postgres, ni CLI. C'est le choix le plus sûr : ces identifiants contournent la RLS (lecture/écriture/suppression sur les données de tous les joueurs) et le dépôt est **public**, donc une fuite serait immédiate et définitive. (La clé `anon` de `js/cloud.js` est publique par conception — c'est l'inverse ; elle n'ouvre que ce que la RLS autorise.)
+
+**Forme de la livraison** : le SQL est versionné dans le dépôt, en **`docs/supabase/crowdsourced-grids.sql`**, avec des **placeholders** à la place des valeurs sensibles :
+
+- `<TON_WEBHOOK_DISCORD>` — l'URL du webhook, dans le corps de la fonction du trigger.
+- `<TON_USER_ID>` — l'`uuid` du mainteneur, pour l'`insert` dans `admins`.
+
+Le mainteneur substitue ces deux valeurs **au moment de coller** dans l'éditeur Supabase. **Elles ne doivent jamais être committées** : le dépôt étant public, une URL de webhook committée permettrait à n'importe qui d'inonder le salon Discord. Le fichier versionné documente donc le schéma sans jamais porter de secret.
+
+**Étapes pour le mainteneur** :
+1. Ouvrir `docs/supabase/crowdsourced-grids.sql`, y remplacer les deux placeholders par ses vraies valeurs (dans l'éditeur Supabase, pas dans le fichier du dépôt).
+2. Exécuter le script (tables, RLS, RPC, trigger, `pg_net`).
+3. Récupérer son `user_id` dans Supabase → Authentication → Users (après s'être connecté une fois via Discord).
