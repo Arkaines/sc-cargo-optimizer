@@ -69,6 +69,61 @@ let pickMeshes = [];
 // applyLayoutEditingToScene (le câblage doit rester idempotent, il est appelé
 // à chaque rendu).
 let layoutEditingWired = false;
+// Mode « réserver un emplacement » (brique B) : réutilise le glisser du mode
+// édition (setCargoLayoutEditing) mais, au lieu de glisser les modules, le
+// joueur glisse UNE grille virtuelle (son véhicule). En ce mode, les modules
+// ne sont PAS cliquables (seul le véhicule l'est) et la dépose déclenche
+// window.onReservationVehicleDropped (voir onLayoutPointerUp) plutôt que la
+// persistance de position d'un module.
+let reservationMode = false;
+window.setCargoReservationMode = function setCargoReservationMode(on) {
+  reservationMode = !!on;
+};
+
+// Boîte ambre translucide pleine hauteur, positionnée sur son COIN (comme les
+// caissons de module) : sert et pour la grille virtuelle qu'on glisse (le
+// véhicule) et pour l'affichage des réservations déjà posées.
+function makeReservationBox(dx, dy, dz) {
+  const group = new THREE.Group();
+  const fill = new THREE.Mesh(
+    new THREE.BoxGeometry(dx, dy, dz),
+    new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.28, depthWrite: false })
+  );
+  fill.position.set(dx / 2, dy / 2, dz / 2);
+  group.add(fill);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(dx, dy, dz)),
+    new THREE.LineBasicMaterial({ color: 0xffb020 })
+  );
+  edges.position.set(dx / 2, dy / 2, dz / 2);
+  group.add(edges);
+  return group;
+}
+
+// Crée la grille virtuelle (le véhicule) à glisser, au centre de la scène,
+// aimantée au sol. Même structure qu'un module pour réutiliser le glisser tel
+// quel : une cible de raycast invisible CENTRÉE (dans pickMeshes) + une boîte
+// visible positionnée sur son COIN, liées par userData.wireframe. Hauteur
+// purement visuelle (2 crans) ; seule l'empreinte au sol compte.
+window.setReservationVehicleSize = function setReservationVehicleSize(sxCells, syCells) {
+  if (!scene || !controls || !contentGroup) return;
+  const dx = sxCells * UNIT;
+  const dz = syCells * UNIT;
+  const dy = UNIT * 2;
+  const cx = snapToUnit(controls.target.x - dx / 2);
+  const cz = snapToUnit(controls.target.z - dz / 2);
+  const visible = makeReservationBox(dx, dy, dz);
+  visible.position.set(cx, 0, cz);
+  contentGroup.add(visible);
+  const pick = new THREE.Mesh(new THREE.BoxGeometry(dx, dy, dz), new THREE.MeshBasicMaterial({ visible: false }));
+  pick.position.set(cx + dx / 2, dy / 2, cz + dz / 2);
+  pick.userData.isReservationVehicle = true;
+  pick.userData.wireframe = visible;
+  pick.userData.dims = { dx, dy, dz };
+  pick.userData.cells = { sx: sxCells, sy: syCells };
+  contentGroup.add(pick);
+  pickMeshes.push(pick);
+};
 // Métriques et repères des 4 étiquettes du dernier rendu complet (voir
 // renderCargoViewer3D) : permettent à updateCargoViewerOrientation de
 // reconstruire seulement le texte des étiquettes sans toucher au reste de
@@ -680,9 +735,10 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     wireframe.position.set(worldPos[0], worldPos[1], worldPos[2]);
     contentGroup.add(wireframe);
 
-    if (editingLayout) {
+    if (editingLayout && !reservationMode) {
       // Cube invisible aux dimensions du module, centré (le caisson, lui, est
-      // positionné sur son coin/origine) — c'est la cible du raycaster.
+      // positionné sur son coin/origine) — c'est la cible du raycaster. En mode
+      // réservation, les modules ne sont PAS cliquables : seul le véhicule l'est.
       const pick = new THREE.Mesh(
         new THREE.BoxGeometry(dx, dy, dz),
         new THREE.MeshBasicMaterial({ visible: false })
@@ -773,6 +829,29 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     const axes = makeAxesHelper(minX0, minZ0, Math.max(3, sceneScale * 0.18));
     axes.userData.isAxes = true;
     contentGroup.add(axes);
+  }
+
+  // Réservations déjà posées (mode réservation) : une boîte ambre pleine
+  // hauteur par empreinte, dans son module. Données fournies par l'app (état
+  // joueur, keyé par moduleKey). Reconstruites à chaque rendu comme le reste.
+  if (reservationMode && typeof window.getReservationOverlays === "function") {
+    const holdsArr = layout.map((l) => l.hold);
+    const byKey = {};
+    layout.forEach((l) => {
+      byKey[moduleKey(l.hold, holdsArr)] = l;
+    });
+    const overlays = window.getReservationOverlays() || {};
+    Object.keys(overlays).forEach((key) => {
+      const l = byKey[key];
+      if (!l) return;
+      (overlays[key] || []).forEach((f) => {
+        const box = makeReservationBox(f.sx * UNIT, l.dy, f.sy * UNIT);
+        // f.x0/f.y0 sont sur les axes packing 0/1 = viewer X/Z ; hauteur = l.dy.
+        box.position.set(l.worldPos[0] + f.x0 * UNIT, l.worldPos[1], l.worldPos[2] + f.y0 * UNIT);
+        box.userData.isReservationOverlay = true;
+        contentGroup.add(box);
+      });
+    });
   }
 
   // Ne recadre la caméra que si la scène a changé de taille (nouveau
@@ -1055,6 +1134,24 @@ function persistMeshExact(mesh) {
 }
 
 function onLayoutPointerUp() {
+  if (editingLayout && dragTarget && dragTarget.userData.isReservationVehicle) {
+    // Dépose de la grille virtuelle (véhicule) : on remonte à l'app le coin
+    // monde (viewer X/Z) et la taille en cellules ; elle résout l'intersection
+    // avec les modules et stocke la réservation (voir onReservationVehicleDropped).
+    // Committé qu'on ait glissé ou non : la boîte n'existe que parce que le
+    // joueur a cliqué « Placer ».
+    const { dx, dz } = dragTarget.userData.dims;
+    const { sx, sy } = dragTarget.userData.cells;
+    const vx = dragTarget.position.x - dx / 2;
+    const vz = dragTarget.position.z - dz / 2;
+    if (typeof window.onReservationVehicleDropped === "function") {
+      window.onReservationVehicleDropped(vx, vz, sx, sy);
+    }
+    dragTarget = null;
+    dragMoved = false;
+    controls.enabled = true;
+    return;
+  }
   if (editingLayout && dragTarget && dragMoved) {
     // Mode « tout déplacer » : chaque module a bougé, on les enregistre tous
     // sans ré-aimanter (rigidité). Sinon, on aimante le seul module glissé.
@@ -1078,12 +1175,16 @@ function onLayoutPointerUp() {
 window.__sceneAudit = function () {
   let floor = 0;
   let axes = 0;
+  let reservationOverlay = 0;
+  let reservationVehicle = 0;
   if (contentGroup)
     contentGroup.children.forEach((c) => {
       if (c.userData && c.userData.isFloor) floor++;
       if (c.userData && c.userData.isAxes) axes++;
+      if (c.userData && c.userData.isReservationOverlay) reservationOverlay++;
+      if (c.userData && c.userData.isReservationVehicle) reservationVehicle++;
     });
-  return { floor, axes };
+  return { floor, axes, reservationOverlay, reservationVehicle };
 };
 window.__labelAudit = function () {
   const p = (m) => (m ? { x: m.position.x, z: m.position.z } : null);

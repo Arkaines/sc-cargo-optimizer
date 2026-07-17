@@ -1074,6 +1074,49 @@ function resolveVehicleReservations(vx, vz, sxCells, syCells, resolvedGrid) {
   return out;
 }
 
+// Re-rend la vue 3D en gardant le mode réservation actif (les overlays de
+// réservation se redessinent alors, voir js/cargo-viewer.js). Utilisé après une
+// dépose ou un effacement.
+function rerenderCargoReservationView() {
+  const ship = getCargoViewerShipName();
+  if (!ship || typeof renderCargoViewer3D !== "function") return;
+  const holds = getShipHolds(ship) || [];
+  renderCargoViewer3D(
+    holds,
+    [],
+    getCargoViewerOrientation(ship),
+    getCargoViewerMirror(ship),
+    getCargoViewerLayout(ship)
+  );
+}
+
+// Hook lu par le visualiseur pour dessiner les réservations déjà posées du
+// vaisseau affiché : { [moduleKey]: [ {x0,y0,sx,sy,vid} ] }.
+window.getReservationOverlays = function getReservationOverlays() {
+  const ship = getCargoViewerShipName();
+  return (ship && state.cargoReservations[ship]) || {};
+};
+
+// Hook appelé par le visualiseur quand le joueur lâche sa grille virtuelle
+// (véhicule) : coin monde (viewer X/Z) + taille en cellules. On résout
+// l'intersection avec les modules (fonction pure) et on stocke une empreinte
+// par module couvert, toutes marquées du même vid (un véhicule). Lâché hors de
+// toute soute -> rien (la grille virtuelle reste, le joueur peut réessayer).
+window.onReservationVehicleDropped = function onReservationVehicleDropped(vx, vz, sx, sy) {
+  const ship = getCargoViewerShipName();
+  if (!ship) return;
+  const fps = resolveVehicleReservations(vx, vz, sx, sy, getResolvedCargoGrid());
+  if (!fps.length) return;
+  const vid = Date.now();
+  if (!state.cargoReservations[ship]) state.cargoReservations[ship] = {};
+  fps.forEach((f) => {
+    if (!state.cargoReservations[ship][f.moduleKey]) state.cargoReservations[ship][f.moduleKey] = [];
+    state.cargoReservations[ship][f.moduleKey].push({ x0: f.x0, y0: f.y0, sx: f.sx, sy: f.sy, vid });
+  });
+  saveState();
+  rerenderCargoReservationView();
+};
+
 // Orientation Avant/Arrière/Gauche/Droite de la vue 3D : rotation (0-3, par
 // pas de 90°) + miroir (voir js/cargo-viewer.js:currentOrientation/
 // currentMirror) — FleetYards ne donne parfois aucune position réelle pour
