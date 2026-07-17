@@ -54,12 +54,15 @@ Un bouton **« Éditer la disposition »** (`#cargo-viewer-edit-btn`) rejoint la
 
 ## 3. Application au rendu (`renderCargoViewer3D`)
 
-La surcharge s'insère **après** le calcul des positions auto (`positioned`/`fallbackGrid`/`fallbackRow` → `worldPos`) et **avant** la normalisation en coordonnées positives (`minX`/`minZ`) et le calcul des bornes de scène :
+La surcharge s'insère **après** le calcul des positions auto (`positioned`/`fallbackGrid`/`fallbackRow` → `worldPos`) **et après la normalisation** en coordonnées positives (`minX`/`minZ`), mais **avant** le calcul des bornes de scène (`maxDy`/`maxDz`/`totalWidth`) :
 
 ```js
-const layoutForShip = getCargoViewerLayout(currentShipName); // {} si absent
+// savedLayout : map { [moduleKey]: {x, z} } déjà résolue pour ce vaisseau.
+// ATTENTION au nommage : renderCargoViewer3D a déjà un local `layout`
+// (le tableau des modules affichés) — le paramètre s'appelle `savedLayout`.
+const overrides = savedLayout || {};
 layout.forEach((l) => {
-  const custom = layoutForShip[moduleKey(l.hold, displayHolds)];
+  const custom = overrides[moduleKey(l.hold, displayHolds)];
   if (custom) {
     l.worldPos[0] = custom.x;
     l.worldPos[2] = custom.z;
@@ -68,14 +71,16 @@ layout.forEach((l) => {
 });
 ```
 
-- `renderCargoViewer3D` reçoit aujourd'hui `(holds, placements, rotation, mirror)` ; on ajoute un 5ᵉ paramètre `layout` = **la map de disposition déjà résolue** pour le vaisseau courant (`getCargoViewerLayout(shipName)`, ou `{}`). On passe la map, pas le nom du vaisseau : le visualiseur reste découplé de `state`/de la résolution de vaisseau (il ne connaît que des clés de modules et des positions). Le point d'appel `renderCargoStepView` (`js/app.js`) a déjà `getSelectedShip()` pour résoudre la map.
-- La normalisation `minX`/`minZ` et le recentrage caméra existants s'appliquent ensuite normalement : une disposition manuelle qui déborde en coordonnées négatives est ramenée dans le cadre comme n'importe quelle position auto.
+- `renderCargoViewer3D` reçoit aujourd'hui `(holds, placements, rotation, mirror)` ; on ajoute un 5ᵉ paramètre **`savedLayout`** = **la map de disposition déjà résolue** pour le vaisseau courant (`getCargoViewerLayout(shipName)`, ou `{}`). On passe la map, pas le nom du vaisseau : le visualiseur reste découplé de `state`/de la résolution de vaisseau (il ne connaît que des clés de modules et des positions). Le point d'appel `renderCargoStepView` (`js/app.js`) a déjà `getSelectedShip()` pour résoudre la map.
+- **Pourquoi après la normalisation (aller-retour exact)** : la normalisation (`minX = Math.min(0, ...)`) est une translation appliquée à tous les modules. Si la surcharge était appliquée AVANT, une position glissée puis mémorisée serait re-décalée au rendu suivant — ce qu'on enregistre ne serait pas ce qu'on récupère (dérive). En appliquant la surcharge APRÈS, la valeur mémorisée est exactement la valeur dessinée : aller-retour stable, sans dérive.
+- **Corollaire — coordonnées ≥ 0** : les positions enregistrées sont **bornées à 0 minimum** au moment du glisser (`Math.max(0, valeurAimantée)`, voir Section 4). Les positions auto étant déjà normalisées ≥ 0, tous les modules restent en coordonnées positives, ce qui préserve tel quel le calcul existant des bornes et des étiquettes (`sceneBounds` suppose `minX`/`minZ` = 0). Aucune refonte de la géométrie des repères n'est nécessaire.
 - **Caméra en édition** : `renderCargoViewer3D` ne doit pas recadrer la caméra pendant l'édition (le `frameKey` peut changer quand les bornes bougent au fil des glissers). En mode édition, on saute le bloc de recadrage caméra (garde `lastFrameKey` tel quel), pour que la vue de dessus posée à l'entrée ne saute pas à chaque déplacement.
 
 ## 4. Technique du glisser (Three.js)
 
 - **Sélection** : les caissons sont des `LineSegments`/`Group` (fils de fer), mal cibles au raycasting. On ajoute, par module affiché, une **boîte de collision invisible** (`Mesh` `BoxGeometry` aux dimensions du module, `material.visible = false`) positionnée comme le caisson, portant une référence au module (`mesh.userData.layoutEntry = l`). Le raycaster teste ces boîtes.
-- **Projection au sol** : `THREE.Raycaster.setFromCamera(ndcPointer, camera)` puis intersection avec un `THREE.Plane(normal=(0,1,0), constant=0)` (`ray.intersectPlane`) → point monde ; on en déduit la nouvelle origine du module en retranchant le décalage saisi au clic (pour que la grille ne « saute » pas sous le curseur), puis on aimante chaque coordonnée sur `Math.round(v / UNIT) * UNIT`.
+- **Projection au sol** : `THREE.Raycaster.setFromCamera(ndcPointer, camera)` puis intersection avec un `THREE.Plane(normal=(0,1,0), constant=0)` (`ray.intersectPlane`) → point monde ; on en déduit la nouvelle origine du module en retranchant le décalage saisi au clic (pour que la grille ne « saute » pas sous le curseur), puis on aimante chaque coordonnée sur `Math.round(v / UNIT) * UNIT` **et on la borne à 0 minimum** (`Math.max(0, ...)`, voir Section 3 : garde toutes les positions positives pour que les bornes/étiquettes existantes restent valides).
+- **Origine mémorisée** : on enregistre l'**origine (coin)** du module — les mêmes `worldPos[0]`/`worldPos[2]` que le rendu utilise — pas le centre. Le caisson (`Group`) est positionné à l'origine, la boîte de collision à l'origine + demi-dimensions ; ne pas confondre les deux au moment de persister.
 - **Mise à jour live** : on déplace le `Group` caisson et sa boîte de collision (même position) sans reconstruire la scène.
 - **Nettoyage** : les boîtes de collision sont ajoutées au `contentGroup` et libérées par `clearContent()` existant (dispose geometry/material) au prochain rendu complet ; elles ne sont créées qu'en mode édition (hors édition, aucun surcoût).
 - **Écouteurs** : `pointerdown`/`pointermove`/`pointerup` sur le canvas du renderer, actifs seulement en mode édition (ajoutés à l'entrée, retirés à la sortie) pour ne pas interférer avec OrbitControls en usage normal.
