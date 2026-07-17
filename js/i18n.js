@@ -185,6 +185,8 @@ const TRANSLATIONS = {
     resetLayoutBtn: "Réinitialiser la disposition",
     editLayoutHint:
       "Glisse chaque grille à sa vraie place (aimantage sur 1 SCU = 1,25 m). Tu déplaces dans le plan que tu regardes : en vue de dessus au sol, en vue avant ou de côté tu règles la hauteur. Change de vue avec les boutons ci-dessous.",
+    publishedGridNote:
+      "Grille officielle : la disposition de ce vaisseau a été validée et s'applique à tout le monde.",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -397,6 +399,8 @@ const TRANSLATIONS = {
     resetLayoutBtn: "Reset layout",
     editLayoutHint:
       "Drag each grid to its real place (snaps to 1 SCU = 1.25 m). You move within the plane you are looking at: top view moves it along the floor, front or side view sets its height. Switch views with the buttons below.",
+    publishedGridNote:
+      "Official grid: this ship's layout has been validated and applies to everyone.",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",

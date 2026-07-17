@@ -2230,6 +2230,17 @@ function renderCargoStepView() {
   const orientation = publishedGrid ? publishedGrid.orientation : shipName ? getCargoViewerOrientation(shipName) : 0;
   const mirror = publishedGrid ? publishedGrid.mirror : shipName ? getCargoViewerMirror(shipName) : false;
   const savedLayout = publishedPositions || (shipName ? getCargoViewerLayout(shipName) : {});
+  // Vaisseau avec grille publiée : elle fait autorité, on masque les
+  // contrôles de placement perso pour un joueur normal (l'admin garde son
+  // propre éditeur, voir enterAdminGridEdit). Le vrai garde-fou reste la RLS
+  // côté base — masquer un bouton n'est pas une sécurité.
+  const locked = !!publishedGrid && !isAdminUser;
+  const editBtn = document.getElementById("cargo-viewer-edit-btn");
+  const publishedNote = document.getElementById("cargo-published-note");
+  if (editBtn) editBtn.style.display = locked ? "none" : "";
+  if (publishedNote) publishedNote.style.display = publishedGrid ? "" : "none";
+  document.getElementById("cargo-viewer-rotate-btn").style.display = locked ? "none" : "";
+  document.getElementById("cargo-viewer-mirror-btn").style.display = locked ? "none" : "";
   if (typeof renderCargoViewer3D === "function")
     renderCargoViewer3D(holds, present, orientation, mirror, savedLayout);
 }
