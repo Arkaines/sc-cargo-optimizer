@@ -44,7 +44,7 @@ Un bouton **« Éditer la disposition »** (`#cargo-viewer-edit-btn`) rejoint la
 - Deux boutons deviennent visibles/actifs : **« Terminer »** (`#cargo-viewer-edit-done-btn`, sort du mode) et **« Réinitialiser la disposition »** (`#cargo-viewer-reset-layout-btn`). Les boutons de vue/rotation/miroir sont masqués ou désactivés pendant l'édition (l'orientation se règle hors édition).
 
 **Glisser une grille :**
-- Clic maintenu sur un module → il devient la cible ; le curseur est projeté sur le plan horizontal Y=0, et le module suit, **aimanté sur la grille de 1,25 m** (`UNIT`). Déplacement en X (gauche-droite) et Z (avant-arrière) uniquement.
+- Clic maintenu sur un module → il devient la cible ; le curseur est projeté sur le plan horizontal Y=0, et le module suit, **aimanté sur la grille de 1,25 m** (`UNIT` = la taille d'**une cellule de 1 SCU**). Rappel : dans Star Citizen 1 SCU = un cube de 1,25 m, pas 1 m — vérifiable sur FleetYards (conteneur 32 SCU de l'Ironclad = 10 × 2,5 × 2,5 m = 62,5 m³ = 32 × 1,25³). Aimanter sur 1,25 m aligne les bords des modules sur les mêmes cellules SCU que suivent les caisses ; 1 m les mettrait hors grille. Déplacement en X (gauche-droite) et Z (avant-arrière) uniquement.
 - Pendant le glisser, OrbitControls est temporairement désactivé (`controls.enabled = false`) pour que le geste ne bouge pas la caméra ; réactivé au relâchement.
 - Au relâchement : la position aimantée du module est écrite dans `state.cargoViewerLayout[shipName][moduleKey]`, `saveState()` est appelé (→ localStorage + synchro cloud si connecté). La scène n'est pas entièrement reconstruite ; seuls la position du caisson (et de sa boîte de sélection invisible) sont mises à jour en direct.
 
