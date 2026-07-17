@@ -480,6 +480,21 @@ function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBox
           if (!canPlace(grid, cellDims, pos, size)) continue;
           if (!hasValidSupport(grid, pos, size, box.scu, dropoffStop)) continue;
 
+          // Barrière dure d'un véhicule garé (brique A) : une position que
+          // l'obstacle réservé bloque par TOUTES les faces accessibles est
+          // refusée (l'espace derrière lui est inutilisable — décision
+          // utilisateur), contrairement au score de sévérité qui ne fait que
+          // classer des positions autorisées. Réutilise le prédicat d'accès
+          // existant, sans le modifier.
+          if (
+            activeBoxes.some(
+              (ab) =>
+                ab.reserved &&
+                isBlockedFromEveryAccessibleFace(effectiveFaceAxes, ab.position, ab.size, pos, size)
+            )
+          )
+            continue;
+
           const candidate = {
             position: pos.slice(),
             size,
@@ -517,6 +532,18 @@ function tryStackOnExisting(existingBoxes, box, dropoffStop, missionId) {
     const pos = [basePos[0], basePos[1], basePos[2] + baseSize[2]];
     for (const size of boxOrientations(box)) {
       if (size[0] > baseSize[0] || size[1] > baseSize[1]) continue;
+      // Même barrière dure qu'en findBestPosition : ne pas empiler à un endroit
+      // que le véhicule garé rend inaccessible par toutes les faces. En
+      // pratique la caisse-base a déjà passé la garde et l'empilement partage
+      // son empreinte horizontale ; on la remet par cohérence/robustesse.
+      if (
+        m.activeBoxes.some(
+          (ab) =>
+            ab.reserved &&
+            isBlockedFromEveryAccessibleFace(m.faceAxes, ab.position, ab.size, pos, size)
+        )
+      )
+        continue;
       if (canPlace(m.grid, m.cellDims, pos, size) && hasValidSupport(m.grid, pos, size, box.scu, dropoffStop)) {
         markPlaced(m.grid, pos, size, { dropoffStop, scu: box.scu, missionId });
         if (m.layerUsage) bumpLayerUsage(m.layerUsage, m.depthAxis, pos, size, 1);

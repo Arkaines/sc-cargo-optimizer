@@ -816,6 +816,67 @@ test("reserved: the parked-vehicle obstacle is never a reported conflict", () =>
   r.conflicts.forEach((c) => assert.ok(c.entry, "un conflit sans entry = l'obstacle réservé a fui dans les conflits"));
 });
 
+// ===== Brique A : barrière dure d'accès (Task 2) ==========================
+
+// Module long en profondeur, une seule face accessible (arrière, coord 0 de
+// l'axe le plus long). Réservation près de l'accès : une caisse ne peut pas se
+// glisser DERRIÈRE (plus loin sur l'axe d'accès) — elle serait inaccessible.
+// accessFaces limité à une face pour que le blocage soit total.
+test("reserved: hard barrier — nothing placed behind the vehicle (single face)", () => {
+  const ctx = loadCargoPacking();
+  // Module 1 cellule en largeur (axe 0) et hauteur (axe 2), 4 en profondeur
+  // (axe 1, le plus long -> depthAxis). Une seule face accessible : "back" =
+  // depthAxis "near" (coord 0). La réservation occupe la profondeur 0 (y0=0
+  // sur l'axe 1), à l'accès : toute cellule libre (profondeur 1..3) est DERRIÈRE
+  // elle -> bloquée par la seule face -> refusée par la barrière dure.
+  const holds = [{ name: "bay", dimensions: { x: 1.25, y: 5.0, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  const accessFaces = { back: true }; // clé réelle (voir moduleFaceAxes) ; défaut aussi = { back:true }
+  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, accessFaces, reservations);
+  // La seule caisse ne peut être ni dans la réservation ni derrière : non placée.
+  assert.strictEqual(r.placements.length, 0, "une caisse a été placée derrière le véhicule");
+  assert.strictEqual(r.unplaced.length, 1, "la caisse aurait dû rester non placée");
+});
+
+// Même géométrie, mais DEUX faces accessibles dont une non bloquée par la
+// réservation -> la caisse redevient plaçable (on n'a pas court-circuité la
+// logique de faces).
+test("reserved: an unblocked access face still allows placement", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 1.25, y: 5.0, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [{ quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 1 }];
+  // Accès aux DEUX extrémités de l'axe de profondeur : "back" (near, coord 0)
+  // ET "front" (far, coord max). La réservation à la profondeur 0 ne bloque pas
+  // depuis "front" -> une caisse en profondeur 1..3 reste atteignable.
+  const accessFaces = { back: true, front: true };
+  const reservations = { bay: { x0: 0, y0: 0, sx: 1, sy: 1 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 2, accessFaces, reservations);
+  assert.strictEqual(r.placements.length, 1, "la caisse devrait être atteignable par la face non bloquée");
+  assert.ok(!overlapsReserved(r.placements[0], 0, 0, 1, 1));
+});
+
+// Effet nul du score : une réservation qui ne bloque PERSONNE laisse le
+// rangement identique à sans réservation.
+test("reserved: a reservation that blocks nobody leaves packing unchanged", () => {
+  const ctx = loadCargoPacking();
+  const holds = [{ name: "bay", dimensions: { x: 6.25, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
+  const entries = [
+    { quantity: 1, commodity: "A", pickupStop: 0, dropoffStop: 2, maxCargoBoxSize: 1 },
+    { quantity: 1, commodity: "B", pickupStop: 1, dropoffStop: 3, maxCargoBoxSize: 1 },
+  ];
+  const base = ctx.simulateRoutePacking(entries, holds, 4);
+  // Réservation dans un coin éloigné où rien ne se serait de toute façon placé
+  // et qui ne borde aucune caisse posée (à ajuster si le placement de base
+  // l'atteint : la choisir hors des cellules réellement occupées par `base`).
+  const reservations = { bay: { x0: 0, y0: 1, sx: 1, sy: 1 } };
+  const r = ctx.simulateRoutePacking(entries, holds, 4, undefined, reservations);
+  const occupied = base.placements.some((p) => overlapsReserved(p, 0, 1, 1, 1));
+  assert.ok(!occupied, "cas de test mal choisi : la réservation touche une caisse du rangement de base");
+  assert.deepStrictEqual(r.placements.map((p) => p.position), base.placements.map((p) => p.position));
+  assert.strictEqual(r.conflicts.length, base.conflicts.length);
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
