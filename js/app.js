@@ -2414,6 +2414,25 @@ function applyAdminGridSize() {
   renderAdminGridEditor();
 }
 
+// Pivoter un module de 90° autour de la VERTICALE. Sur une grille alignée sur
+// des cellules cubiques, cette rotation est exactement l'échange de X et Y —
+// il n'y a donc rien à faire tourner : on échange les deux champs et on repasse
+// par applyAdminGridSize, qui dérive déjà les dimensions, la capacité (qui ne
+// bouge pas : même volume) et le rendu. La position n'est pas touchée, le
+// module pivote donc sur place, coin conservé.
+// Une rotation LIBRE (45°…) est impossible par construction : cargo-packing.js
+// travaille en cellules entières alignées sur les axes. Ce n'est pas une limite
+// de l'éditeur. Voir spec 2a §155 (rotation d'un module : hors périmètre à
+// l'origine, rouverte à l'usage).
+function rotateAdminGridModule() {
+  const cx = document.getElementById("admin-grid-cx");
+  const cy = document.getElementById("admin-grid-cy");
+  const swap = cx.value;
+  cx.value = cy.value;
+  cy.value = swap;
+  applyAdminGridSize();
+}
+
 function enterAdminGridEdit() {
   const ship = getSelectedShip();
   if (!ship) return;
@@ -3425,6 +3444,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("admin-grid-add-btn").addEventListener("click", addAdminGridModule);
   document.getElementById("admin-grid-remove-btn").addEventListener("click", removeAdminGridModule);
   document.getElementById("admin-grid-publish-btn").addEventListener("click", publishAdminGrid);
+  document.getElementById("admin-grid-rotate-btn").addEventListener("click", rotateAdminGridModule);
   ["admin-grid-cx", "admin-grid-cy", "admin-grid-cz", "admin-grid-mcs"].forEach((id) => {
     document.getElementById(id).addEventListener("change", applyAdminGridSize);
   });
