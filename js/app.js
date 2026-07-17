@@ -1135,19 +1135,38 @@ function setCargoLayoutEditUI(editing) {
 }
 
 // Équivalent de setCargoLayoutEditUI, mais pour L'ÉDITEUR ADMIN — ne doit
-// JAMAIS afficher #cargo-viewer-edit-done-btn ni #cargo-viewer-reset-layout-btn :
-// ces deux boutons pilotent la disposition PERSO du joueur
-// (state.cargoViewerLayout / exitCargoLayoutEdit / resetCargoViewerLayout),
-// sans aucun rapport avec adminGridDraft. Les emprunter à
-// setCargoLayoutEditUI (comme avant) laissait « Terminer » sortir de
-// l'édition sans fermer #admin-grid-panel (état bâtard) et « Réinitialiser »
+// JAMAIS LAISSER VISIBLES #cargo-viewer-edit-done-btn, #cargo-viewer-reset-layout-btn
+// ni #cargo-edit-hint pendant l'édition admin : ces trois éléments pilotent
+// la disposition PERSO du joueur (state.cargoViewerLayout / exitCargoLayoutEdit /
+// resetCargoViewerLayout), sans aucun rapport avec adminGridDraft. Les
+// emprunter à setCargoLayoutEditUI (comme avant) laissait « Terminer » sortir
+// de l'édition sans fermer #admin-grid-panel (état bâtard) et « Réinitialiser »
 // effacer silencieusement la disposition perso de l'admin — voir revue
-// finale 2a, finding #4. #admin-grid-close-btn (« Fermer sans publier »)
-// est l'unique sortie de l'éditeur admin.
+// finale 2a, finding #4. Un simple "ne jamais les AFFICHER" ne suffit pas :
+// si le joueur était déjà en cours d'édition perso (les trois visibles) au
+// moment où il ouvre l'éditeur admin — #admin-grid-edit-btn reste visible
+// pendant l'édition perso, rien ne l'empêche — il faut aussi les MASQUER en
+// entrant, sans quoi ils restent visibles par-dessus l'éditeur admin et
+// #pack-cargo-btn reste bloqué (désactivé par enterAdminGridEdit) tant que
+// l'admin n'a pas trouvé « Fermer sans publier » — voir revue finale 2a,
+// finding A. On mémorise donc si le joueur était en cours d'édition perso à
+// l'entrée, pour restaurer EXACTEMENT cet état (via setCargoLayoutEditUI) à
+// la sortie plutôt que de rendre ces boutons inconditionnellement visibles.
+// #admin-grid-close-btn (« Fermer sans publier ») est l'unique sortie de
+// l'éditeur admin.
+let adminGridPlayerEditWasOpen = false;
 function setAdminGridEditUI(editing) {
-  document.getElementById("cargo-viewer-edit-btn").style.display = editing ? "none" : "";
-  document.getElementById("cargo-viewer-rotate-btn").style.display = editing ? "none" : "";
-  document.getElementById("cargo-viewer-mirror-btn").style.display = editing ? "none" : "";
+  if (editing) {
+    adminGridPlayerEditWasOpen = document.getElementById("cargo-viewer-edit-done-btn").style.display !== "none";
+    document.getElementById("cargo-viewer-edit-btn").style.display = "none";
+    document.getElementById("cargo-viewer-rotate-btn").style.display = "none";
+    document.getElementById("cargo-viewer-mirror-btn").style.display = "none";
+    document.getElementById("cargo-viewer-edit-done-btn").style.display = "none";
+    document.getElementById("cargo-viewer-reset-layout-btn").style.display = "none";
+    document.getElementById("cargo-edit-hint").style.display = "none";
+  } else {
+    setCargoLayoutEditUI(adminGridPlayerEditWasOpen);
+  }
 }
 
 function enterCargoLayoutEdit() {
@@ -2351,8 +2370,15 @@ function renderAdminGridEditor() {
   }));
   const positions = {};
   adminGridDraft.forEach((m) => (positions[m.name] = { x: m.position.x, y: m.position.y, z: m.position.z }));
+  // Orientation/miroir RÉELS (ceux que publishShipGrid enverra), pas 0/false :
+  // l'admin doit voir la même étiquette Avant/Arrière/Gauche/Droite que celle
+  // qu'il publie, sinon il place ses modules contre un repère qu'il ne
+  // publie pas — voir revue finale 2a, finding B. Ça ne déplace rien (voir
+  // updateCargoViewerOrientation) : seul l'étiquetage change.
+  const orientation = adminGridShipName ? getCargoViewerOrientation(adminGridShipName) : 0;
+  const mirror = adminGridShipName ? getCargoViewerMirror(adminGridShipName) : false;
   // Aucune caisse : on place des grilles, pas de la cargaison.
-  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, [], 0, false, positions);
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, [], orientation, mirror, positions);
 
   renderAdminGridSelection();
 }
@@ -2402,7 +2428,17 @@ function enterAdminGridEdit() {
     // automatique (la disposition perso est partielle et ne les contient pas).
     if (holds.length && typeof renderCargoViewer3D === "function") {
       document.getElementById("cargo-viewer-panel").style.display = "";
-      renderCargoViewer3D(holds, [], 0, false, getCargoViewerLayout(ship.name));
+      // Même orientation/miroir réels qu'en (2) : la reconstruction auto ne
+      // dépend pas de l'orientation (relabel seulement), mais autant que ce
+      // premier rendu affiche déjà les bonnes étiquettes avant que
+      // renderAdminGridEditor() ne prenne le relais juste après.
+      renderCargoViewer3D(
+        holds,
+        [],
+        getCargoViewerOrientation(ship.name),
+        getCargoViewerMirror(ship.name),
+        getCargoViewerLayout(ship.name)
+      );
       adminGridDraft = typeof getResolvedCargoGrid === "function" ? getResolvedCargoGrid() : [];
     } else {
       adminGridDraft = [];
