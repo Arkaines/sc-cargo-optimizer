@@ -6,6 +6,18 @@
 const STORAGE_KEY = "sc-cargo-optimizer-v1";
 const DEFAULT_DISTANCE = 100; // valeur de repli quand une distance n'a pas été renseignée
 
+// Bumper à chaque changement de la logique de synchro elle-même (filtre
+// syncUexShips, mapping FleetYards...) — indépendant de l'ancienneté de la
+// dernière synchro (voir maybeAutoSync plus bas) : sans ça, un joueur dont le
+// cache local a moins de 6h ne récupère jamais un correctif de logique de
+// synchro tant que ce délai n'est pas écoulé, même après un rechargement
+// complet (cache navigateur vidé ou non), ce qui a caché le correctif du
+// filtre syncUexShips (Ironclad Assault et 35 autres vaisseaux) le temps que
+// l'ancienne synchro expire. Un changement de valeur ici force une
+// resynchronisation complète au prochain chargement, quel que soit l'âge de
+// la dernière synchro.
+const DATA_SCHEMA_VERSION = 2;
+
 function defaultState() {
   return {
     missions: [],
@@ -26,6 +38,7 @@ function defaultState() {
     fleetyardsSyncedAt: null,
     shipAccessFaces: {},
     cargoViewerOrientation: {},
+    dataSchemaVersion: DATA_SCHEMA_VERSION,
   };
 }
 
@@ -113,6 +126,7 @@ function loadState() {
       fleetyardsSyncedAt: parsed.fleetyardsSyncedAt || null,
       shipAccessFaces: parsed.shipAccessFaces || {},
       cargoViewerOrientation: parsed.cargoViewerOrientation || {},
+      dataSchemaVersion: parsed.dataSchemaVersion || 0,
     };
   } catch (e) {
     return defaultState();
@@ -3135,8 +3149,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("reset-all").addEventListener("click", () => {
     if (confirm(t("confirmResetAll"))) {
-      localStorage.removeItem(STORAGE_KEY);
-      state = loadState();
+      // Ne remet à zéro que le contenu propre au joueur (missions, lieux
+      // personnalisés, distances associées, calibrage de réputation — voir
+      // confirmResetAll ci-dessous pour la liste exacte annoncée au joueur),
+      // pas le catalogue UEX/SCWiki/FleetYards synchronisé : ce dernier n'a
+      // aucune raison d'être perdu ici, il se tient déjà à jour tout seul
+      // (voir maybeAutoSync) et un vaisseau/lieu n'a pas besoin d'être
+      // "réappris" par une resynchronisation après un simple reset.
+      const defaults = defaultState();
+      state.missions = defaults.missions;
+      state.customLocations = defaults.customLocations;
+      state.distances = defaults.distances;
+      state.nextMissionId = defaults.nextMissionId;
+      state.reputationOverrides = defaults.reputationOverrides;
+      saveState();
       renderAll();
       // Répercute aussi le reset côté cloud, sinon une prochaine connexion
       // ressusciterait les anciennes données depuis Supabase.
@@ -3150,11 +3176,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // Pas de bouton de synchronisation manuelle : la base se rafraîchit toute
   // seule, jusqu'à 4 fois par jour (toutes les 6h). Un check au chargement
   // couvre la visite normale ; l'intervalle couvre le cas d'un onglet laissé
-  // ouvert plus de 6h (le joueur n'a jamais besoin d'y penser).
+  // ouvert plus de 6h (le joueur n'a jamais besoin d'y penser). Un
+  // DATA_SCHEMA_VERSION différent de celui déjà enregistré (voir plus haut)
+  // force aussi une resynchro immédiate, même si les 6h ne sont pas
+  // écoulées : sans ça, un correctif de la logique de synchro elle-même
+  // (ex. le filtre syncUexShips qui excluait l'Ironclad Assault) reste
+  // masqué par un cache local encore "frais" jusqu'à expiration du délai.
   const AUTO_SYNC_MAX_AGE_MS = 6 * 60 * 60 * 1000;
   const maybeAutoSync = () => {
-    if (!state.uexSyncedAt || Date.now() - state.uexSyncedAt > AUTO_SYNC_MAX_AGE_MS) {
-      runFullSync();
+    const stale = !state.uexSyncedAt || Date.now() - state.uexSyncedAt > AUTO_SYNC_MAX_AGE_MS;
+    const schemaChanged = state.dataSchemaVersion !== DATA_SCHEMA_VERSION;
+    if (stale || schemaChanged) {
+      runFullSync().then(() => {
+        state.dataSchemaVersion = DATA_SCHEMA_VERSION;
+        saveState();
+      });
     }
   };
   maybeAutoSync();

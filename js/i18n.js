@@ -206,9 +206,9 @@ const TRANSLATIONS = {
     dropoffAction: "Déposer",
     cargoAlreadyPickedUpElsewhere: "{commodity} — déjà récupéré à {locations}",
 
-    resetAllBtn: "Réinitialiser toutes les données",
+    resetAllBtn: "Réinitialiser mes données",
     confirmResetAll:
-      "⚠ Action irréversible : ceci va TOUT supprimer sans exception — missions actives, historique des missions terminées, calibrage de réputation, lieux personnalisés et distances enregistrées. Si tu es connecté, la sauvegarde cloud sera aussi effacée définitivement. Continuer ?",
+      "⚠ Action irréversible : ceci va supprimer tes missions actives, l'historique des missions terminées, le calibrage de réputation, tes lieux personnalisés et les distances enregistrées. Si tu es connecté, la sauvegarde cloud sera aussi effacée définitivement. Le catalogue vaisseaux/lieux/marchandises n'est pas touché — il se met à jour tout seul. Continuer ?",
   },
 
   en: {
@@ -408,9 +408,9 @@ const TRANSLATIONS = {
     dropoffAction: "Drop off",
     cargoAlreadyPickedUpElsewhere: "{commodity} — already picked up at {locations}",
 
-    resetAllBtn: "Reset all data",
+    resetAllBtn: "Reset my data",
     confirmResetAll:
-      "⚠ Irreversible action: this will delete EVERYTHING with no exception — active missions, completed mission history, reputation calibration, custom locations and saved distances. If you're logged in, the cloud backup will also be permanently erased. Continue?",
+      "⚠ Irreversible action: this will delete your active missions, completed mission history, reputation calibration, custom locations and saved distances. If you're logged in, the cloud backup will also be permanently erased. The ship/location/commodity catalog is not affected — it keeps itself up to date automatically. Continue?",
   },
 };
 
