@@ -39,6 +39,7 @@ function defaultState() {
     shipAccessFaces: {},
     cargoViewerOrientation: {},
     cargoViewerMirror: {},
+    cargoViewerLayout: {},
     dataSchemaVersion: DATA_SCHEMA_VERSION,
   };
 }
@@ -128,6 +129,7 @@ function loadState() {
       shipAccessFaces: parsed.shipAccessFaces || {},
       cargoViewerOrientation: parsed.cargoViewerOrientation || {},
       cargoViewerMirror: parsed.cargoViewerMirror || {},
+      cargoViewerLayout: parsed.cargoViewerLayout || {},
       dataSchemaVersion: parsed.dataSchemaVersion || 0,
     };
   } catch (e) {
@@ -1049,6 +1051,37 @@ function mirrorCargoViewerOrientation() {
   saveState();
   applyCargoViewerOrientation(ship);
 }
+
+// Disposition manuelle des grilles de cargo, par vaisseau (voir
+// docs/superpowers/specs/2026-07-17-manual-cargo-grid-placement-design.md).
+// FleetYards ne donne pas les positions réelles des soutes : le joueur peut
+// glisser chaque grille à sa vraie place (mode édition, js/cargo-viewer.js).
+// Surcharge PARTIELLE : seuls les modules déplacés sont mémorisés, les autres
+// gardent la reconstruction auto. La clé de module est opaque ici — c'est le
+// visualiseur qui la produit (moduleKey), app.js ne fait que la stocker.
+function getCargoViewerLayout(shipName) {
+  return (shipName && state.cargoViewerLayout[shipName]) || {};
+}
+
+// Appelée par js/cargo-viewer.js au relâchement d'un glisser. x/z sont
+// l'origine (coin) du module, déjà aimantée sur 1,25 m et bornée à >= 0
+// côté visualiseur.
+window.persistCargoModulePosition = function persistCargoModulePosition(moduleKey, x, z) {
+  const ship = getSelectedShip();
+  if (!ship || !moduleKey) return;
+  if (!state.cargoViewerLayout[ship.name]) state.cargoViewerLayout[ship.name] = {};
+  state.cargoViewerLayout[ship.name][moduleKey] = { x, z };
+  saveState();
+};
+
+// Bouton « Réinitialiser la disposition » : ce vaisseau repart à 100 % auto.
+window.resetCargoViewerLayout = function resetCargoViewerLayout() {
+  const ship = getSelectedShip();
+  if (!ship) return;
+  delete state.cargoViewerLayout[ship.name];
+  saveState();
+  renderCargoStepView();
+};
 
 function renderShipAccessFaces() {
   const ship = getSelectedShip();

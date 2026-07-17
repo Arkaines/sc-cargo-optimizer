@@ -24,6 +24,9 @@ const CLOUD_SYNCED_KEYS = [
   "selectedShip",
   "customShipCapacity",
   "reputationOverrides",
+  "cargoViewerOrientation",
+  "cargoViewerMirror",
+  "cargoViewerLayout",
 ];
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
