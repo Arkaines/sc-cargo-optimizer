@@ -1030,26 +1030,26 @@ function getCargoViewerMirror(shipName) {
 // tourner/mirer ne fasse jamais sauter l'angle de vue ou le zoom que le
 // joueur a mis en place à la souris (voir js/cargo-viewer.js:
 // buildAxisLabels pour le détail de ce découplage).
-function applyCargoViewerOrientation(ship) {
+function applyCargoViewerOrientation(shipName) {
   if (typeof updateCargoViewerOrientation !== "function") return;
-  updateCargoViewerOrientation(getCargoViewerOrientation(ship.name), getCargoViewerMirror(ship.name));
+  updateCargoViewerOrientation(getCargoViewerOrientation(shipName), getCargoViewerMirror(shipName));
 }
 
 function rotateCargoViewerOrientation() {
-  const ship = getSelectedShip();
-  if (!ship) return;
-  const current = getCargoViewerOrientation(ship.name);
-  state.cargoViewerOrientation[ship.name] = (current + 1) % 4;
+  const shipName = getCargoViewerShipName();
+  if (!shipName) return;
+  const current = getCargoViewerOrientation(shipName);
+  state.cargoViewerOrientation[shipName] = (current + 1) % 4;
   saveState();
-  applyCargoViewerOrientation(ship);
+  applyCargoViewerOrientation(shipName);
 }
 
 function mirrorCargoViewerOrientation() {
-  const ship = getSelectedShip();
-  if (!ship) return;
-  state.cargoViewerMirror[ship.name] = !getCargoViewerMirror(ship.name);
+  const shipName = getCargoViewerShipName();
+  if (!shipName) return;
+  state.cargoViewerMirror[shipName] = !getCargoViewerMirror(shipName);
   saveState();
-  applyCargoViewerOrientation(ship);
+  applyCargoViewerOrientation(shipName);
 }
 
 // Disposition manuelle des grilles de cargo, par vaisseau (voir
@@ -1063,22 +1063,34 @@ function getCargoViewerLayout(shipName) {
   return (shipName && state.cargoViewerLayout[shipName]) || {};
 }
 
+// Le vaisseau auquel appartient la scène 3D actuellement affichée — pas
+// forcément getSelectedShip() : changer le sélecteur de vaisseau ne
+// recalcule pas le rangement (cargoPackState garde l'ancien vaisseau tant
+// qu'on n'a pas relancé « Calculer le rangement »). Passer par
+// getSelectedShip() écrirait les réglages du vaisseau AFFICHÉ dans ceux du
+// vaisseau SÉLECTIONNÉ, et corromprait la disposition de ce dernier.
+function getCargoViewerShipName() {
+  if (cargoPackState && cargoPackState.shipName) return cargoPackState.shipName;
+  const ship = getSelectedShip();
+  return ship ? ship.name : null;
+}
+
 // Appelée par js/cargo-viewer.js au relâchement d'un glisser. x/z sont
 // l'origine (coin) du module, déjà aimantée sur 1,25 m et bornée à >= 0
 // côté visualiseur.
 window.persistCargoModulePosition = function persistCargoModulePosition(moduleKey, x, z) {
-  const ship = getSelectedShip();
-  if (!ship || !moduleKey) return;
-  if (!state.cargoViewerLayout[ship.name]) state.cargoViewerLayout[ship.name] = {};
-  state.cargoViewerLayout[ship.name][moduleKey] = { x, z };
+  const shipName = getCargoViewerShipName();
+  if (!shipName || !moduleKey) return;
+  if (!state.cargoViewerLayout[shipName]) state.cargoViewerLayout[shipName] = {};
+  state.cargoViewerLayout[shipName][moduleKey] = { x, z };
   saveState();
 };
 
 // Bouton « Réinitialiser la disposition » : ce vaisseau repart à 100 % auto.
 window.resetCargoViewerLayout = function resetCargoViewerLayout() {
-  const ship = getSelectedShip();
-  if (!ship) return;
-  delete state.cargoViewerLayout[ship.name];
+  const shipName = getCargoViewerShipName();
+  if (!shipName) return;
+  delete state.cargoViewerLayout[shipName];
   saveState();
   renderCargoStepView();
 };
@@ -2204,10 +2216,10 @@ function renderCargoStepView() {
   // l'arrivée à l'étape de déchargement, obligeant à revenir en arrière
   // pour la voir encore sur la grille.
   const present = result.placements.filter((p) => p.pickupStop <= stepIndex && p.dropoffStop >= stepIndex);
-  const ship = getSelectedShip();
-  const orientation = ship ? getCargoViewerOrientation(ship.name) : 0;
-  const mirror = ship ? getCargoViewerMirror(ship.name) : false;
-  const savedLayout = ship ? getCargoViewerLayout(ship.name) : {};
+  const shipName = getCargoViewerShipName();
+  const orientation = shipName ? getCargoViewerOrientation(shipName) : 0;
+  const mirror = shipName ? getCargoViewerMirror(shipName) : false;
+  const savedLayout = shipName ? getCargoViewerLayout(shipName) : {};
   if (typeof renderCargoViewer3D === "function")
     renderCargoViewer3D(holds, present, orientation, mirror, savedLayout);
 }
@@ -2257,7 +2269,7 @@ function runCargoPacking() {
   }
 
   const result = simulateRoutePacking(entries, holds, lastRouteResult.steps.length, getShipAccessFaces(ship.name));
-  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: 0 };
+  cargoPackState = { holds, routeResult: lastRouteResult, result, stepIndex: 0, shipName: ship.name };
   renderCargoPackStatus();
   renderCargoStepView();
 }

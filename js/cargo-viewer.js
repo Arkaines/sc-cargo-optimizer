@@ -199,13 +199,17 @@ function trailingIndex(name) {
 
 // Clé stable d'un module pour la disposition manuelle (voir
 // state.cargoViewerLayout dans js/app.js). Le nom du hardpoint suffit ; on ne
-// suffixe "#<i>" que si ce nom apparaît plusieurs fois parmi les modules
-// AFFICHÉS (cas théorique — les noms FleetYards observés sont distincts, y
-// compris module_01..04), pour que deux homonymes ne partagent pas la même
-// position mémorisée.
-function moduleKey(hold, displayHolds) {
+// suffixe "#<i>" que si ce nom apparaît plusieurs fois parmi TOUTES les
+// soutes du vaisseau (cas théorique — les noms FleetYards observés sont
+// distincts, y compris module_01..04), pour que deux homonymes ne partagent
+// pas la même position mémorisée. Calculée sur l'ensemble non filtré des
+// soutes (holds), pas la liste affichée à l'étape courante (displayHolds) :
+// cette dernière varie d'une étape de trajet à l'autre (un module structurel
+// n'apparaît que quand il porte une caisse à cette étape), ce qui ferait
+// changer l'indice "#<i>" d'un même module d'une étape à l'autre.
+function moduleKey(hold, holds) {
   const name = hold.name || "";
-  const sameName = displayHolds.filter((h) => (h.name || "") === name);
+  const sameName = holds.filter((h) => (h.name || "") === name);
   if (sameName.length <= 1) return name;
   return `${name}#${sameName.indexOf(hold)}`;
 }
@@ -537,7 +541,7 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
   // suit (sceneBounds suppose une origine à 0) reste valide.
   const overrides = savedLayout || {};
   layout.forEach((l) => {
-    const custom = overrides[moduleKey(l.hold, displayHolds)];
+    const custom = overrides[moduleKey(l.hold, holds)];
     if (custom) {
       l.worldPos[0] = custom.x;
       l.worldPos[2] = custom.z;
@@ -567,7 +571,7 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
         new THREE.MeshBasicMaterial({ visible: false })
       );
       pick.position.set(worldPos[0] + dx / 2, worldPos[1] + dy / 2, worldPos[2] + dz / 2);
-      pick.userData.moduleKey = moduleKey(hold, displayHolds);
+      pick.userData.moduleKey = moduleKey(hold, holds);
       pick.userData.wireframe = wireframe;
       pick.userData.dims = { dx, dy, dz };
       contentGroup.add(pick);
@@ -706,6 +710,7 @@ const dragRaycaster = new THREE.Raycaster();
 const dragPointerNdc = new THREE.Vector2();
 const dragHitPoint = new THREE.Vector3();
 let dragTarget = null;
+let dragMoved = false;
 let dragGrabOffsetX = 0;
 let dragGrabOffsetZ = 0;
 
@@ -726,6 +731,7 @@ function onLayoutPointerDown(event) {
   const hits = dragRaycaster.intersectObjects(pickMeshes, false);
   if (!hits.length) return;
   dragTarget = hits[0].object;
+  dragMoved = false;
   if (!dragRaycaster.ray.intersectPlane(dragGroundPlane, dragHitPoint)) {
     dragTarget = null;
     return;
@@ -745,6 +751,9 @@ function onLayoutPointerMove(event) {
   const { dx, dz } = dragTarget.userData.dims;
   const originX = snapToUnit(dragHitPoint.x - dragGrabOffsetX);
   const originZ = snapToUnit(dragHitPoint.z - dragGrabOffsetZ);
+  const currentOriginX = dragTarget.position.x - dx / 2;
+  const currentOriginZ = dragTarget.position.z - dz / 2;
+  if (originX !== currentOriginX || originZ !== currentOriginZ) dragMoved = true;
   dragTarget.position.x = originX + dx / 2;
   dragTarget.position.z = originZ + dz / 2;
   dragTarget.userData.wireframe.position.x = originX;
@@ -752,16 +761,18 @@ function onLayoutPointerMove(event) {
 }
 
 function onLayoutPointerUp() {
-  if (!editingLayout || !dragTarget) return;
-  const { dx, dz } = dragTarget.userData.dims;
-  // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
-  // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
-  const originX = snapToUnit(dragTarget.position.x - dx / 2);
-  const originZ = snapToUnit(dragTarget.position.z - dz / 2);
-  if (typeof window.persistCargoModulePosition === "function") {
-    window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originZ);
+  if (editingLayout && dragTarget && dragMoved) {
+    const { dx, dz } = dragTarget.userData.dims;
+    // On mémorise l'ORIGINE (coin) du module — les mêmes coordonnées que
+    // worldPos[0]/worldPos[2] au rendu — pas le centre de la boîte de collision.
+    const originX = snapToUnit(dragTarget.position.x - dx / 2);
+    const originZ = snapToUnit(dragTarget.position.z - dz / 2);
+    if (typeof window.persistCargoModulePosition === "function") {
+      window.persistCargoModulePosition(dragTarget.userData.moduleKey, originX, originZ);
+    }
   }
   dragTarget = null;
+  dragMoved = false;
   controls.enabled = true;
 }
 
