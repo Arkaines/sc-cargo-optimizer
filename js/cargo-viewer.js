@@ -71,6 +71,10 @@ let pickMeshes = [];
 // la scène (caissons, caisses, caméra) — voir ce commentaire plus bas pour
 // pourquoi ce découplage est nécessaire.
 let lastLabelMetrics = null;
+
+// Dernier `layout` résolu (modules + worldPos finaux) — voir
+// getResolvedCargoGrid.
+let lastResolvedLayout = [];
 let labelMeshes = { front: null, rear: null, left: null, right: null };
 
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
@@ -576,6 +580,7 @@ window.renderCargoViewer3D = function renderCargoViewer3D(holds, placements, rot
     maxDz = Math.max(maxDz, l.worldPos[2] + l.dz);
     totalWidth = Math.max(totalWidth, l.worldPos[0] + l.dx);
   });
+  lastResolvedLayout = layout;
 
   layout.forEach(({ hold, dx, dy, dz, worldPos }) => {
     // Caisson du module : arêtes nettes + grille de crans sur les faces.
@@ -721,6 +726,21 @@ function setCargoViewerView(view) {
 }
 window.setCargoViewerView = setCargoViewerView;
 
+// Positions RÉSOLUES du dernier rendu, une entrée par module affiché.
+// La disposition perso est une surcharge PARTIELLE (seuls les modules
+// déplacés y figurent) : pour amorcer un brouillon d'éditeur il faut les
+// positions de TOUS les modules, y compris ceux placés par la
+// reconstruction automatique. Rien d'autre ne les expose.
+window.getResolvedCargoGrid = function getResolvedCargoGrid() {
+  return lastResolvedLayout.map((l) => ({
+    name: l.hold.name,
+    dimensions: { x: l.hold.dimensions.x, y: l.hold.dimensions.y, z: l.hold.dimensions.z },
+    capacity: l.hold.capacity,
+    maxContainerSize: l.hold.maxContainerSize,
+    position: { x: l.worldPos[0], y: l.worldPos[1], z: l.worldPos[2] },
+  }));
+};
+
 // --- Glisser-déposer d'une grille (mode édition) -------------------------
 // Le curseur est projeté sur le plan du sol (Y=0) ; le module suit, aimanté
 // sur 1 SCU (UNIT = 1,25 m) et borné à >= 0 pour que tous les modules restent
@@ -789,6 +809,11 @@ function onLayoutPointerDown(event) {
   dragGrabOffsetA = dragHitPoint[dragAxes.a] - (dragTarget.position[dragAxes.a] - halfOf[dragAxes.a]);
   dragGrabOffsetB = dragHitPoint[dragAxes.b] - (dragTarget.position[dragAxes.b] - halfOf[dragAxes.b]);
   controls.enabled = false; // le geste ne doit pas bouger la caméra
+  // Prévient l'app du module visé, pour que l'éditeur admin puisse le
+  // sélectionner même sans glisser (un simple clic).
+  if (typeof window.onCargoModulePicked === "function") {
+    window.onCargoModulePicked(dragTarget.userData.moduleKey);
+  }
 }
 
 function onLayoutPointerMove(event) {

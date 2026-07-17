@@ -5,6 +5,7 @@
 // =========================================================================
 const STORAGE_KEY = "sc-cargo-optimizer-v1";
 const DEFAULT_DISTANCE = 100; // valeur de repli quand une distance n'a pas été renseignée
+const UNIT_M = 1.25; // 1 cellule SCU = 1,25 m (doit rester égal à UNIT dans js/cargo-viewer.js)
 
 // Bumper à chaque changement de la logique de synchro elle-même (filtre
 // syncUexShips, mapping FleetYards...) — indépendant de l'ancienneté de la
@@ -1087,11 +1088,28 @@ function getCargoViewerShipName() {
 // l'origine (coin) du module, chacun déjà aimanté sur 1,25 m et borné à >= 0
 // côté visualiseur.
 window.persistCargoModulePosition = function persistCargoModulePosition(moduleKey, x, y, z) {
+  // En édition admin, un glisser modifie le BROUILLON (rien n'est publié tant
+  // que Publier n'est pas cliqué), pas la disposition perso du joueur.
+  if (adminGridDraft) {
+    const mod = adminGridDraft.find((m) => m.name === moduleKey);
+    if (mod) {
+      mod.position = { x, y, z };
+      adminGridSelected = moduleKey;
+      renderAdminGridSelection();
+    }
+    return;
+  }
   const shipName = getCargoViewerShipName();
   if (!shipName || !moduleKey) return;
   if (!state.cargoViewerLayout[shipName]) state.cargoViewerLayout[shipName] = {};
   state.cargoViewerLayout[shipName][moduleKey] = { x, y, z };
   saveState();
+};
+
+window.onCargoModulePicked = function onCargoModulePicked(moduleKey) {
+  if (!adminGridDraft) return;
+  adminGridSelected = moduleKey;
+  renderAdminGridSelection();
 };
 
 // Bouton « Réinitialiser la disposition » : ce vaisseau repart à 100 % auto.
@@ -2277,6 +2295,155 @@ function getPublishedGridPositions(shipName) {
   return byName;
 }
 
+// =========================================================================
+// Éditeur de grille (admin) — voir
+// docs/superpowers/specs/2026-07-17-admin-grid-editor-design.md
+// On édite LE VAISSEAU, pas la cargaison : l'éditeur s'ouvre sans qu'aucun
+// rangement n'existe (un vaisseau inconnu de FleetYards n'a rien à ranger),
+// donc il force l'affichage du visualiseur et y rend son brouillon.
+// =========================================================================
+const ADMIN_GRID_MAX_BOX_SIZES = [1, 2, 4, 8, 16, 24, 32];
+
+let adminGridDraft = null; // [{ name, dimensions, capacity, maxContainerSize, position }]
+let adminGridShipName = null;
+let adminGridSelected = null; // le nom du module sélectionné
+
+// La capacité n'est JAMAIS saisie : c'est le volume en cellules SCU.
+// Vérifié sur les 284 soutes FleetYards, 284/284 sans exception.
+function capacityFromDimensions(dims) {
+  return Math.round((dims.x / UNIT_M) * (dims.y / UNIT_M) * (dims.z / UNIT_M));
+}
+
+function renderAdminGridEditor() {
+  const panel = document.getElementById("cargo-viewer-panel");
+  const nav = document.getElementById("cargo-step-nav");
+  const adminPanel = document.getElementById("admin-grid-panel");
+  if (!adminGridDraft) {
+    adminPanel.style.display = "none";
+    return;
+  }
+  panel.style.display = "";
+  nav.style.display = "none";
+  adminPanel.style.display = "";
+  document.getElementById("cargo-published-note").style.display = "none";
+
+  const holds = adminGridDraft.map((m) => ({
+    name: m.name,
+    dimensions: m.dimensions,
+    capacity: m.capacity,
+    maxContainerSize: m.maxContainerSize,
+  }));
+  const positions = {};
+  adminGridDraft.forEach((m) => (positions[m.name] = { x: m.position.x, y: m.position.y, z: m.position.z }));
+  // Aucune caisse : on place des grilles, pas de la cargaison.
+  if (typeof renderCargoViewer3D === "function") renderCargoViewer3D(holds, [], 0, false, positions);
+
+  renderAdminGridSelection();
+}
+
+function renderAdminGridSelection() {
+  const box = document.getElementById("admin-grid-selected");
+  const mod = adminGridDraft && adminGridDraft.find((m) => m.name === adminGridSelected);
+  if (!mod) {
+    box.style.display = "none";
+    return;
+  }
+  box.style.display = "";
+  document.getElementById("admin-grid-selected-name").textContent = mod.name;
+  document.getElementById("admin-grid-cx").value = Math.round(mod.dimensions.x / UNIT_M);
+  document.getElementById("admin-grid-cy").value = Math.round(mod.dimensions.y / UNIT_M);
+  document.getElementById("admin-grid-cz").value = Math.round(mod.dimensions.z / UNIT_M);
+  const sel = document.getElementById("admin-grid-mcs");
+  sel.value = String(mod.maxContainerSize);
+  document.getElementById("admin-grid-capacity").textContent = t("adminGridCapacity", { scu: mod.capacity });
+}
+
+function applyAdminGridSize() {
+  const mod = adminGridDraft && adminGridDraft.find((m) => m.name === adminGridSelected);
+  if (!mod) return;
+  const cx = Math.max(1, Number(document.getElementById("admin-grid-cx").value) || 1);
+  const cy = Math.max(1, Number(document.getElementById("admin-grid-cy").value) || 1);
+  const cz = Math.max(1, Number(document.getElementById("admin-grid-cz").value) || 1);
+  mod.dimensions = { x: cx * UNIT_M, y: cy * UNIT_M, z: cz * UNIT_M };
+  mod.capacity = capacityFromDimensions(mod.dimensions);
+  mod.maxContainerSize = Number(document.getElementById("admin-grid-mcs").value) || 1;
+  renderAdminGridEditor();
+}
+
+function enterAdminGridEdit() {
+  const ship = getSelectedShip();
+  if (!ship) return;
+  adminGridShipName = ship.name;
+  adminGridSelected = null;
+
+  // Amorçage : grille publiée > soutes FleetYards résolues > vide.
+  const published = state.approvedShipGrids[ship.name];
+  if (published && Array.isArray(published.grid) && published.grid.length) {
+    adminGridDraft = JSON.parse(JSON.stringify(published.grid));
+  } else {
+    const holds = getShipHolds(ship.name) || [];
+    // Rendu d'abord pour obtenir les positions résolues de la reconstruction
+    // automatique (la disposition perso est partielle et ne les contient pas).
+    if (holds.length && typeof renderCargoViewer3D === "function") {
+      document.getElementById("cargo-viewer-panel").style.display = "";
+      renderCargoViewer3D(holds, [], 0, false, getCargoViewerLayout(ship.name));
+      adminGridDraft = typeof getResolvedCargoGrid === "function" ? getResolvedCargoGrid() : [];
+    } else {
+      adminGridDraft = [];
+    }
+  }
+
+  document.getElementById("admin-grid-edit-btn").style.display = "none";
+  if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(true);
+  setCargoLayoutEditUI(true);
+  renderAdminGridEditor();
+}
+
+function exitAdminGridEdit() {
+  adminGridDraft = null;
+  adminGridShipName = null;
+  adminGridSelected = null;
+  document.getElementById("admin-grid-panel").style.display = "none";
+  if (typeof setCargoLayoutEditing === "function") setCargoLayoutEditing(false);
+  setCargoLayoutEditUI(false);
+  renderCargoStepView();
+  renderAdminGridEntry();
+}
+
+// Le bouton d'entrée n'apparaît que pour un admin, avec un vaisseau choisi.
+function renderAdminGridEntry() {
+  const btn = document.getElementById("admin-grid-edit-btn");
+  if (!btn) return;
+  btn.style.display = isAdminUser && getSelectedShip() && !adminGridDraft ? "" : "none";
+}
+
+function addAdminGridModule() {
+  if (!adminGridDraft) return;
+  let i = 1;
+  let name = `grid_${i}`;
+  while (adminGridDraft.some((m) => m.name === name)) name = `grid_${++i}`;
+  const dims = { x: UNIT_M, y: UNIT_M, z: UNIT_M };
+  adminGridDraft.push({
+    name,
+    dimensions: dims,
+    capacity: capacityFromDimensions(dims),
+    maxContainerSize: 1,
+    position: { x: 0, y: 0, z: 0 },
+  });
+  adminGridSelected = name;
+  renderAdminGridEditor();
+}
+
+function removeAdminGridModule() {
+  if (!adminGridDraft || !adminGridSelected) {
+    alert(t("adminGridSelectFirst"));
+    return;
+  }
+  adminGridDraft = adminGridDraft.filter((m) => m.name !== adminGridSelected);
+  adminGridSelected = null;
+  renderAdminGridEditor();
+}
+
 // Calcule et affiche le rangement des marchandises des missions incluses
 // dans les vraies soutes du vaisseau sélectionné (données FleetYards.net,
 // voir js/fleetyards.js), en respectant l'ordre réel de récupération/
@@ -3151,6 +3318,22 @@ document.addEventListener("DOMContentLoaded", () => {
     renderShipCapacity();
     renderShipAccessFaces();
     renderMissionsTable();
+    renderAdminGridEntry();
+  });
+
+  const mcsSelect = document.getElementById("admin-grid-mcs");
+  ADMIN_GRID_MAX_BOX_SIZES.forEach((s) => {
+    const opt = document.createElement("option");
+    opt.value = String(s);
+    opt.textContent = `${s} SCU`;
+    mcsSelect.appendChild(opt);
+  });
+  document.getElementById("admin-grid-edit-btn").addEventListener("click", enterAdminGridEdit);
+  document.getElementById("admin-grid-close-btn").addEventListener("click", exitAdminGridEdit);
+  document.getElementById("admin-grid-add-btn").addEventListener("click", addAdminGridModule);
+  document.getElementById("admin-grid-remove-btn").addEventListener("click", removeAdminGridModule);
+  ["admin-grid-cx", "admin-grid-cy", "admin-grid-cz", "admin-grid-mcs"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", applyAdminGridSize);
   });
 
   document.getElementById("custom-ship-capacity").addEventListener("change", (e) => {

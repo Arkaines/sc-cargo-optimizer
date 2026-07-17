@@ -187,6 +187,19 @@ const TRANSLATIONS = {
       "Glisse chaque grille à sa vraie place (aimantage sur 1 SCU = 1,25 m). Tu déplaces dans le plan que tu regardes : en vue de dessus au sol, en vue avant ou de côté tu règles la hauteur. Change de vue avec les boutons ci-dessous.",
     publishedGridNote:
       "Grille officielle : la disposition de ce vaisseau a été validée et s'applique à tout le monde.",
+    adminGridEditBtn: "Éditer la grille (admin)",
+    adminGridHint:
+      "Édite la grille de ce vaisseau : clique une grille pour la sélectionner, glisse-la pour la placer (change de vue pour régler la hauteur), et règle sa taille en cellules SCU. La capacité se calcule toute seule. Rien n'est publié tant que tu ne cliques pas Publier.",
+    adminGridAddBtn: "Ajouter une grille",
+    adminGridRemoveBtn: "Supprimer la grille",
+    adminGridPublishBtn: "Publier la grille",
+    adminGridCloseBtn: "Fermer sans publier",
+    adminGridCellsX: "Largeur (cellules)",
+    adminGridCellsY: "Profondeur (cellules)",
+    adminGridCellsZ: "Hauteur (cellules)",
+    adminGridMaxBox: "Caisse max (SCU)",
+    adminGridCapacity: "Capacité : {scu} SCU",
+    adminGridSelectFirst: "Sélectionne d'abord une grille.",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -401,6 +414,19 @@ const TRANSLATIONS = {
       "Drag each grid to its real place (snaps to 1 SCU = 1.25 m). You move within the plane you are looking at: top view moves it along the floor, front or side view sets its height. Switch views with the buttons below.",
     publishedGridNote:
       "Official grid: this ship's layout has been validated and applies to everyone.",
+    adminGridEditBtn: "Edit grid (admin)",
+    adminGridHint:
+      "Edit this ship's grid: click a grid to select it, drag it to place it (switch view to set its height), and set its size in SCU cells. Capacity is computed for you. Nothing is published until you click Publish.",
+    adminGridAddBtn: "Add a grid",
+    adminGridRemoveBtn: "Delete grid",
+    adminGridPublishBtn: "Publish grid",
+    adminGridCloseBtn: "Close without publishing",
+    adminGridCellsX: "Width (cells)",
+    adminGridCellsY: "Depth (cells)",
+    adminGridCellsZ: "Height (cells)",
+    adminGridMaxBox: "Max box (SCU)",
+    adminGridCapacity: "Capacity: {scu} SCU",
+    adminGridSelectFirst: "Select a grid first.",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",
