@@ -8,9 +8,20 @@ A French-first (FR/EN) fan tool for Star Citizen: logs cargo-hauling missions, c
 
 ## Commands
 
-There is no build, lint, or test tooling at the repo root — it's a static site; changes are tested by opening `index.html` in a browser (or serving the directory with any static file server) and exercising the feature by hand.
+There is no build or lint step — it's a static site. Two test suites exist, both under `scripts/`, both plain Node with no framework:
 
-**Testing the 3D viewer** (`js/cargo-viewer.js`) needs read-only probes that are **not installed in production**: open the page with **`?probes=1`** and `window.__cargoViewerTestProbe()` (projects a module to screen coordinates so a headless test can click it for real — clicking "the middle of the canvas" proves nothing, the Caterpillar's spine is narrow and the centre falls in empty space), `window.__sceneAudit()` (counts floor grid / axes helper / reservation overlays actually in the scene) and `window.__labelAudit()` (positions of the four orientation labels) become available. Without the flag they don't exist at all. Headless runs use Edge + `puppeteer-core`; always attach `page.on("dialog", d => d.accept())` first — an unhandled `alert` hangs the run — and force `syncFleetyardsCargoHolds()` once on a fresh profile, which has no FleetYards data (otherwise the viewer renders nothing and the test proves nothing).
+```bash
+node scripts/cargo-packing-tests.cjs        # l'algorithme pur (js/cargo-packing.js)
+cd scripts && npm install                   # une fois : puppeteer-core
+npm run test:browser                        # les 4 suites navigateur (~20 s)
+npm run test:browser -- admin               # filtre sur le nom de fichier
+```
+
+`scripts/browser-tests/` drives the **real UI** in headless Edge (`run.cjs` is autonomous: it starts its own static server on 8123 and its own Edge on CDP 9500, so it never collides with a dev server on 8080). Suites: `01-viewer` (3D probes, bounds, floor/axes), `02-admin-editor` (selection, rotation, rigid move-all via real mouse drags), `03-reservations` (world→module cell conversion, drag, packing exclusion), `04-community-grids` (brick 2b + the robustness fixes). Anything about the 3D viewer or a UI journey belongs here; `cargo-packing-tests.cjs` covers only pure packing logic.
+
+`scripts/browser-tests/lib.cjs` carries the hard-won setup, and its header comment lists the traps — read it before writing a new suite. The two that cost the most: the app's background `maybeAutoSync()` finishes mid-test and calls `renderAll()`, which rebuilds the 3D scene and makes any in-flight drag fail *intermittently* — `openApp` neutralizes it by seeding `localStorage` with a fresh `uexSyncedAt`/`dataSchemaVersion` (both read out of `js/app.js` by regex, so they can't drift); and `document.startViewTransition` (used by `activateTab`) aborts in headless, so `openApp` makes it synchronous.
+
+**Viewer probes are not installed in production.** Open with **`?probes=1`** to get `window.__cargoViewerTestProbe()` (projects a module to screen coordinates so a test can click it for real — clicking "the middle of the canvas" proves nothing, the Caterpillar's spine is narrow and the centre falls in empty space), `window.__sceneAudit()` (counts floor grid / axes helper / reservation overlays actually in the scene) and `window.__labelAudit()` (positions of the four orientation labels). Without the flag they don't exist at all — `01-viewer` asserts that.
 
 Docker (for serving a built copy, not for development):
 ```bash
