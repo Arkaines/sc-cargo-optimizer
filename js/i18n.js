@@ -219,6 +219,8 @@ const TRANSLATIONS = {
     adminGridPublished: "Grille publiée pour « {ship} ».",
     adminGridPublishFailed: "Échec de la publication : {msg}",
     proposalFailed: "Échec de l'envoi de la proposition : {msg}",
+    proposalQuotaReached:
+      "Tu as déjà 10 propositions en attente pour ce vaisseau. Attends qu'elles soient traitées avant d'en envoyer d'autres.",
     proposeLayoutBtn: "Proposer cette disposition",
     proposeCorrectionBtn: "Proposer une correction",
     proposalSent: "Proposition envoyée — en attente de validation. Merci !",
@@ -478,6 +480,8 @@ const TRANSLATIONS = {
     adminGridPublished: "Grid published for \"{ship}\".",
     adminGridPublishFailed: "Publishing failed: {msg}",
     proposalFailed: "Could not send the proposal: {msg}",
+    proposalQuotaReached:
+      "You already have 10 pending proposals for this ship. Wait until they are reviewed before sending more.",
     proposeLayoutBtn: "Propose this layout",
     proposeCorrectionBtn: "Propose a correction",
     proposalSent: "Proposal sent — pending review. Thanks!",

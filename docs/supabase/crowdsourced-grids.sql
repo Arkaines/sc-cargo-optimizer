@@ -29,13 +29,46 @@ create table if not exists public.layout_submissions (
   reviewed_at    timestamptz
 );
 
--- Une seule proposition EN ATTENTE par (joueur, vaisseau) : la nouvelle
--- remplace l'ancienne (voir l'upsert côté client).
-create unique index if not exists layout_submissions_one_pending
-  on public.layout_submissions (submitted_by, ship_name)
-  where status = 'pending';
+-- Un joueur peut avoir PLUSIEURS propositions en attente pour un même vaisseau
+-- (des variantes, à toi de choisir la meilleure) — d'où l'absence de contrainte
+-- d'unicité. `drop index` au cas où une version antérieure du script l'aurait
+-- créée : sans ça, la 2e proposition d'un joueur serait rejetée.
+drop index if exists public.layout_submissions_one_pending;
 
 alter table public.layout_submissions enable row level security;
+
+-- --- Garde-fou anti-inondation ---------------------------------------------
+-- Plafond de 10 propositions EN ATTENTE par (joueur, vaisseau). Côté BASE, pas
+-- côté client : le client est public et ne protège rien. Sans plafond, cliquer
+-- « Proposer » en boucle créerait autant de lignes à modérer ET autant de
+-- notifications Discord. Les propositions déjà validées/rejetées ne comptent
+-- pas — seules celles encore en attente.
+-- security definer : la fonction doit pouvoir compter les lignes du joueur
+-- indépendamment de la RLS. Elle ne fait que compter et lever une erreur.
+create or replace function public.enforce_submission_quota()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n integer;
+begin
+  select count(*) into n
+    from public.layout_submissions
+   where submitted_by = new.submitted_by
+     and ship_name = new.ship_name
+     and status = 'pending';
+  if n >= 10 then
+    raise exception 'too many pending submissions for this ship (max 10)';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_submission_quota on public.layout_submissions;
+create trigger trg_submission_quota
+  before insert on public.layout_submissions
+  for each row execute function public.enforce_submission_quota();
 
 -- --- RLS : layout_submissions ---------------------------------------------
 -- Insert : un utilisateur connecté, seulement pour lui-même.

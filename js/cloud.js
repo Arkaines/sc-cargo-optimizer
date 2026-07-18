@@ -294,21 +294,14 @@ async function publishShipGrid(shipName, grid, orientation, mirror) {
 // exactement comme avant tant que la table n'existe pas.
 // =========================================================================
 
-// Proposer sa disposition. « Remplace » la proposition encore en attente du
-// même joueur pour le même vaisseau : on supprime la sienne (la RLS l'autorise
-// UNIQUEMENT sur ses propres lignes encore 'pending') puis on insère. On ne
-// passe pas par un upsert : la contrainte d'unicité est un index PARTIEL
-// (where status='pending') et PostgREST ne sait pas s'appuyer dessus de façon
-// fiable pour un on_conflict.
+// Proposer sa disposition. Un joueur peut en avoir PLUSIEURS en attente pour un
+// même vaisseau (des variantes) : on insère simplement, sans rien remplacer. Le
+// plafond de 10 en attente par (joueur, vaisseau) est tenu par un trigger côté
+// BASE (voir enforce_submission_quota dans docs/supabase/crowdsourced-grids.sql)
+// — un garde-fou client ne protégerait rien, le client étant public.
 async function submitLayoutProposal(shipName, grid, orientation, mirror, submitterName) {
   if (!sb || !cloudUserId) return false;
   try {
-    await sb
-      .from("layout_submissions")
-      .delete()
-      .eq("submitted_by", cloudUserId)
-      .eq("ship_name", shipName)
-      .eq("status", "pending");
     const { error } = await sb.from("layout_submissions").insert({
       ship_name: shipName,
       grid,
@@ -321,7 +314,10 @@ async function submitLayoutProposal(shipName, grid, orientation, mirror, submitt
     if (error) throw error;
     return true;
   } catch (err) {
-    alert(t("proposalFailed", { msg: err.message }));
+    // Le plafond du trigger remonte comme une erreur Postgres brute : on la
+    // traduit en message compréhensible plutôt que d'afficher du SQL au joueur.
+    const quota = /too many pending submissions/i.test(err.message || "");
+    alert(quota ? t("proposalQuotaReached") : t("proposalFailed", { msg: err.message }));
     return false;
   }
 }
