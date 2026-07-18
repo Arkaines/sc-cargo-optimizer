@@ -1170,46 +1170,65 @@ function onLayoutPointerUp() {
   controls.enabled = true;
 }
 
-// Sonde de test : la seule façon fiable de vérifier la SÉLECTION au clic
-// depuis un test, en projetant la position réelle d'un module à l'écran.
-// Cliquer « au centre du canvas » ne prouve rien — l'épine de la Caterpillar
-// est étroite et le centre tombe dans le vide (ça m'a valu un faux positif).
-// Lecture seule, aucun effet sur l'app.
-// Sondes de test (lecture seule) : compter le sol/les axes présents dans la
-// scène, et relever la position des 4 étiquettes de repère.
-window.__sceneAudit = function () {
-  let floor = 0;
-  let axes = 0;
-  let reservationOverlay = 0;
-  let reservationVehicle = 0;
-  if (contentGroup)
-    contentGroup.children.forEach((c) => {
-      if (c.userData && c.userData.isFloor) floor++;
-      if (c.userData && c.userData.isAxes) axes++;
-      if (c.userData && c.userData.isReservationOverlay) reservationOverlay++;
-      if (c.userData && c.userData.isReservationVehicle) reservationVehicle++;
-    });
-  return { floor, axes, reservationOverlay, reservationVehicle };
-};
-window.__labelAudit = function () {
-  const p = (m) => (m ? { x: m.position.x, z: m.position.z } : null);
-  return { front: p(labelMeshes.front), rear: p(labelMeshes.rear), left: p(labelMeshes.left), right: p(labelMeshes.right) };
-};
+// =========================================================================
+// Sondes de test — NON INSTALLÉES EN PRODUCTION.
+//
+// Le visualiseur 3D n'est testable que de l'intérieur : projeter un module à
+// l'écran pour cliquer dessus pour de vrai (cliquer « au centre du canvas » ne
+// prouve rien — l'épine du Caterpillar est étroite et le centre tombe dans le
+// vide, ça m'a valu un faux positif), compter ce que la scène contient
+// réellement, relever la position des étiquettes. Ces fonctions sont en LECTURE
+// SEULE et sans effet sur l'app.
+//
+// Elles n'existent que si la page est ouverte avec ?probes=1 : les tests
+// headless ajoutent ce paramètre, un joueur n'a jamais ces fonctions dans son
+// espace global. (Avant, elles étaient toujours définies — inoffensif mais
+// c'est de l'échafaudage qui n'a rien à faire en production.)
+// =========================================================================
+function viewerProbesEnabled() {
+  try {
+    return new URLSearchParams(window.location.search).has("probes");
+  } catch (e) {
+    return false;
+  }
+}
 
-window.__cargoViewerTestProbe = function () {
-  const mesh = pickMeshes[0];
-  if (!mesh || !camera || !renderer) return null;
-  const v = mesh.position.clone().project(camera);
-  const rect = renderer.domElement.getBoundingClientRect();
-  return {
-    x: rect.left + ((v.x + 1) / 2) * rect.width,
-    y: rect.top + ((-v.y + 1) / 2) * rect.height,
-    moduleKey: mesh.userData.moduleKey,
-    pickMeshCount: pickMeshes.length,
-    editingLayout,
-    enableRotate: controls ? controls.enableRotate : null,
+if (viewerProbesEnabled()) {
+  window.__sceneAudit = function () {
+    let floor = 0;
+    let axes = 0;
+    let reservationOverlay = 0;
+    let reservationVehicle = 0;
+    if (contentGroup)
+      contentGroup.children.forEach((c) => {
+        if (c.userData && c.userData.isFloor) floor++;
+        if (c.userData && c.userData.isAxes) axes++;
+        if (c.userData && c.userData.isReservationOverlay) reservationOverlay++;
+        if (c.userData && c.userData.isReservationVehicle) reservationVehicle++;
+      });
+    return { floor, axes, reservationOverlay, reservationVehicle };
   };
-};
+
+  window.__labelAudit = function () {
+    const p = (m) => (m ? { x: m.position.x, z: m.position.z } : null);
+    return { front: p(labelMeshes.front), rear: p(labelMeshes.rear), left: p(labelMeshes.left), right: p(labelMeshes.right) };
+  };
+
+  window.__cargoViewerTestProbe = function () {
+    const mesh = pickMeshes[0];
+    if (!mesh || !camera || !renderer) return null;
+    const v = mesh.position.clone().project(camera);
+    const rect = renderer.domElement.getBoundingClientRect();
+    return {
+      x: rect.left + ((v.x + 1) / 2) * rect.width,
+      y: rect.top + ((-v.y + 1) / 2) * rect.height,
+      moduleKey: mesh.userData.moduleKey,
+      pickMeshCount: pickMeshes.length,
+      editingLayout,
+      enableRotate: controls ? controls.enableRotate : null,
+    };
+  };
+}
 
 // Câble le glisser sur la scène. Idempotent, et SÉPARÉ de setCargoLayoutEditing
 // parce que la scène peut naître APRÈS que le mode édition a été demandé :

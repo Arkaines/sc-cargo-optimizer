@@ -10,6 +10,8 @@ A French-first (FR/EN) fan tool for Star Citizen: logs cargo-hauling missions, c
 
 There is no build, lint, or test tooling at the repo root — it's a static site; changes are tested by opening `index.html` in a browser (or serving the directory with any static file server) and exercising the feature by hand.
 
+**Testing the 3D viewer** (`js/cargo-viewer.js`) needs read-only probes that are **not installed in production**: open the page with **`?probes=1`** and `window.__cargoViewerTestProbe()` (projects a module to screen coordinates so a headless test can click it for real — clicking "the middle of the canvas" proves nothing, the Caterpillar's spine is narrow and the centre falls in empty space), `window.__sceneAudit()` (counts floor grid / axes helper / reservation overlays actually in the scene) and `window.__labelAudit()` (positions of the four orientation labels) become available. Without the flag they don't exist at all. Headless runs use Edge + `puppeteer-core`; always attach `page.on("dialog", d => d.accept())` first — an unhandled `alert` hangs the run — and force `syncFleetyardsCargoHolds()` once on a fresh profile, which has no FleetYards data (otherwise the viewer renders nothing and the test proves nothing).
+
 Docker (for serving a built copy, not for development):
 ```bash
 docker compose up -d --build          # http://<host>:8080, port set in docker-compose.yml
