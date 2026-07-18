@@ -459,6 +459,19 @@ details[open] > *:not(summary) {
   animation: fade-in-up 0.2s ease;
 }
 
+/* Titre de l'aide OCR : reprend l'allure d'un <summary> (l'aide était repliable
+   avant), mais sans chevron ni curseur puisqu'elle est désormais toujours
+   ouverte — voir le commentaire dans index.html. */
+.ocr-help-title {
+  font-size: 1.05rem;
+  font-family: var(--heading-font);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
 .ocr-help-image-wrap {
   position: relative;
   margin-top: 0.75rem;
