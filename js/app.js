@@ -46,6 +46,11 @@ function defaultState() {
     // repère packing. Passé tel quel à simulateRoutePacking (brique A′), qui
     // ignore vid. Voir getShipReservations.
     cargoReservations: {},
+    // Vaisseaux dont le joueur a DÉVERROUILLÉ localement la grille publiée pour
+    // en proposer une correction (brique 2b) : { [ship]: true }. Local à ce
+    // joueur — ne change rien pour les autres tant que le mainteneur n'a pas
+    // validé sa proposition.
+    cargoViewerUnlocked: {},
     // Grilles publiées (Supabase, table ship_layouts) : { [ship]: {grid, orientation, mirror} }.
     // Cache local relu à chaque synchro, comme fleetyardsCargoHolds.
     approvedShipGrids: {},
@@ -140,6 +145,7 @@ function loadState() {
       cargoViewerMirror: parsed.cargoViewerMirror || {},
       cargoViewerLayout: parsed.cargoViewerLayout || {},
       cargoReservations: parsed.cargoReservations || {},
+      cargoViewerUnlocked: parsed.cargoViewerUnlocked || {},
       approvedShipGrids: parsed.approvedShipGrids || {},
       dataSchemaVersion: parsed.dataSchemaVersion || 0,
     };
@@ -1179,6 +1185,44 @@ function enterReservationEdit() {
   setReservationEditUI(true);
   rerenderCargoReservationView();
   renderReservationList();
+}
+
+// Pseudo affiché du compte connecté (posé par updateAuthUI dans js/cloud.js) —
+// joint à la proposition pour que le mainteneur sache qui propose.
+function getConnectedUserName() {
+  const el = document.getElementById("user-name");
+  return (el && el.textContent && el.textContent.trim()) || null;
+}
+
+// « Proposer cette disposition » : envoie la grille RÉSOLUE (tous les modules
+// avec leurs positions, pas la surcharge partielle) à la modération.
+async function proposeCurrentLayout() {
+  const ship = getCargoViewerShipName();
+  if (!ship) return;
+  const grid = typeof getResolvedCargoGrid === "function" ? getResolvedCargoGrid() : [];
+  if (!grid.length) return;
+  const ok = await submitLayoutProposal(
+    ship,
+    grid,
+    getCargoViewerOrientation(ship),
+    getCargoViewerMirror(ship),
+    getConnectedUserName()
+  );
+  if (ok) alert(t("proposalSent"));
+}
+
+// « Proposer une correction » : déverrouille LOCALEMENT la grille publiée et
+// amorce la disposition perso À PARTIR d'elle — le joueur corrige l'existant
+// au lieu de repartir de la reconstruction automatique. Ne change rien pour
+// les autres joueurs.
+function proposeCorrection() {
+  const ship = getCargoViewerShipName();
+  if (!ship) return;
+  const positions = getPublishedGridPositions(ship);
+  if (positions) state.cargoViewerLayout[ship] = { ...positions };
+  state.cargoViewerUnlocked[ship] = true;
+  saveState();
+  renderCargoStepView();
 }
 
 function exitReservationEdit() {
@@ -2512,15 +2556,21 @@ function renderCargoStepView() {
   // (surcharge partielle) > reconstruction auto. Une grille publiée fait
   // autorité et remplace le placement perso du joueur.
   const publishedGrid = shipName ? state.approvedShipGrids[shipName] : null;
-  const publishedPositions = shipName ? getPublishedGridPositions(shipName) : null;
-  const orientation = publishedGrid ? publishedGrid.orientation : shipName ? getCargoViewerOrientation(shipName) : 0;
-  const mirror = publishedGrid ? publishedGrid.mirror : shipName ? getCargoViewerMirror(shipName) : false;
+  // Porte de sortie (brique 2b) : le joueur a demandé à corriger la grille
+  // publiée de ce vaisseau. Sa disposition perso (amorcée depuis la publiée par
+  // proposeCorrection) reprend alors la main et l'édition redevient possible —
+  // LOCALEMENT à lui, tant que le mainteneur n'a rien validé.
+  const unlocked = !!(shipName && state.cargoViewerUnlocked[shipName]);
+  const usePublished = !!publishedGrid && !unlocked;
+  const publishedPositions = usePublished && shipName ? getPublishedGridPositions(shipName) : null;
+  const orientation = usePublished ? publishedGrid.orientation : shipName ? getCargoViewerOrientation(shipName) : 0;
+  const mirror = usePublished ? publishedGrid.mirror : shipName ? getCargoViewerMirror(shipName) : false;
   const savedLayout = publishedPositions || (shipName ? getCargoViewerLayout(shipName) : {});
   // Vaisseau avec grille publiée : elle fait autorité, on masque les
   // contrôles de placement perso pour un joueur normal (l'admin garde son
   // propre éditeur, voir enterAdminGridEdit). Le vrai garde-fou reste la RLS
   // côté base — masquer un bouton n'est pas une sécurité.
-  const locked = !!publishedGrid && !isAdminUser;
+  const locked = usePublished && !isAdminUser;
   const editBtn = document.getElementById("cargo-viewer-edit-btn");
   const publishedNote = document.getElementById("cargo-published-note");
   if (editBtn) editBtn.style.display = locked ? "none" : "";
@@ -2528,7 +2578,18 @@ function renderCargoStepView() {
   // une grille publiée (la réservation est perso, pas une modif de la grille).
   const resBtn = document.getElementById("reservation-edit-btn");
   if (resBtn) resBtn.style.display = holds && holds.length ? "" : "none";
-  if (publishedNote) publishedNote.style.display = publishedGrid ? "" : "none";
+  // Propositions (brique 2b) : il faut être connecté (l'insert exige auth.uid()).
+  const connected = typeof cloudUserId !== "undefined" && !!cloudUserId;
+  const proposeBtn = document.getElementById("propose-layout-btn");
+  const correctionBtn = document.getElementById("propose-correction-btn");
+  // « Proposer cette disposition » : on ne propose que ce qu'on peut éditer.
+  if (proposeBtn)
+    proposeBtn.style.display =
+      connected && holds && holds.length && (!publishedGrid || unlocked || isAdminUser) ? "" : "none";
+  // « Proposer une correction » : seule porte de sortie d'une grille publiée.
+  if (correctionBtn)
+    correctionBtn.style.display = connected && publishedGrid && !unlocked && !isAdminUser ? "" : "none";
+  if (publishedNote) publishedNote.style.display = usePublished ? "" : "none";
   document.getElementById("cargo-viewer-rotate-btn").style.display = locked ? "none" : "";
   document.getElementById("cargo-viewer-mirror-btn").style.display = locked ? "none" : "";
   if (typeof renderCargoViewer3D === "function")
@@ -3892,6 +3953,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("cargo-viewer-edit-btn").addEventListener("click", enterCargoLayoutEdit);
   document.getElementById("cargo-viewer-edit-done-btn").addEventListener("click", exitCargoLayoutEdit);
   document.getElementById("cargo-viewer-reset-layout-btn").addEventListener("click", resetCargoViewerLayout);
+  bindEvent("propose-layout-btn", "click", proposeCurrentLayout);
+  bindEvent("propose-correction-btn", "click", proposeCorrection);
   bindEvent("reservation-edit-btn", "click", enterReservationEdit);
   bindEvent("reservation-close-btn", "click", exitReservationEdit);
   bindEvent("reservation-place-btn", "click", placeReservationVehicle);

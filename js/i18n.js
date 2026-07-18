@@ -219,6 +219,9 @@ const TRANSLATIONS = {
     adminGridPublished: "Grille publiée pour « {ship} ».",
     adminGridPublishFailed: "Échec de la publication : {msg}",
     proposalFailed: "Échec de l'envoi de la proposition : {msg}",
+    proposeLayoutBtn: "Proposer cette disposition",
+    proposeCorrectionBtn: "Proposer une correction",
+    proposalSent: "Proposition envoyée — en attente de validation. Merci !",
     submissionActionFailed: "Échec de l'action sur la proposition : {msg}",
 
     startLocationLabel: "Point de départ (optionnel)",
@@ -466,6 +469,9 @@ const TRANSLATIONS = {
     adminGridPublished: "Grid published for \"{ship}\".",
     adminGridPublishFailed: "Publishing failed: {msg}",
     proposalFailed: "Could not send the proposal: {msg}",
+    proposeLayoutBtn: "Propose this layout",
+    proposeCorrectionBtn: "Propose a correction",
+    proposalSent: "Proposal sent — pending review. Thanks!",
     submissionActionFailed: "Action on the proposal failed: {msg}",
 
     startLocationLabel: "Starting point (optional)",
