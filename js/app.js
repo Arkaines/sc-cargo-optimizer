@@ -1187,6 +1187,99 @@ function enterReservationEdit() {
   renderReservationList();
 }
 
+// =========================================================================
+// Onglet de modération des propositions (brique 2b). N'est qu'un confort
+// d'affichage : la RLS refuse toute écriture d'un non-admin même s'il forçait
+// l'onglet à s'afficher.
+// =========================================================================
+
+// L'onglet n'apparaît que pour un admin. Appelé quand isAdminUser est posé
+// (voir fetchIsAdmin) et au rendu général.
+function renderSubmissionsEntry() {
+  const btn = document.getElementById("submissions-tab-btn");
+  if (btn) btn.style.display = isAdminUser ? "" : "none";
+}
+
+// Aperçu 3D d'une proposition : ses modules, ZÉRO caisse, ses positions et son
+// orientation — c'est ce qui permet de juger une grille au lieu de valider du
+// JSON en aveugle.
+function previewSubmission(sub) {
+  if (typeof renderCargoViewer3D !== "function" || !sub || !Array.isArray(sub.grid)) return;
+  document.getElementById("cargo-viewer-panel").style.display = "";
+  const holds = sub.grid.map((m) => ({
+    name: m.name,
+    dimensions: m.dimensions,
+    capacity: m.capacity,
+    maxContainerSize: m.maxContainerSize,
+  }));
+  const positions = {};
+  sub.grid.forEach((m) => {
+    if (m.position) positions[m.name] = { x: m.position.x, y: m.position.y, z: m.position.z };
+  });
+  renderCargoViewer3D(holds, [], sub.orientation || 0, !!sub.mirror, positions);
+}
+
+// Liste des propositions en attente, avec aperçu / valider / rejeter.
+async function renderSubmissionsTab() {
+  const box = document.getElementById("submissions-list");
+  if (!box) return;
+  box.textContent = t("submissionsLoading");
+  const subs = await fetchPendingSubmissions();
+  box.innerHTML = "";
+  if (!subs.length) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = t("submissionsEmpty");
+    box.appendChild(p);
+    return;
+  }
+  subs.forEach((sub) => {
+    const row = document.createElement("div");
+    row.className = "admin-grid-row";
+    const label = document.createElement("span");
+    label.className = "hint";
+    const when = sub.created_at ? new Date(sub.created_at).toLocaleString() : "";
+    label.textContent = `${sub.ship_name} — ${sub.submitter_name || "?"} ${when}`;
+    row.appendChild(label);
+
+    const preview = document.createElement("button");
+    preview.type = "button";
+    preview.className = "btn-secondary btn-view-sm";
+    preview.textContent = t("submissionPreview");
+    preview.addEventListener("click", () => previewSubmission(sub));
+    row.appendChild(preview);
+
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "btn-primary btn-view-sm";
+    ok.textContent = t("submissionApprove");
+    ok.addEventListener("click", async () => {
+      if (!(await approveSubmission(sub.id))) return;
+      // La grille validée devient celle de tout le monde : on rafraîchit le
+      // cache local pour la voir tout de suite, sans attendre la prochaine synchro.
+      state.approvedShipGrids[sub.ship_name] = {
+        grid: sub.grid,
+        orientation: sub.orientation || 0,
+        mirror: !!sub.mirror,
+      };
+      saveState();
+      renderSubmissionsTab();
+    });
+    row.appendChild(ok);
+
+    const no = document.createElement("button");
+    no.type = "button";
+    no.className = "btn-danger btn-view-sm";
+    no.textContent = t("submissionReject");
+    no.addEventListener("click", async () => {
+      if (await rejectSubmission(sub.id)) renderSubmissionsTab();
+    });
+    row.appendChild(no);
+
+    box.appendChild(row);
+  });
+}
+
 // Pseudo affiché du compte connecté (posé par updateAuthUI dans js/cloud.js) —
 // joint à la proposition pour que le mainteneur sache qui propose.
 function getConnectedUserName() {
@@ -3751,8 +3844,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // sur la page (ex : les onglets Nouvelle mission/Missions n'affectent pas
   // ceux de Distances/Optimisation).
   document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+    btn.addEventListener("click", () => {
+      activateTab(btn.dataset.tab);
+      // Les propositions sont rechargées à l'ouverture de l'onglet (données
+      // distantes, pas un rendu local) — sinon on afficherait un cache figé.
+      if (btn.dataset.tab === "submissions-tab") renderSubmissionsTab();
+    });
   });
+  bindEvent("submissions-refresh-btn", "click", renderSubmissionsTab);
 
   document.getElementById("ship-select").addEventListener("change", (e) => {
     state.selectedShip = e.target.value;
@@ -4056,6 +4155,7 @@ async function runFullSync() {
     }
     if (typeof fetchIsAdmin === "function") isAdminUser = await fetchIsAdmin();
     renderAdminGridEntry();
+    renderSubmissionsEntry();
 
     renderShipCapacity();
   } catch (err) {

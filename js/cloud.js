@@ -212,6 +212,7 @@ function initCloudSync() {
         fetchIsAdmin().then((admin) => {
           isAdminUser = admin;
           if (typeof renderAdminGridEntry === "function") renderAdminGridEntry();
+          if (typeof renderSubmissionsEntry === "function") renderSubmissionsEntry();
         });
       }
     }

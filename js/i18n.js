@@ -222,6 +222,15 @@ const TRANSLATIONS = {
     proposeLayoutBtn: "Proposer cette disposition",
     proposeCorrectionBtn: "Proposer une correction",
     proposalSent: "Proposition envoyée — en attente de validation. Merci !",
+    submissionsTab: "Propositions",
+    submissionsHint:
+      "Propositions de grilles envoyées par les joueurs. « Aperçu » affiche la grille proposée dans la vue 3D (onglet Optimisation du cargo) pour la juger. « Valider » la publie pour tout le monde.",
+    submissionsRefresh: "Rafraîchir",
+    submissionsLoading: "Chargement…",
+    submissionsEmpty: "Aucune proposition en attente.",
+    submissionPreview: "Aperçu",
+    submissionApprove: "Valider",
+    submissionReject: "Rejeter",
     submissionActionFailed: "Échec de l'action sur la proposition : {msg}",
 
     startLocationLabel: "Point de départ (optionnel)",
@@ -472,6 +481,15 @@ const TRANSLATIONS = {
     proposeLayoutBtn: "Propose this layout",
     proposeCorrectionBtn: "Propose a correction",
     proposalSent: "Proposal sent — pending review. Thanks!",
+    submissionsTab: "Submissions",
+    submissionsHint:
+      "Grid layouts proposed by players. “Preview” shows the proposed grid in the 3D view (Cargo optimisation tab) so you can judge it. “Approve” publishes it for everyone.",
+    submissionsRefresh: "Refresh",
+    submissionsLoading: "Loading…",
+    submissionsEmpty: "No pending submissions.",
+    submissionPreview: "Preview",
+    submissionApprove: "Approve",
+    submissionReject: "Reject",
     submissionActionFailed: "Action on the proposal failed: {msg}",
 
     startLocationLabel: "Starting point (optional)",
