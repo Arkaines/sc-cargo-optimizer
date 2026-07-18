@@ -284,3 +284,87 @@ async function publishShipGrid(shipName, grid, orientation, mirror) {
     return false;
   }
 }
+
+// =========================================================================
+// Propositions communautaires (brique 2b, table layout_submissions).
+// Tout dégrade proprement si le SQL de la 2b n'a pas encore été exécuté :
+// lister renvoie [], proposer/valider/rejeter renvoient false. L'app marche
+// exactement comme avant tant que la table n'existe pas.
+// =========================================================================
+
+// Proposer sa disposition. « Remplace » la proposition encore en attente du
+// même joueur pour le même vaisseau : on supprime la sienne (la RLS l'autorise
+// UNIQUEMENT sur ses propres lignes encore 'pending') puis on insère. On ne
+// passe pas par un upsert : la contrainte d'unicité est un index PARTIEL
+// (where status='pending') et PostgREST ne sait pas s'appuyer dessus de façon
+// fiable pour un on_conflict.
+async function submitLayoutProposal(shipName, grid, orientation, mirror, submitterName) {
+  if (!sb || !cloudUserId) return false;
+  try {
+    await sb
+      .from("layout_submissions")
+      .delete()
+      .eq("submitted_by", cloudUserId)
+      .eq("ship_name", shipName)
+      .eq("status", "pending");
+    const { error } = await sb.from("layout_submissions").insert({
+      ship_name: shipName,
+      grid,
+      orientation: orientation || 0,
+      mirror: !!mirror,
+      submitted_by: cloudUserId,
+      submitter_name: submitterName || null,
+      status: "pending",
+    });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    alert(t("proposalFailed", { msg: err.message }));
+    return false;
+  }
+}
+
+// Propositions en attente (lecture réservée aux admins par la RLS ; un
+// non-admin ne verrait que les siennes, ce qui est sans danger).
+async function fetchPendingSubmissions() {
+  if (!sb) return [];
+  try {
+    const { data, error } = await sb
+      .from("layout_submissions")
+      .select("id, ship_name, grid, orientation, mirror, submitter_name, created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.warn("Propositions indisponibles :", err.message);
+    return [];
+  }
+}
+
+// Valider : passe par le RPC, qui marque 'approved' ET publie dans
+// ship_layouts dans UNE transaction (deux écritures client séparées pourraient
+// échouer à moitié). Le RPC revérifie is_admin() côté base.
+async function approveSubmission(id) {
+  if (!sb) return false;
+  try {
+    const { error } = await sb.rpc("approve_submission", { submission_id: id });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    alert(t("submissionActionFailed", { msg: err.message }));
+    return false;
+  }
+}
+
+async function rejectSubmission(id) {
+  if (!sb) return false;
+  try {
+    const { error } = await sb.rpc("reject_submission", { submission_id: id });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    alert(t("submissionActionFailed", { msg: err.message }));
+    return false;
+  }
+}

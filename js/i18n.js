@@ -218,6 +218,8 @@ const TRANSLATIONS = {
       "Publier cette grille pour « {ship} » ? Elle remplacera la grille actuelle pour TOUS les joueurs.",
     adminGridPublished: "Grille publiée pour « {ship} ».",
     adminGridPublishFailed: "Échec de la publication : {msg}",
+    proposalFailed: "Échec de l'envoi de la proposition : {msg}",
+    submissionActionFailed: "Échec de l'action sur la proposition : {msg}",
 
     startLocationLabel: "Point de départ (optionnel)",
     freeStart: "Libre (meilleur choix automatique)",
@@ -463,6 +465,8 @@ const TRANSLATIONS = {
       "Publish this grid for \"{ship}\"? It will replace the current grid for EVERY player.",
     adminGridPublished: "Grid published for \"{ship}\".",
     adminGridPublishFailed: "Publishing failed: {msg}",
+    proposalFailed: "Could not send the proposal: {msg}",
+    submissionActionFailed: "Action on the proposal failed: {msg}",
 
     startLocationLabel: "Starting point (optional)",
     freeStart: "Free (best automatic choice)",

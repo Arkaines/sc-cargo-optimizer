@@ -48,10 +48,18 @@ drop policy if exists submissions_select on public.layout_submissions;
 create policy submissions_select on public.layout_submissions
   for select using (submitted_by = auth.uid() or public.is_admin());
 
--- Update/delete : admins uniquement (validation/rejet via les RPC ci-dessous).
+-- Update/delete : admins (validation/rejet via les RPC ci-dessous).
 drop policy if exists submissions_write_admin on public.layout_submissions;
 create policy submissions_write_admin on public.layout_submissions
   for all using (public.is_admin()) with check (public.is_admin());
+
+-- Un joueur peut retirer SA propre proposition ENCORE EN ATTENTE : c'est ce qui
+-- permet de « remplacer » sa proposition (le client supprime puis réinsère).
+-- Sans ça, seul un admin pourrait le faire et le joueur resterait bloqué sur sa
+-- première version. Ne touche jamais une proposition déjà validée/rejetée.
+drop policy if exists submissions_delete_own_pending on public.layout_submissions;
+create policy submissions_delete_own_pending on public.layout_submissions
+  for delete using (submitted_by = auth.uid() and status = 'pending');
 
 -- --- RPC : valider (ATOMIQUE) ---------------------------------------------
 -- Marque la proposition approved ET upsert dans ship_layouts, en UNE
