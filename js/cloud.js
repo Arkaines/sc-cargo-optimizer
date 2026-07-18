@@ -79,7 +79,7 @@ async function pushStateToCloud(state) {
     setCloudStatus(t("cloudSynced"));
   } catch (err) {
     setCloudStatus("");
-    alert(t("cloudSyncFailed", { msg: err.message }));
+    showToast(t("cloudSyncFailed", { msg: err.message }), "error");
   }
 }
 
@@ -87,7 +87,7 @@ async function pullStateFromCloud() {
   if (!sb || !cloudUserId) return null;
   const { data, error } = await sb.from("player_state").select("state").eq("user_id", cloudUserId).maybeSingle();
   if (error) {
-    alert(t("cloudSyncFailed", { msg: error.message }));
+    showToast(t("cloudSyncFailed", { msg: error.message }), "error");
     return null;
   }
   return data ? data.state : null;
@@ -178,7 +178,12 @@ async function reconcileOnSignIn() {
     return;
   }
 
-  const keepCloud = confirm(t("cloudConflictPrompt"));
+  const keepCloud = await confirmDialog({
+    message: t("cloudConflictPrompt"),
+    confirmLabel: t("cloudConflictKeepCloud"),
+    cancelLabel: t("cloudConflictKeepLocal"),
+    dismissible: false,
+  });
   if (keepCloud) {
     Object.assign(state, defaultState(), cloudState);
     if (typeof migratePlayerDataInPlace === "function") migratePlayerDataInPlace();
@@ -304,7 +309,7 @@ async function publishShipGrid(shipName, grid, orientation, mirror) {
     if (error) throw error;
     return true;
   } catch (err) {
-    alert(t("adminGridPublishFailed", { msg: err.message }));
+    showToast(t("adminGridPublishFailed", { msg: err.message }), "error");
     return false;
   }
 }
@@ -339,7 +344,7 @@ async function submitLayoutProposal(shipName, grid, orientation, mirror, submitt
     // Le plafond du trigger remonte comme une erreur Postgres brute : on la
     // traduit en message compréhensible plutôt que d'afficher du SQL au joueur.
     const quota = /too many pending submissions/i.test(err.message || "");
-    alert(quota ? t("proposalQuotaReached") : t("proposalFailed", { msg: err.message }));
+    showToast(quota ? t("proposalQuotaReached") : t("proposalFailed", { msg: err.message }), "error");
     return false;
   }
 }
@@ -372,7 +377,7 @@ async function approveSubmission(id) {
     if (error) throw error;
     return true;
   } catch (err) {
-    alert(t("submissionActionFailed", { msg: err.message }));
+    showToast(t("submissionActionFailed", { msg: err.message }), "error");
     return false;
   }
 }
@@ -384,7 +389,7 @@ async function rejectSubmission(id) {
     if (error) throw error;
     return true;
   } catch (err) {
-    alert(t("submissionActionFailed", { msg: err.message }));
+    showToast(t("submissionActionFailed", { msg: err.message }), "error");
     return false;
   }
 }

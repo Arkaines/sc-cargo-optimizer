@@ -1345,18 +1345,18 @@ async function proposeCurrentLayout() {
   // n'avait même été envoyé). Chaque sortie dit pourquoi.
   const ship = getCargoViewerShipName();
   if (!ship) {
-    alert(t("proposalNoShip"));
+    showToast(t("proposalNoShip"), "error");
     return;
   }
   const grid = typeof getResolvedCargoGrid === "function" ? getResolvedCargoGrid() : [];
   if (!grid.length) {
-    alert(t("proposalNoGrid"));
+    showToast(t("proposalNoGrid"), "error");
     return;
   }
   // submitLayoutProposal renvoie false sans rien dire si la session a expiré
   // (le bouton, lui, n'est affiché qu'aux connectés) : on le signale ici.
   if (typeof cloudUserId === "undefined" || !cloudUserId) {
-    alert(t("proposalNeedsLogin"));
+    showToast(t("proposalNeedsLogin"), "error");
     return;
   }
   const ok = await submitLayoutProposal(
@@ -1366,7 +1366,7 @@ async function proposeCurrentLayout() {
     getCargoViewerMirror(ship),
     getConnectedUserName()
   );
-  if (ok) alert(t("proposalSent"));
+  if (ok) showToast(t("proposalSent"), "success");
 }
 
 // « Proposer une correction » : déverrouille LOCALEMENT la grille publiée et
@@ -3011,7 +3011,7 @@ function addAdminGridModule() {
 
 function removeAdminGridModule() {
   if (!adminGridDraft || !adminGridSelected) {
-    alert(t("adminGridSelectFirst"));
+    showToast(t("adminGridSelectFirst"), "error");
     return;
   }
   adminGridDraft = adminGridDraft.filter((m) => m.name !== adminGridSelected);
@@ -3022,10 +3022,14 @@ function removeAdminGridModule() {
 async function publishAdminGrid() {
   if (!adminGridDraft || !adminGridShipName) return;
   if (!adminGridDraft.length) {
-    alert(t("adminGridEmpty"));
+    showToast(t("adminGridEmpty"), "error");
     return;
   }
-  if (!confirm(t("adminGridPublishConfirm", { ship: adminGridShipName }))) return;
+  const confirmed = await confirmDialog({
+    message: t("adminGridPublishConfirm", { ship: adminGridShipName }),
+    confirmLabel: t("adminGridPublishConfirmBtn"),
+  });
+  if (!confirmed) return;
   // Décision du mainteneur (revue finale 2a, finding #6) : on publie
   // l'orientation/miroir RÉELS du vaisseau — ceux que l'admin a réglés avec
   // Tourner/Miroir avant d'ouvrir l'éditeur — et non 0/false en dur. C'est ce
@@ -3043,7 +3047,7 @@ async function publishAdminGrid() {
   // mêmes valeurs que celles envoyées, pas 0/false.
   state.approvedShipGrids[adminGridShipName] = { grid: adminGridDraft, orientation, mirror };
   saveState();
-  alert(t("adminGridPublished", { ship: adminGridShipName }));
+  showToast(t("adminGridPublished", { ship: adminGridShipName }), "success");
   exitAdminGridEdit();
 }
 
@@ -4029,7 +4033,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rows = getCargoFieldValues();
     if (rows.length === 0) {
-      alert(t("addAtLeastOneCargoError"));
+      showToast(t("addAtLeastOneCargoError"), "error");
       return;
     }
 
@@ -4038,7 +4042,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const pickupLoc = findLocationByLabel(row.pickupText);
       const dropoffLoc = findLocationByLabel(row.dropoffText);
       if (!pickupLoc || !dropoffLoc) {
-        alert(t("locationNotFoundError", { commodity: row.commodity || "?" }));
+        showToast(t("locationNotFoundError", { commodity: row.commodity || "?" }), "error");
         return;
       }
       cargoItems.push({
@@ -4146,28 +4150,36 @@ document.addEventListener("DOMContentLoaded", () => {
     allowRevisitsBtn.classList.toggle("active");
   });
 
-  document.getElementById("reset-all").addEventListener("click", () => {
-    if (confirm(t("confirmResetAll"))) {
-      // Ne remet à zéro que le contenu propre au joueur (missions, lieux
-      // personnalisés, distances associées, calibrage de réputation — voir
-      // confirmResetAll ci-dessous pour la liste exacte annoncée au joueur),
-      // pas le catalogue UEX/SCWiki/FleetYards synchronisé : ce dernier n'a
-      // aucune raison d'être perdu ici, il se tient déjà à jour tout seul
-      // (voir maybeAutoSync) et un vaisseau/lieu n'a pas besoin d'être
-      // "réappris" par une resynchronisation après un simple reset.
-      const defaults = defaultState();
-      state.missions = defaults.missions;
-      state.customLocations = defaults.customLocations;
-      state.distances = defaults.distances;
-      state.nextMissionId = defaults.nextMissionId;
-      state.reputationOverrides = defaults.reputationOverrides;
-      saveState();
-      renderAll();
-      // Répercute aussi le reset côté cloud, sinon une prochaine connexion
-      // ressusciterait les anciennes données depuis Supabase.
-      if (typeof scheduleCloudSync === "function") scheduleCloudSync(state);
-      if (typeof flushPendingCloudSync === "function") flushPendingCloudSync();
-    }
+  document.getElementById("reset-all").addEventListener("click", async () => {
+    // danger:true — le focus part sur « Annuler » et le bouton de
+    // confirmation est rouge : une frappe Entrée réflexe ne doit pas effacer
+    // les données du joueur.
+    const confirmed = await confirmDialog({
+      message: t("confirmResetAll"),
+      confirmLabel: t("confirmResetAllBtn"),
+      danger: true,
+    });
+    if (!confirmed) return;
+    // Ne remet à zéro que le contenu propre au joueur (missions, lieux
+    // personnalisés, distances associées, calibrage de réputation — voir
+    // confirmResetAll ci-dessous pour la liste exacte annoncée au joueur),
+    // pas le catalogue UEX/SCWiki/FleetYards synchronisé : ce dernier n'a
+    // aucune raison d'être perdu ici, il se tient déjà à jour tout seul
+    // (voir maybeAutoSync) et un vaisseau/lieu n'a pas besoin d'être
+    // "réappris" par une resynchronisation après un simple reset.
+    const defaults = defaultState();
+    state.missions = defaults.missions;
+    state.customLocations = defaults.customLocations;
+    state.distances = defaults.distances;
+    state.nextMissionId = defaults.nextMissionId;
+    state.reputationOverrides = defaults.reputationOverrides;
+    saveState();
+    renderAll();
+    // Répercute aussi le reset côté cloud, sinon une prochaine connexion
+    // ressusciterait les anciennes données depuis Supabase.
+    if (typeof scheduleCloudSync === "function") scheduleCloudSync(state);
+    if (typeof flushPendingCloudSync === "function") flushPendingCloudSync();
+    showToast(t("resetAllDone"), "success");
   });
 
   if (typeof initCloudSync === "function") initCloudSync();

@@ -177,6 +177,9 @@ async function openApp(ctx, { probes = true, skipSync = false } = {}) {
     STORAGE_KEY,
     DATA_SCHEMA_VERSION
   );
+  // L'app n'utilise plus alert()/confirm() (voir js/ui-feedback.js), mais on
+  // garde ce filet : si un appel réapparaît, un dialogue non géré FIGERAIT la
+  // session CDP au lieu d'échouer proprement.
   const alerts = [];
   const errors = [];
   page.on("dialog", (d) => {
@@ -185,13 +188,34 @@ async function openApp(ctx, { probes = true, skipSync = false } = {}) {
   });
   page.on("pageerror", (e) => errors.push(e.message));
 
+  // Journal des toasts. Ils s'effacent tout seuls au bout de quelques
+  // secondes : lire le DOM au moment de l'assertion raterait un message paru
+  // plus tôt dans le test. On les enregistre donc à leur apparition.
+  await page.evaluateOnNewDocument(() => {
+    window.__toastLog = [];
+    new MutationObserver((records) => {
+      for (const r of records) {
+        for (const node of r.addedNodes) {
+          if (node.nodeType === 1 && node.classList.contains("toast")) {
+            const kind = (node.className.match(/toast-(success|error|info)/) || [])[1] || "info";
+            window.__toastLog.push({ kind, text: node.querySelector(".toast-text").textContent });
+          }
+        }
+      }
+      // On observe `document` et non `document.documentElement` : ce script
+      // s'exécute avant TOUT contenu de la page, l'élément racine n'existe
+      // pas encore (« parameter 1 is not of type 'Node' »).
+    }).observe(document, { childList: true, subtree: true });
+  });
+
   await page.goto(`${ctx.baseUrl}/${probes ? "?probes=1" : ""}`, { waitUntil: "networkidle0", timeout: 60000 });
   if (!skipSync) {
     await page.evaluate(async () => {
       await syncFleetyardsCargoHolds();
     });
   }
-  return { page, alerts, errors };
+  const toasts = () => page.evaluate(() => window.__toastLog.slice());
+  return { page, alerts, errors, toasts };
 }
 
 // Bascule d'onglet + attente que le panneau soit RÉELLEMENT affiché. On ne

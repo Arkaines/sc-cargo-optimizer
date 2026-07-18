@@ -9,7 +9,7 @@ module.exports = {
   name: "Grilles communautaires : proposer, déverrouiller, modérer, robustesse",
   async run(ctx) {
     const { check, failures } = makeChecker();
-    const { page, errors, alerts } = await openApp(ctx);
+    const { page, errors, alerts, toasts } = await openApp(ctx);
 
     // --- Dégradation : sans les tables 2b, rien ne casse. -----------------
     const degraded = await page.evaluate(async () => ({
@@ -133,7 +133,67 @@ module.exports = {
       return captured;
     });
     check(submit && submit.modules > 0 && submit.positionnes, "payload de proposition incomplet : " + JSON.stringify(submit));
-    check(alerts.some((a) => /connect/i.test(a)), "session expirée : l'échec est resté silencieux");
+    const shown = await toasts();
+    check(
+      shown.some((x) => x.kind === "error" && /connect/i.test(x.text)),
+      "session expirée : l'échec est resté silencieux (toasts : " + JSON.stringify(shown) + ")"
+    );
+
+    // --- Retours d'interface (js/ui-feedback.js) : plus aucun alert/confirm
+    //     natif, et la modale tient ses promesses. ---------------------------
+    const feedback = await page.evaluate(async () => {
+      const o = {};
+      // Un toast disparaît tout seul ; une modale attend une vraie réponse.
+      const p1 = confirmDialog({ message: "Question ?" });
+      const dlg = document.querySelector(".modal-dialog");
+      o.modale = {
+        present: !!dlg,
+        aria: dlg.getAttribute("aria-modal"),
+        // danger:false -> le focus part sur Confirmer.
+        focusSurConfirmer: document.activeElement === dlg.querySelectorAll("button")[1],
+      };
+      dlg.querySelectorAll("button")[1].click();
+      o.confirme = await p1;
+
+      const p2 = confirmDialog({ message: "Question ?" });
+      document.querySelector(".modal-dialog").querySelectorAll("button")[0].click();
+      o.annule = await p2;
+
+      // danger:true -> focus sur Annuler, pour qu'Entrée ne détruise rien.
+      const p3 = confirmDialog({ message: "Danger ?", danger: true });
+      const d3 = document.querySelector(".modal-dialog");
+      o.dangerFocusSurAnnuler = document.activeElement === d3.querySelectorAll("button")[0];
+      d3.querySelectorAll("button")[0].click();
+      await p3;
+
+      // Échap ferme une modale ordinaire...
+      const p4 = confirmDialog({ message: "Échap ?" });
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      o.echap = await p4;
+
+      // ...mais PAS celle du conflit cloud, où aucune branche n'est neutre.
+      let resolu = false;
+      confirmDialog({ message: "Conflit ?", dismissible: false }).then(() => (resolu = true));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.querySelector(".modal-overlay").click();
+      await new Promise((r) => setTimeout(r, 50));
+      o.nonDismissible = { resolu, encoreLa: !!document.querySelector(".modal-dialog") };
+      document.querySelector(".modal-dialog").querySelectorAll("button")[0].click();
+
+      o.restantes = document.querySelectorAll(".modal-overlay").length;
+      return o;
+    });
+    check(feedback.modale.present && feedback.modale.aria === "true", "la modale n'est pas annoncée comme telle (aria-modal)");
+    check(feedback.modale.focusSurConfirmer, "modale ordinaire : le focus devrait partir sur Confirmer");
+    check(feedback.confirme === true && feedback.annule === false, "confirmDialog ne renvoie pas le bon booléen");
+    check(feedback.dangerFocusSurAnnuler, "modale danger : le focus doit partir sur Annuler, pas sur l'action destructrice");
+    check(feedback.echap === false, "Échap devrait annuler une modale ordinaire");
+    check(
+      !feedback.nonDismissible.resolu && feedback.nonDismissible.encoreLa,
+      "conflit cloud : Échap/clic extérieur ne doivent PAS trancher à la place du joueur"
+    );
+    check(feedback.restantes === 0, `${feedback.restantes} modale(s) laissée(s) dans le DOM`);
+    check(alerts.length === 0, "un alert()/confirm() natif subsiste : " + alerts.join("; "));
 
     // --- Onglet de modération (admin) : liste, aperçu, validation. --------
     const mod = await page.evaluate(async () => {

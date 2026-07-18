@@ -85,8 +85,12 @@ const TRANSLATIONS = {
     cloudSyncing: "Synchronisation...",
     cloudSynced: "Synchronisé",
     cloudSyncFailed: "Échec de la synchronisation cloud : {msg}",
+    // Le texte n'a plus à décrire ce que font les boutons (« OK pour... ») :
+    // depuis le passage à confirmDialog, ils portent le nom de l'action.
     cloudConflictPrompt:
-      "Des données existent déjà en ligne pour ce compte. OK pour charger les données en ligne (tes modifications locales non synchronisées seront perdues), Annuler pour garder tes données locales et écraser celles en ligne.",
+      "Des données existent déjà en ligne pour ce compte, et tu as aussi des données locales non synchronisées. Une seule des deux versions peut être gardée — l'autre sera définitivement écrasée.",
+    cloudConflictKeepCloud: "Charger les données en ligne",
+    cloudConflictKeepLocal: "Garder mes données locales",
     routeCargoRowLabel: "{commodity} (prévu : {planned} SCU)",
     routeCargoFullBtn: "Tout",
     routeCargoPartialBtn: "Partiel",
@@ -218,6 +222,7 @@ const TRANSLATIONS = {
     adminGridEmpty: "La grille est vide — ajoute au moins une grille avant de publier.",
     adminGridPublishConfirm:
       "Publier cette grille pour « {ship} » ? Elle remplacera la grille actuelle pour TOUS les joueurs.",
+    adminGridPublishConfirmBtn: "Publier",
     adminGridPublished: "Grille publiée pour « {ship} ».",
     adminGridPublishFailed: "Échec de la publication : {msg}",
     proposalFailed: "Échec de l'envoi de la proposition : {msg}",
@@ -270,7 +275,15 @@ const TRANSLATIONS = {
 
     resetAllBtn: "Réinitialiser mes données",
     confirmResetAll:
-      "⚠ Action irréversible : ceci va supprimer tes missions actives, l'historique des missions terminées, le calibrage de réputation, tes lieux personnalisés et les distances enregistrées. Si tu es connecté, la sauvegarde cloud sera aussi effacée définitivement. Le catalogue vaisseaux/lieux/marchandises n'est pas touché — il se met à jour tout seul. Continuer ?",
+      "⚠ Action irréversible : ceci va supprimer tes missions actives, l'historique des missions terminées, le calibrage de réputation, tes lieux personnalisés et les distances enregistrées. Si tu es connecté, la sauvegarde cloud sera aussi effacée définitivement. Le catalogue vaisseaux/lieux/marchandises n'est pas touché — il se met à jour tout seul.",
+    confirmResetAllBtn: "Tout supprimer",
+    resetAllDone: "Tes données ont été supprimées.",
+
+    // Libellés par défaut de js/ui-feedback.js, utilisés quand l'appelant
+    // n'en fournit pas de plus précis.
+    dialogConfirm: "Confirmer",
+    dialogCancel: "Annuler",
+    toastDismiss: "Fermer la notification",
   },
 
   en: {
@@ -352,7 +365,9 @@ const TRANSLATIONS = {
     cloudSynced: "Synced",
     cloudSyncFailed: "Cloud sync failed: {msg}",
     cloudConflictPrompt:
-      "Data already exists online for this account. OK to load the online data (unsynced local changes will be lost), Cancel to keep your local data and overwrite the online copy.",
+      "Data already exists online for this account, and you also have unsynced local data. Only one of the two versions can be kept — the other will be permanently overwritten.",
+    cloudConflictKeepCloud: "Load the online data",
+    cloudConflictKeepLocal: "Keep my local data",
     routeCargoRowLabel: "{commodity} (planned: {planned} SCU)",
     routeCargoFullBtn: "All",
     routeCargoPartialBtn: "Partial",
@@ -484,6 +499,7 @@ const TRANSLATIONS = {
     adminGridEmpty: "The grid is empty — add at least one grid before publishing.",
     adminGridPublishConfirm:
       "Publish this grid for \"{ship}\"? It will replace the current grid for EVERY player.",
+    adminGridPublishConfirmBtn: "Publish",
     adminGridPublished: "Grid published for \"{ship}\".",
     adminGridPublishFailed: "Publishing failed: {msg}",
     proposalFailed: "Could not send the proposal: {msg}",
@@ -534,7 +550,13 @@ const TRANSLATIONS = {
 
     resetAllBtn: "Reset my data",
     confirmResetAll:
-      "⚠ Irreversible action: this will delete your active missions, completed mission history, reputation calibration, custom locations and saved distances. If you're logged in, the cloud backup will also be permanently erased. The ship/location/commodity catalog is not affected — it keeps itself up to date automatically. Continue?",
+      "⚠ Irreversible action: this will delete your active missions, completed mission history, reputation calibration, custom locations and saved distances. If you're logged in, the cloud backup will also be permanently erased. The ship/location/commodity catalog is not affected — it keeps itself up to date automatically.",
+    confirmResetAllBtn: "Delete everything",
+    resetAllDone: "Your data has been deleted.",
+
+    dialogConfirm: "Confirm",
+    dialogCancel: "Cancel",
+    toastDismiss: "Dismiss notification",
   },
 };
 

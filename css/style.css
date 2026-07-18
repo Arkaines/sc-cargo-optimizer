@@ -1358,3 +1358,174 @@ footer button {
   font-weight: 400;
   font-size: 0.8rem;
 }
+
+/* =========================================================================
+   Toasts et modale de confirmation (js/ui-feedback.js) — remplacent
+   alert()/confirm(), dont la boîte système grise détonnait dans le cockpit
+   et gelait la page. Deux seuls z-index du projet : la modale (1000) doit
+   passer au-dessus des toasts (900), pas l'inverse.
+   ========================================================================= */
+#toast-container {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  /* Le conteneur couvre un coin entier de l'écran : sans pointer-events:none
+     il intercepterait les clics sur ce qu'il recouvre même quand il est vide.
+     Les toasts eux-mêmes les réactivent. */
+  pointer-events: none;
+  max-width: min(26rem, calc(100vw - 2.5rem));
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  /* Liseré de gauche : porte la sévérité par la FORME autant que la couleur,
+     pour que le sens reste lisible en cas de daltonisme. */
+  border-left: 3px solid var(--muted);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  animation: toast-in 0.2s ease;
+}
+
+.toast-success {
+  border-left-color: var(--success);
+}
+.toast-error {
+  border-left-color: var(--danger);
+}
+.toast-info {
+  border-left-color: var(--accent);
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere; /* un message d'erreur peut contenir une URL sans espace */
+}
+
+.toast-close {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.toast-close:hover {
+  color: var(--text);
+  transform: none;
+}
+
+.toast-leaving {
+  opacity: 0;
+  transform: translateX(0.75rem);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(6, 8, 12, 0.72);
+  animation: fade-in-overlay 0.15s ease;
+}
+
+/* En thème clair, 72 % de noir écrase la page au lieu de la mettre en
+   retrait — le contraste avec la modale blanche suffit largement. */
+:root[data-theme="light"] .modal-overlay {
+  background: rgba(20, 24, 33, 0.45);
+}
+
+.modal-dialog {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-top: 3px solid var(--accent);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 1.4rem;
+  max-width: 34rem;
+  width: 100%;
+  animation: modal-in 0.18s ease;
+}
+
+.modal-message {
+  margin: 0 0 1.2rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+@keyframes fade-in-overlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .modal-overlay,
+  .modal-dialog {
+    animation: none;
+  }
+  .toast-leaving {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #toast-container {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    max-width: none;
+  }
+}
