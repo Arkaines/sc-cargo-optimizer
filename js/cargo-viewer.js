@@ -414,8 +414,15 @@ function ensureScene(container) {
 
   if (!animating) {
     animating = true;
+    // La boucle tournait sans condition, y compris quand le panneau était en
+    // display:none ou l'onglet Cargo inactif. C'est un outil de second écran :
+    // il tournait en continu pendant que Star Citizen tourne, et lui prenait
+    // du GPU pour rendre une scène que personne ne regardait. On saute le
+    // rendu quand le conteneur n'a aucune surface visible — requestAnimationFrame
+    // est déjà suspendu par le navigateur quand l'onglet passe en arrière-plan.
     (function animate() {
       requestAnimationFrame(animate);
+      if (!container.clientWidth || !container.clientHeight) return;
       controls.update();
       renderer.render(scene, camera);
     })();

@@ -284,6 +284,17 @@ const TRANSLATIONS = {
     dialogConfirm: "Confirmer",
     dialogCancel: "Annuler",
     toastDismiss: "Fermer la notification",
+
+    // Retours des actions courantes. Elles étaient muettes jusqu'ici, alors
+    // que ce sont les plus répétées de la session.
+    missionAdded: "Mission « {name} » enregistrée.",
+    missionDeleted: "Mission « {name} » supprimée.",
+    missionRestored: "Mission « {name} » rétablie.",
+    undoBtn: "Annuler",
+    locationAdded: "Lieu « {name} » ajouté.",
+    locationNameRequired: "Donne un nom au lieu avant de l'ajouter.",
+    ocrDropzoneAria: "Choisir des captures d'écran de mission à importer",
+    viewSwitcherAria: "Angle de vue de la soute",
   },
 
   en: {
@@ -557,6 +568,15 @@ const TRANSLATIONS = {
     dialogConfirm: "Confirm",
     dialogCancel: "Cancel",
     toastDismiss: "Dismiss notification",
+
+    missionAdded: "Mission \"{name}\" saved.",
+    missionDeleted: "Mission \"{name}\" deleted.",
+    missionRestored: "Mission \"{name}\" restored.",
+    undoBtn: "Undo",
+    locationAdded: "Location \"{name}\" added.",
+    locationNameRequired: "Name the location before adding it.",
+    ocrDropzoneAria: "Choose mission screenshots to import",
+    viewSwitcherAria: "Cargo hold viewing angle",
   },
 };
 

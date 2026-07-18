@@ -44,17 +44,44 @@ function dismissToast(toast) {
 }
 
 // kind : "success" | "error" | "info" (défaut).
-function showToast(message, kind = "info") {
+//
+// actionLabel/onAction ajoutent un bouton dans le toast. Sert à l'annulation
+// d'une action destructrice : plutôt que de barrer la route avec un dialogue
+// de confirmation à chaque suppression, on laisse le geste passer et on offre
+// le retour en arrière pendant la durée du toast. Moins de friction sur
+// l'action courante, et le filet reste là.
+function showToast(message, kind = "info", { actionLabel, onAction } = {}) {
   if (!message) return null;
   const container = ensureToastContainer();
   const toast = document.createElement("div");
   toast.className = `toast toast-${kind}`;
   if (kind === "error") toast.setAttribute("role", "alert");
 
+  // Glyphe de sévérité : la couleur seule ne suffit pas (daltonisme), et un
+  // liseré coloré n'est que de la couleur déplacée. aria-hidden parce que le
+  // message porte déjà l'information, et role="alert" l'urgence.
+  const icon = document.createElement("span");
+  icon.className = "toast-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = kind === "success" ? "✓" : kind === "error" ? "!" : "i";
+  toast.appendChild(icon);
+
   const text = document.createElement("span");
   text.className = "toast-text";
   text.textContent = message;
   toast.appendChild(text);
+
+  if (actionLabel && typeof onAction === "function") {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "toast-action";
+    action.textContent = actionLabel;
+    action.addEventListener("click", () => {
+      onAction();
+      dismissToast(toast);
+    });
+    toast.appendChild(action);
+  }
 
   const close = document.createElement("button");
   close.type = "button";

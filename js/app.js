@@ -443,9 +443,21 @@ function missionRouteLabel(mission, tags) {
   return tag ? `${mission.name} (${tag})` : mission.name;
 }
 
+// Rend une fonction de restauration, qui remet la mission à SA place d'origine
+// dans la liste. Le bouton « Supprimer » est à 0,4 rem du bouton « Terminer »,
+// et une mission importée par OCR peut porter six lignes de cargaison saisies
+// à la main : le mauvais clic finit par arriver. Plutôt qu'un dialogue de
+// confirmation à chaque suppression (friction sur une action fréquente), on
+// laisse le geste passer et on offre l'annulation dans le toast.
 function removeMission(id) {
-  state.missions = state.missions.filter((m) => m.id !== id);
+  const index = state.missions.findIndex((m) => m.id === id);
+  if (index === -1) return () => {};
+  const [removed] = state.missions.splice(index, 1);
   saveState();
+  return () => {
+    state.missions.splice(Math.min(index, state.missions.length), 0, removed);
+    saveState();
+  };
 }
 
 function setMissionIncluded(id, included) {
@@ -1741,7 +1753,13 @@ function renderMissionsTable() {
     cb.addEventListener("change", () => {
       setMissionIncluded(m.id, cb.checked);
       renderStartLocationOptions();
-      renderMissionsTable();
+      // NE PAS reconstruire la table ici. renderMissionsTable() commence par
+      // tbody.innerHTML = "", ce qui retire du DOM la case qu'on vient de
+      // cocher : le focus retombait sur <body>, et il fallait re-tabuler
+      // depuis le début du document pour atteindre la ligne suivante —
+      // cocher plusieurs missions au clavier était impossible. Aucune cellule
+      // ne dépend de `included`, seul le pied de tableau change.
+      renderMissionsSummary();
     });
     tdCheck.appendChild(cb);
     tr.appendChild(tdCheck);
@@ -1816,8 +1834,16 @@ function renderMissionsTable() {
     delBtn.className = "btn-danger";
     delBtn.textContent = t("deleteBtn");
     delBtn.addEventListener("click", () => {
-      removeMission(m.id);
+      const restoreMission = removeMission(m.id);
       renderAll();
+      showToast(t("missionDeleted", { name: m.name }), "info", {
+        actionLabel: t("undoBtn"),
+        onAction: () => {
+          restoreMission();
+          renderAll();
+          showToast(t("missionRestored", { name: m.name }), "success");
+        },
+      });
     });
     actionsWrap.appendChild(delBtn);
     tdActions.appendChild(actionsWrap);
@@ -1826,6 +1852,15 @@ function renderMissionsTable() {
     tbody.appendChild(tr);
   });
 
+  renderMissionsSummary();
+}
+
+// Pied du tableau des missions : compteur inclus/total, avertissement au-delà
+// de 10 missions, et rappel de capacité. Séparé du rendu des lignes parce que
+// c'est la SEULE partie qui change quand on coche une case — reconstruire les
+// lignes pour ça détruisait le focus clavier (voir le handler ci-dessus).
+function renderMissionsSummary() {
+  const missions = activeMissions();
   const summary = document.getElementById("missions-summary");
   const included = missions.filter((m) => m.included);
   const totalCargo = included.reduce(
@@ -3998,6 +4033,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ocrDropzone.addEventListener("click", () => ocrFileInput.click());
 
+  // Un div en role="button" n'hérite d'AUCUN comportement clavier natif : sans
+  // ceci, Entrée et Espace ne faisaient rien sur la zone d'import.
+  ocrDropzone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault(); // Espace ferait défiler la page
+      ocrFileInput.click();
+    }
+  });
+
   ocrFileInput.addEventListener("change", () => {
     const files = Array.from(ocrFileInput.files);
     if (files.length === 1) processOcrImage(files[0]);
@@ -4075,13 +4119,18 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       cancelEditMission();
     } else {
-      addMission({ name, giver, cargoItems, reward, maxCargoBoxSize: pendingOcrMaxCargoBoxSize });
+      const added = addMission({ name, giver, cargoItems, reward, maxCargoBoxSize: pendingOcrMaxCargoBoxSize });
       pendingOcrMaxCargoBoxSize = null;
       e.target.reset();
       resetCargoFields();
       // La mission est enregistrée : la capture/le texte reconnu qui a servi
       // à la préremplir n'a plus d'utilité, on nettoie le panneau d'import.
       clearOcrPanel();
+      // C'est l'action la plus répétée de la session (5 à 10 fois). Sans ce
+      // retour, le seul signal de succès était « le formulaire s'est vidé »,
+      // indistinguable d'une remise à zéro accidentelle : le joueur allait
+      // vérifier dans l'onglet Missions à chaque fois.
+      showToast(t("missionAdded", { name: (added && added.name) || name }), "success");
     }
     renderAll();
   });
@@ -4093,10 +4142,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const nameInput = document.getElementById("new-location-name");
     const categorySelect = document.getElementById("new-location-category");
     const loc = addCustomLocation(nameInput.value, categorySelect.value);
-    if (loc) {
-      nameInput.value = "";
-      refreshAllLocationSelects();
+    // addCustomLocation ne renvoie null que sur un nom vide. Avant, ce cas ne
+    // produisait STRICTEMENT rien à l'écran : le joueur cliquait, rien ne
+    // bougeait, et rien ne disait pourquoi.
+    if (!loc) {
+      showToast(t("locationNameRequired"), "error");
+      nameInput.focus();
+      return;
     }
+    nameInput.value = "";
+    refreshAllLocationSelects();
+    showToast(t("locationAdded", { name: loc.name }), "success");
   });
 
   document.getElementById("select-all-missions").addEventListener("click", () => {
