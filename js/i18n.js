@@ -229,7 +229,7 @@ const TRANSLATIONS = {
     proposalSent: "Proposition envoyée — en attente de validation. Merci !",
     submissionsTab: "Propositions",
     submissionsHint:
-      "Propositions de grilles envoyées par les joueurs. « Aperçu » affiche la grille proposée dans la vue 3D (onglet Optimisation du cargo) pour la juger. « Valider » la publie pour tout le monde.",
+      "Propositions de grilles envoyées par les joueurs. « Aperçu » bascule sur la vue 3D pour juger la grille proposée (reviens ici par cet onglet). « Valider » la publie pour tout le monde.",
     submissionsRefresh: "Rafraîchir",
     submissionsLoading: "Chargement…",
     submissionsEmpty: "Aucune proposition en attente.",
@@ -493,7 +493,7 @@ const TRANSLATIONS = {
     proposalSent: "Proposal sent — pending review. Thanks!",
     submissionsTab: "Submissions",
     submissionsHint:
-      "Grid layouts proposed by players. “Preview” shows the proposed grid in the 3D view (Cargo optimisation tab) so you can judge it. “Approve” publishes it for everyone.",
+      "Grid layouts proposed by players. “Preview” switches to the 3D view so you can judge the proposed grid (come back via this tab). “Approve” publishes it for everyone.",
     submissionsRefresh: "Refresh",
     submissionsLoading: "Loading…",
     submissionsEmpty: "No pending submissions.",

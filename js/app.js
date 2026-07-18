@@ -1205,6 +1205,11 @@ function renderSubmissionsEntry() {
 // JSON en aveugle.
 function previewSubmission(sub) {
   if (typeof renderCargoViewer3D !== "function" || !sub || !Array.isArray(sub.grid)) return;
+  // Le visualiseur 3D vit dans l'onglet « Optimisation du cargo ». Rendre dedans
+  // depuis l'onglet Propositions dessinait dans un conteneur dont le PARENT est
+  // masqué : le clic semblait ne rien faire (constaté à l'usage). On bascule
+  // donc sur l'onglet qui l'affiche réellement.
+  if (typeof activateTab === "function") activateTab("cargo-tab");
   document.getElementById("cargo-viewer-panel").style.display = "";
   const holds = sub.grid.map((m) => ({
     name: m.name,
@@ -1278,6 +1283,38 @@ async function renderSubmissionsTab() {
 
     box.appendChild(row);
   });
+}
+
+// Une proposition ne vaut que si la disposition a RÉELLEMENT été modifiée :
+// sans ça on proposerait une grille identique à l'existante — du bruit à
+// modérer. Piège : « Corriger cette disposition » AMORCE cargoViewerLayout
+// depuis la grille publiée, donc « non vide » ne signifie PAS « modifié ». On
+// compare donc à la référence plutôt que de se fier à sa présence.
+function hasLayoutChanges(shipName) {
+  const layout = shipName && state.cargoViewerLayout[shipName];
+  if (!layout || !Object.keys(layout).length) return false;
+  const published = getPublishedGridPositions(shipName);
+  // Pas de grille publiée : la seule façon d'avoir une entrée est un glisser.
+  if (!published) return true;
+  return Object.keys(layout).some((k) => {
+    const a = layout[k];
+    const b = published[k];
+    return !b || a.x !== b.x || a.y !== b.y || a.z !== b.z;
+  });
+}
+
+// Visibilité de « Proposer cette disposition ». Extrait de renderCargoStepView
+// pour pouvoir être rappelé après CHAQUE glisser sans reconstruire la scène 3D
+// — un re-rendu complet couperait le geste et ferait clignoter la vue.
+function updateProposeButton() {
+  const btn = document.getElementById("propose-layout-btn");
+  if (!btn) return;
+  const ship = getCargoViewerShipName();
+  const connected = typeof cloudUserId !== "undefined" && !!cloudUserId;
+  const published = ship ? state.approvedShipGrids[ship] : null;
+  const unlocked = !!(ship && state.cargoViewerUnlocked[ship]);
+  const editable = !published || unlocked || isAdminUser;
+  btn.style.display = ship && connected && editable && hasLayoutChanges(ship) ? "" : "none";
 }
 
 // Pseudo affiché du compte connecté (posé par updateAuthUI dans js/cloud.js) —
@@ -1478,6 +1515,10 @@ window.persistCargoModulePosition = function persistCargoModulePosition(moduleKe
   if (!state.cargoViewerLayout[shipName]) state.cargoViewerLayout[shipName] = {};
   state.cargoViewerLayout[shipName][moduleKey] = { x, y, z };
   saveState();
+  // « Proposer » n'apparaît qu'une fois la grille réellement modifiée : c'est
+  // ici, et seulement ici, qu'on sait qu'un déplacement vient d'avoir lieu. On
+  // ne met à jour QUE le bouton — re-rendre la scène couperait le glisser.
+  updateProposeButton();
 };
 
 window.onCargoModulePicked = function onCargoModulePicked(moduleKey) {
@@ -2688,12 +2729,10 @@ function renderCargoStepView() {
   if (resBtn) resBtn.style.display = holds && holds.length ? "" : "none";
   // Propositions (brique 2b) : il faut être connecté (l'insert exige auth.uid()).
   const connected = typeof cloudUserId !== "undefined" && !!cloudUserId;
-  const proposeBtn = document.getElementById("propose-layout-btn");
   const correctionBtn = document.getElementById("propose-correction-btn");
-  // « Proposer cette disposition » : on ne propose que ce qu'on peut éditer.
-  if (proposeBtn)
-    proposeBtn.style.display =
-      connected && holds && holds.length && (!publishedGrid || unlocked || isAdminUser) ? "" : "none";
+  // « Proposer » dépend aussi de modifications réelles : voir updateProposeButton,
+  // appelé ici ET après chaque glisser (sans re-rendre toute la scène 3D).
+  updateProposeButton();
   // « Corriger cette disposition » : seule porte de sortie d'une grille publiée.
   // NE demande PAS d'être connecté : déverrouiller est purement LOCAL (la
   // disposition perso du joueur). Exiger un compte enfermait un joueur
