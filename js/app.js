@@ -1290,10 +1290,25 @@ function getConnectedUserName() {
 // « Proposer cette disposition » : envoie la grille RÉSOLUE (tous les modules
 // avec leurs positions, pas la surcharge partielle) à la modération.
 async function proposeCurrentLayout() {
+  // Aucun échec SILENCIEUX ici : un clic qui ne produit ni effet ni message est
+  // indébogable (constaté à l'usage — « je n'ai rien reçu » alors que rien
+  // n'avait même été envoyé). Chaque sortie dit pourquoi.
   const ship = getCargoViewerShipName();
-  if (!ship) return;
+  if (!ship) {
+    alert(t("proposalNoShip"));
+    return;
+  }
   const grid = typeof getResolvedCargoGrid === "function" ? getResolvedCargoGrid() : [];
-  if (!grid.length) return;
+  if (!grid.length) {
+    alert(t("proposalNoGrid"));
+    return;
+  }
+  // submitLayoutProposal renvoie false sans rien dire si la session a expiré
+  // (le bouton, lui, n'est affiché qu'aux connectés) : on le signale ici.
+  if (typeof cloudUserId === "undefined" || !cloudUserId) {
+    alert(t("proposalNeedsLogin"));
+    return;
+  }
   const ok = await submitLayoutProposal(
     ship,
     grid,

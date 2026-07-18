@@ -213,6 +213,11 @@ function initCloudSync() {
           isAdminUser = admin;
           if (typeof renderAdminGridEntry === "function") renderAdminGridEntry();
           if (typeof renderSubmissionsEntry === "function") renderSubmissionsEntry();
+          // La connexion débloque « Proposer cette disposition » (réservé aux
+          // connectés) : sans ce re-rendu, le bouton restait invisible après
+          // login tant qu'on ne recalculait pas un rangement — constaté à
+          // l'usage (« il n'y a pas de bouton soumission »).
+          if (typeof renderCargoStepView === "function") renderCargoStepView();
         });
       }
     }

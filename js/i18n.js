@@ -219,6 +219,9 @@ const TRANSLATIONS = {
     adminGridPublished: "Grille publiée pour « {ship} ».",
     adminGridPublishFailed: "Échec de la publication : {msg}",
     proposalFailed: "Échec de l'envoi de la proposition : {msg}",
+    proposalNoShip: "Aucun vaisseau affiché : calcule un rangement avant de proposer une disposition.",
+    proposalNoGrid: "Aucune grille à proposer : la vue 3D n'affiche rien pour ce vaisseau.",
+    proposalNeedsLogin: "Il faut être connecté avec Discord pour envoyer une proposition (ta session a peut-être expiré).",
     proposalQuotaReached:
       "Tu as déjà 10 propositions en attente pour ce vaisseau. Attends qu'elles soient traitées avant d'en envoyer d'autres.",
     proposeLayoutBtn: "Proposer cette disposition",
@@ -480,6 +483,9 @@ const TRANSLATIONS = {
     adminGridPublished: "Grid published for \"{ship}\".",
     adminGridPublishFailed: "Publishing failed: {msg}",
     proposalFailed: "Could not send the proposal: {msg}",
+    proposalNoShip: "No ship displayed: compute a packing before proposing a layout.",
+    proposalNoGrid: "No grid to propose: the 3D view shows nothing for this ship.",
+    proposalNeedsLogin: "You must be signed in with Discord to send a proposal (your session may have expired).",
     proposalQuotaReached:
       "You already have 10 pending proposals for this ship. Wait until they are reviewed before sending more.",
     proposeLayoutBtn: "Propose this layout",
