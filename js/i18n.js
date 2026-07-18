@@ -222,7 +222,7 @@ const TRANSLATIONS = {
     proposalQuotaReached:
       "Tu as déjà 10 propositions en attente pour ce vaisseau. Attends qu'elles soient traitées avant d'en envoyer d'autres.",
     proposeLayoutBtn: "Proposer cette disposition",
-    proposeCorrectionBtn: "Proposer une correction",
+    proposeCorrectionBtn: "Corriger cette disposition",
     proposalSent: "Proposition envoyée — en attente de validation. Merci !",
     submissionsTab: "Propositions",
     submissionsHint:
@@ -483,7 +483,7 @@ const TRANSLATIONS = {
     proposalQuotaReached:
       "You already have 10 pending proposals for this ship. Wait until they are reviewed before sending more.",
     proposeLayoutBtn: "Propose this layout",
-    proposeCorrectionBtn: "Propose a correction",
+    proposeCorrectionBtn: "Correct this layout",
     proposalSent: "Proposal sent — pending review. Thanks!",
     submissionsTab: "Submissions",
     submissionsHint:

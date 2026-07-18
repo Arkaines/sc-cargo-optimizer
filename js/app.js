@@ -2679,9 +2679,14 @@ function renderCargoStepView() {
   if (proposeBtn)
     proposeBtn.style.display =
       connected && holds && holds.length && (!publishedGrid || unlocked || isAdminUser) ? "" : "none";
-  // « Proposer une correction » : seule porte de sortie d'une grille publiée.
+  // « Corriger cette disposition » : seule porte de sortie d'une grille publiée.
+  // NE demande PAS d'être connecté : déverrouiller est purement LOCAL (la
+  // disposition perso du joueur). Exiger un compte enfermait un joueur
+  // déconnecté sur un vaisseau à grille publiée — ni « Éditer », ni porte de
+  // sortie, aucun moyen d'ajuster sa propre vue. Seul l'ENVOI d'une proposition
+  // exige un compte (voir #propose-layout-btn ci-dessus).
   if (correctionBtn)
-    correctionBtn.style.display = connected && publishedGrid && !unlocked && !isAdminUser ? "" : "none";
+    correctionBtn.style.display = publishedGrid && !unlocked && !isAdminUser ? "" : "none";
   if (publishedNote) publishedNote.style.display = usePublished ? "" : "none";
   document.getElementById("cargo-viewer-rotate-btn").style.display = locked ? "none" : "";
   document.getElementById("cargo-viewer-mirror-btn").style.display = locked ? "none" : "";
