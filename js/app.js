@@ -114,6 +114,19 @@ function backfillCustomLocationPlanetHints() {
   planetAnchorCache = null;
 }
 
+// Repasse les migrations de forme sur l'état EN PLACE. Nécessaire après avoir
+// injecté un état venu du cloud (voir reconcileOnSignIn dans js/cloud.js) : un
+// autre appareil resté sur une ancienne version du site peut avoir poussé des
+// missions à l'ancien format, et loadState ne migre qu'au chargement local —
+// jamais ce qui arrive du cloud en cours de session. Sans ça, l'ancien format
+// vivrait tel quel jusqu'au prochain rechargement de la page.
+function migratePlayerDataInPlace() {
+  state.missions = (state.missions || []).map(migrateMission);
+  const scwikiEntries = allScwikiLocations();
+  state.customLocations = (state.customLocations || []).map((loc) => migrateCustomLocation(loc, scwikiEntries));
+  planetAnchorCache = null;
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return defaultState();
@@ -4188,26 +4201,38 @@ document.addEventListener("DOMContentLoaded", () => {
 // chargement puis périodiquement (voir plus haut). Aucune UI de statut :
 // c'est silencieux pour le joueur, une erreur ne finit qu'en console.
 async function runFullSync() {
-  try {
+  // Chaque source échoue SEULE. Avant, tout vivait dans un unique try
+  // séquentiel : une panne UEX (la première source) abandonnait aussi
+  // FleetYards ET les grilles publiées — le cœur du site — alors que ces
+  // sources sont indépendantes les unes des autres.
+  const step = async (label, fn) => {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`Sync ${label} échouée :`, err);
+    }
+  };
+
+  await step("lieux UEX", async () => {
     await syncUexLocations();
     renderAll();
-
-    await syncUexCommodities();
-    await syncUexCompanies();
-
+  });
+  await step("marchandises UEX", () => syncUexCommodities());
+  await step("entreprises UEX", () => syncUexCompanies());
+  await step("vaisseaux UEX", async () => {
     await syncUexShips();
     renderAll();
-
-    await syncMissingDistances();
-
+  });
+  await step("distances UEX", () => syncMissingDistances());
+  await step("lieux SC Wiki", async () => {
     await syncScwikiLocations();
     backfillCustomLocationPlanetHints();
     saveState();
-
-    await syncFleetyardsCargoHolds();
-
-    // Grilles publiées + statut admin. Après FleetYards : une grille publiée
-    // le remplace (voir getShipHolds), donc elle doit être lue en dernier.
+  });
+  await step("soutes FleetYards", () => syncFleetyardsCargoHolds());
+  // Grilles publiées + statut admin. Après FleetYards : une grille publiée
+  // le remplace (voir getShipHolds), donc elle doit être lue en dernier.
+  await step("grilles publiées", async () => {
     if (typeof fetchApprovedShipGrids === "function") {
       state.approvedShipGrids = await fetchApprovedShipGrids();
       saveState();
@@ -4215,9 +4240,6 @@ async function runFullSync() {
     if (typeof fetchIsAdmin === "function") isAdminUser = await fetchIsAdmin();
     renderAdminGridEntry();
     renderSubmissionsEntry();
-
-    renderShipCapacity();
-  } catch (err) {
-    console.error("Sync automatique échouée :", err);
-  }
+  });
+  renderShipCapacity();
 }

@@ -9,6 +9,10 @@ const UEX_API_BASE = "https://api.uexcorp.uk/2.0";
 
 async function uexGet(path) {
   const res = await fetch(`${UEX_API_BASE}/${path}`, { headers: { Accept: "application/json" } });
+  // Sans ce contrôle, une page d'erreur HTML (500, maintenance...) faisait
+  // exploser res.json() en « Unexpected token < » — indéboguable. On échoue
+  // proprement d'abord, comme scwiki.js et fleetyards.js le font déjà.
+  if (!res.ok) throw new Error(`Erreur UEX (HTTP ${res.status})`);
   const json = await res.json();
   if (json.status !== "ok") {
     throw new Error(json.message || `Erreur UEX (${json.status})`);

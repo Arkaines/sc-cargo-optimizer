@@ -11,6 +11,8 @@ const TRANSLATIONS = {
   fr: {
     themeToggleLabel: "Basculer le thème clair/sombre",
     langToggleLabel: "Changer de langue",
+    stepPrevLabel: "Arrêt précédent",
+    stepNextLabel: "Arrêt suivant",
     fanDisclaimer:
       "Ceci est un site de fans non-officiel de Star Citizen, non affilié au groupe d'entreprises Cloud Imperium. Tout le contenu de ce site non créé par son hébergeur ou ses utilisateurs appartient à ses propriétaires respectifs. Site officiel :",
     pageTitle: "Optimiseur de routes cargo — Star Citizen",
@@ -274,6 +276,8 @@ const TRANSLATIONS = {
   en: {
     themeToggleLabel: "Toggle light/dark theme",
     langToggleLabel: "Switch language",
+    stepPrevLabel: "Previous stop",
+    stepNextLabel: "Next stop",
     fanDisclaimer:
       "This is an unofficial Star Citizen fan site, not affiliated with the Cloud Imperium group of companies. All content on this site not authored by its host or users are property of their respective owners. Official site:",
     pageTitle: "Cargo Route Optimizer — Star Citizen",

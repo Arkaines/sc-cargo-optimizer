@@ -168,6 +168,10 @@ async function reconcileOnSignIn() {
 
   if (isLocalEmpty(state)) {
     Object.assign(state, defaultState(), cloudState);
+    // L'état du cloud peut venir d'un appareil resté sur une ancienne version
+    // du site : on lui repasse les migrations de forme, comme loadState le
+    // fait pour le localStorage (voir migratePlayerDataInPlace, js/app.js).
+    if (typeof migratePlayerDataInPlace === "function") migratePlayerDataInPlace();
     saveState();
     renderAll();
     localStorage.setItem(CLOUD_LINKED_FLAG, "1");
@@ -177,12 +181,24 @@ async function reconcileOnSignIn() {
   const keepCloud = confirm(t("cloudConflictPrompt"));
   if (keepCloud) {
     Object.assign(state, defaultState(), cloudState);
+    if (typeof migratePlayerDataInPlace === "function") migratePlayerDataInPlace();
     saveState();
     renderAll();
   } else {
     await pushStateToCloud(state);
   }
   localStorage.setItem(CLOUD_LINKED_FLAG, "1");
+}
+
+// À la déconnexion, retirer TOUT ce que la session ouvrait : sans ça,
+// isAdminUser restait true après logout et l'onglet Propositions + l'entrée de
+// l'éditeur admin restaient affichés jusqu'au rechargement (UI seulement — la
+// RLS refuse de toute façon les écritures — mais incohérent et troublant).
+function handleSignedOutUI() {
+  isAdminUser = false;
+  if (typeof renderAdminGridEntry === "function") renderAdminGridEntry();
+  if (typeof renderSubmissionsEntry === "function") renderSubmissionsEntry();
+  if (typeof renderCargoStepView === "function") renderCargoStepView();
 }
 
 function initCloudSync() {
@@ -201,6 +217,7 @@ function initCloudSync() {
   sb.auth.onAuthStateChange((event, session) => {
     updateAuthUI(session);
     cloudUserId = session && session.user ? session.user.id : null;
+    if (event === "SIGNED_OUT") handleSignedOutUI();
     if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && cloudUserId) {
       reconcileOnSignIn();
       // cloudUserId n'existe qu'à partir d'ici : fetchIsAdmin() lu plus tôt
