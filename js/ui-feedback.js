@@ -109,6 +109,94 @@ function showToast(message, kind = "info", { actionLabel, onAction } = {}) {
   return toast;
 }
 
+// Agrandit une image par-dessus la page, sur un fond assombri. Sert à l'exemple
+// de capture OCR : dans le panneau latéral il fait 280 px de large, illisible
+// alors que c'est précisément le détail (récompense, proposeur, objectifs) que
+// le joueur doit reconnaître pour cadrer sa propre capture.
+//
+// Volontairement sans dépendance à confirmDialog : pas de décision à prendre
+// ici, donc pas de boutons — on ferme au clic n'importe où, à Échap, ou via la
+// croix. Même piège à focus et même restitution du focus que la modale.
+function showImageLightbox(src, alt) {
+  if (!src) return;
+  const previouslyFocused = document.activeElement;
+
+  const overlay = document.createElement("div");
+  overlay.className = "lightbox-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  if (alt) overlay.setAttribute("aria-label", alt);
+
+  const img = document.createElement("img");
+  img.className = "lightbox-image";
+  img.src = src;
+  img.alt = alt || "";
+  overlay.appendChild(img);
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "lightbox-close";
+  close.setAttribute("aria-label", typeof t === "function" ? t("lightboxClose") : "Fermer");
+  close.textContent = "×";
+  overlay.appendChild(close);
+
+  let done = false;
+  const dismiss = () => {
+    if (done) return;
+    done = true;
+    document.removeEventListener("keydown", onKeydown, true);
+    overlay.remove();
+    if (previouslyFocused && typeof previouslyFocused.focus === "function") previouslyFocused.focus();
+  };
+
+  // La croix est le seul élément focalisable : Tab y reste, on ne peut pas
+  // tabuler dans la page masquée derrière.
+  const onKeydown = (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      dismiss();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      close.focus();
+    }
+  };
+  document.addEventListener("keydown", onKeydown, true);
+
+  close.addEventListener("click", dismiss);
+  overlay.addEventListener("click", dismiss);
+  // Un clic SUR l'image ne ferme pas : on vient de l'agrandir pour la lire,
+  // la refermer au premier clic dessus serait hostile.
+  img.addEventListener("click", (e) => e.stopPropagation());
+
+  document.body.appendChild(overlay);
+  close.focus();
+}
+
+// Rend une image agrandissable au clic ET au clavier. Un <img> n'est pas
+// interactif par défaut : sans role ni gestion des touches, la fonction
+// n'existerait tout simplement pas pour qui n'utilise pas la souris.
+function makeImageZoomable(img, label) {
+  if (!img) return;
+  img.setAttribute("role", "button");
+  img.setAttribute("tabindex", "0");
+  if (label) img.setAttribute("aria-label", label);
+  const open = () => {
+    // Focalise l'image AVANT d'ouvrir : showImageLightbox mémorise l'élément
+    // actif pour lui rendre le focus à la fermeture. Un clic souris ne
+    // focalise pas toujours un <img>, et le focus repartirait alors au début
+    // du document — la navigation clavier perdrait sa place.
+    img.focus();
+    showImageLightbox(img.currentSrc || img.src, img.alt);
+  };
+  img.addEventListener("click", open);
+  img.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault(); // Espace ferait défiler la page
+      open();
+    }
+  });
+}
+
 // Modale de confirmation. Renvoie une Promise<boolean> : true si l'action est
 // confirmée, false si annulée (bouton Annuler, Échap, ou clic hors modale).
 //

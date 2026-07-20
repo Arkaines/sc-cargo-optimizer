@@ -297,6 +297,8 @@ const TRANSLATIONS = {
     locationNameRequired: "Donne un nom au lieu avant de l'ajouter.",
     ocrDropzoneAria: "Choisir des captures d'écran de mission à importer",
     viewSwitcherAria: "Angle de vue de la soute",
+    ocrHelpImageZoom: "Agrandir l'exemple de capture",
+    lightboxClose: "Fermer l'agrandissement",
   },
 
   en: {
@@ -581,6 +583,8 @@ const TRANSLATIONS = {
     locationNameRequired: "Name the location before adding it.",
     ocrDropzoneAria: "Choose mission screenshots to import",
     viewSwitcherAria: "Cargo hold viewing angle",
+    ocrHelpImageZoom: "Enlarge the example screenshot",
+    lightboxClose: "Close the enlarged view",
   },
 };
 

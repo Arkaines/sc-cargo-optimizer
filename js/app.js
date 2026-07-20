@@ -4290,6 +4290,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const ocrDropzone = document.getElementById("ocr-dropzone");
   const ocrFileInput = document.getElementById("ocr-file-input");
 
+  // L'exemple de capture fait 280 px de large dans le panneau latéral : le
+  // détail que le joueur doit reconnaître (récompense, proposeur, liste des
+  // objectifs) y est illisible. Cliquer l'agrandit par-dessus la page.
+  makeImageZoomable(document.querySelector(".ocr-help-image"), t("ocrHelpImageZoom"));
+
   ocrDropzone.addEventListener("click", () => ocrFileInput.click());
 
   // Un div en role="button" n'hérite d'AUCUN comportement clavier natif : sans

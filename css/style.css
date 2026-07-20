@@ -1679,3 +1679,69 @@ footer button {
     max-width: none;
   }
 }
+
+/* =========================================================================
+   Agrandissement d'image (js/ui-feedback.js). z-index 1000 comme la modale :
+   les deux ne coexistent jamais.
+   ========================================================================= */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  /* Fond très sombre plutôt que le voile de la modale : ici on regarde une
+     capture de jeu, l'ambiant doit disparaître au maximum. */
+  background: rgba(4, 6, 10, 0.88);
+  animation: fade-in-overlay 0.15s ease;
+  cursor: zoom-out;
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  /* Une capture d'écran ne doit jamais être interpolée en douceur : c'est du
+     texte fin, le lissage le rendrait illisible à l'agrandissement. */
+  image-rendering: -webkit-optimize-contrast;
+  object-fit: contain;
+  border: 1px solid var(--panel-border);
+  cursor: default;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.35rem 0.7rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Signale que l'exemple est agrandissable — sinon personne ne clique. */
+.ocr-help-image {
+  cursor: zoom-in;
+  transition: border-color 0.15s ease;
+}
+
+.ocr-help-image:hover,
+.ocr-help-image:focus-visible {
+  border-color: var(--accent);
+}
+
+.ocr-help-image:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox-overlay {
+    animation: none;
+  }
+}

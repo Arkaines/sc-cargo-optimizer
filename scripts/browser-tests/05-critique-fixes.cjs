@@ -5,7 +5,7 @@
 const { openApp, switchTab, makeChecker, sleep } = require("./lib.cjs");
 
 module.exports = {
-  name: "Correctifs critique : retours, focus, annulation, mobile",
+  name: "Correctifs critique : retours, focus, annulation, mobile, agrandissement",
   async run(ctx) {
     const { check, failures } = makeChecker();
     const { page, errors, toasts } = await openApp(ctx);
@@ -134,6 +134,40 @@ module.exports = {
       check(o.scroll <= o.client + 1, `${id} : débordement horizontal ${o.scroll} > ${o.client}`);
     }
     await page.setViewport({ width: 1500, height: 1000 });
+
+    // --- Agrandissement de l'exemple OCR (makeImageZoomable). -------------
+    const zoom = await page.evaluate(() => {
+      const img = document.querySelector(".ocr-help-image");
+      const o = { role: img.getAttribute("role"), tabindex: img.getAttribute("tabindex"), aria: !!img.getAttribute("aria-label") };
+      img.click();
+      const ov = document.querySelector(".lightbox-overlay");
+      o.ouvert = !!ov;
+      o.ariaModal = ov && ov.getAttribute("aria-modal");
+      o.focusSurCroix = !!ov && document.activeElement === ov.querySelector(".lightbox-close");
+      // Cliquer l'image agrandie ne doit PAS refermer : on vient de l'ouvrir
+      // pour la lire.
+      ov.querySelector(".lightbox-image").click();
+      o.resteOuvertSurClicImage = !!document.querySelector(".lightbox-overlay");
+      // Cliquer le fond ferme.
+      ov.click();
+      o.fermeParFond = !document.querySelector(".lightbox-overlay");
+      o.focusRendu = document.activeElement === img;
+      // Clavier : Entrée ouvre, Échap ferme.
+      img.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      o.ouvreParEntree = !!document.querySelector(".lightbox-overlay");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      o.fermeParEchap = !document.querySelector(".lightbox-overlay");
+      o.restantes = document.querySelectorAll(".lightbox-overlay").length;
+      return o;
+    });
+    check(zoom.role === "button" && zoom.tabindex === "0" && zoom.aria, "l'exemple OCR n'est pas exposé comme un bouton accessible");
+    check(zoom.ouvert && zoom.ariaModal === "true", "l'agrandissement ne s'ouvre pas / n'est pas annoncé comme modal");
+    check(zoom.focusSurCroix, "agrandissement : le focus devrait partir sur la croix de fermeture");
+    check(zoom.resteOuvertSurClicImage, "cliquer l'image agrandie la referme (hostile)");
+    check(zoom.fermeParFond, "cliquer le fond ne referme pas l'agrandissement");
+    check(zoom.focusRendu, "le focus n'est pas rendu à l'image après fermeture");
+    check(zoom.ouvreParEntree && zoom.fermeParEchap, "l'agrandissement n'est pas pilotable au clavier (Entrée / Échap)");
+    check(zoom.restantes === 0, `${zoom.restantes} agrandissement(s) laissé(s) dans le DOM`);
 
     check(errors.length === 0, "erreurs page : " + errors.join("; "));
     await page.close();
