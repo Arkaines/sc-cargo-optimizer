@@ -777,10 +777,17 @@ function assignMissionZones(boxes, modules) {
       // toute la largeur et les suivants doivent s'empiler dessus — mesuré
       // sur la fixture Host/Big : 0 conflit -> 2.
       const contratsRestants = missionsSorted.length - 1 - missionIndex;
+      // Plus aucun contrat à servir après celui-ci : rien ne justifie de lui
+      // mesurer la largeur. Lui laisser sa voie au volume strict abandonnait
+      // une colonne contre la paroi qui ne profitait à personne — signalé sur
+      // un Ironclad avec un seul contrat de 452 SCU : voie de 4 crans sur 6,
+      // 2 crans vides sur toute la longueur et toute la hauteur.
       const neededWidth =
-        freeWidth - arrondi >= grain || contratsRestants === 0
-          ? arrondi
-          : Math.min(freeWidth, parVolume);
+        contratsRestants === 0
+          ? freeWidth
+          : freeWidth - arrondi >= grain
+            ? arrondi
+            : Math.min(freeWidth, parVolume);
       const side = ms.nextSide;
       ms.nextSide = side === "lo" ? "hi" : "lo";
 
