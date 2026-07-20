@@ -1,5 +1,5 @@
 // Liste des vaisseaux (capacite cargo en SCU) generee depuis l'API UEX Corp
-// (https://uexcorp.space/api/documentation/). Genere le 2026-07-17 (scripts/refresh-data.js).
+// (https://uexcorp.space/api/documentation/). Genere le 2026-07-20 (scripts/refresh-data.js).
 // Seuls les vaisseaux avec une capacite cargo non nulle sont retenus ; les
 // variantes purement cosmetiques/edition (meme SCU que leur vaisseau de base)
 // restent exclues -- voir js/uex.js:syncUexShips et ce script:fetchShips.

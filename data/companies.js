@@ -1,5 +1,5 @@
 ﻿// Liste des entreprises/donneurs de mission generee depuis l'API UEX Corp
-// (https://uexcorp.space/api/documentation/). Genere le 2026-07-17 (scripts/refresh-data.js).
+// (https://uexcorp.space/api/documentation/). Genere le 2026-07-20 (scripts/refresh-data.js).
 // Utilisee pour l'autocompletion du champ donneur de mission.
 const DEFAULT_COMPANIES = [
   { name: "987 Clothing", industry: "Fashion" },

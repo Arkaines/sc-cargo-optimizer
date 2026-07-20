@@ -1,5 +1,5 @@
 ﻿// Liste des commodites generee depuis l'API UEX Corp (https://uexcorp.space/api/documentation/).
-// Genere le 2026-07-17 (scripts/refresh-data.js). Utilisee pour l'autocompletion du champ marchandise des missions.
+// Genere le 2026-07-20 (scripts/refresh-data.js). Utilisee pour l'autocompletion du champ marchandise des missions.
 const DEFAULT_COMMODITIES = [
   { name: "AcryliPlex Composite", kind: "Man-made", illegal: false },
   { name: "Agricium", kind: "Metal", illegal: false },
