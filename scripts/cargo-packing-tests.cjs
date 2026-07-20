@@ -680,12 +680,20 @@ test("real data: Hull B (16 modules, 10 real contracts) -> 0 conflicts", () => {
 // Puis 4 -> 1 (2026-07-20), en mesurant depthDistance en crans de caisse
 // plutôt qu'en cellules : les caisses cessent de se placer en quinconce, donc
 // elles laissent moins de poches inutilisables et se gênent moins.
-test("real data: Raft (1 module, 10 real contracts) -> at most 1 conflict (measured 2026-07-20, quantised depthDistance)", () => {
+//
+// Puis 1 -> 2 le même jour, ASSUMÉ, en adoptant la règle du coffre de voiture
+// (voir les tests « coffre » plus bas). Il y a une tension réelle : séparer en
+// profondeur les caisses d'un MÊME contrat livrées au MÊME arrêt évitait ce
+// conflit, mais c'est exactement ce qui les étalait au lieu de les tasser au
+// fond — le défaut que le joueur voyait en jeu. On garde le remplissage
+// logique, qu'il constate à chaque chargement, plutôt qu'un conflit de moins
+// sur un jeu de données. On reste sous les 4 conflits d'avant la journée.
+test("real data: Raft (1 module, 10 real contracts) -> at most 2 conflicts (2026-07-20, règle du coffre)", () => {
   const ctx = loadCargoPacking();
   const { entries, holds, stepCount } = loadFixture("raft-real.json");
   const r = ctx.simulateRoutePacking(entries, holds, stepCount);
   assert.strictEqual(r.unplaced.length, 0);
-  assert.ok(r.conflicts.length <= 1, `expected <= 1 conflict (measured 2026-07-20), got ${r.conflicts.length}`);
+  assert.ok(r.conflicts.length <= 2, `expected <= 2 conflicts (measured 2026-07-20), got ${r.conflicts.length}`);
 });
 
 // --- Régression : conflit évitable via la recherche de dernier recours ---
@@ -1181,6 +1189,55 @@ test("soutes: remplies dans l'ordre déclaré, sans sauter à la suivante", () =
   // caisses de 32) : les soutes arrière ne doivent pas être entamées.
   const arriere = ordreUtilisation.filter((n) => n.includes("rear"));
   assert.strictEqual(arriere.length, 0, `soutes arrière entamées inutilement : ${arriere.join(", ")}`);
+});
+
+// --- On remplit le fond d'abord (règle du coffre de voiture) --------------
+// Formulée par le joueur : « quand on charge le coffre d'une voiture on
+// commence par remplir le fond avec les objets les plus encombrants, ensuite
+// les petits ». Une caisse de 32 SCU fait 8 crans de profond : dans une soute
+// de 20 crans elle doit démarrer au cran 12 pour toucher le fond.
+const SOUTE_20 = [{ name: "bay", dimensions: { x: 7.5, y: 25, z: 7.5 }, capacity: 720, maxContainerSize: 32 }];
+
+test("coffre: une caisse seule se colle au fond, pas à la porte", () => {
+  const ctx = loadCargoPacking();
+  const entries = [
+    { quantity: 32, commodity: "H", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, SOUTE_20, 2, { back: true });
+  assert.strictEqual(r.placements.length, 1);
+  const p = r.placements[0];
+  assert.strictEqual(
+    p.position[1] + p.size[1],
+    20,
+    `la caisse démarre au cran ${p.position[1]} et s'arrête au ${p.position[1] + p.size[1]} : elle doit toucher le fond (20)`
+  );
+});
+
+test("coffre: le fond se remplit avant la porte", () => {
+  const ctx = loadCargoPacking();
+  // 9 caisses de 32 SCU remplissent exactement une tranche de 8 crans
+  // (3 de front x 3 en hauteur). Elles doivent occuper les crans 12 à 19,
+  // pas 0 à 7.
+  const entries = [
+    { quantity: 288, commodity: "H", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, SOUTE_20, 2, { back: true });
+  assert.strictEqual(r.unplaced.length, 0);
+  const plusProche = Math.min(...r.placements.map((p) => p.position[1]));
+  assert.ok(
+    plusProche >= 12,
+    `la caisse la plus avancée démarre au cran ${plusProche} : tout devrait tenir entre les crans 12 et 19, contre le fond`
+  );
+});
+
+test("coffre: le fond suit la porte quand l'accès est à l'avant", () => {
+  const ctx = loadCargoPacking();
+  const entries = [
+    { quantity: 32, commodity: "H", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, SOUTE_20, 2, { front: true });
+  const p = r.placements[0];
+  assert.strictEqual(p.position[1], 0, `accès à l'avant : le fond est au cran 0, la caisse est au ${p.position[1]}`);
 });
 
 let failed = 0;

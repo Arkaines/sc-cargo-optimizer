@@ -1098,13 +1098,34 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
           // entier dans sa zone — pas la fraction du trajet entier, voir
           // missionBoxRank plus haut).
           const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
-          // Mesurée DEPUIS LA FACE D'ACCÈS, pas depuis le cran 0 (voir
-          // depthAccessAtFar) : rang 0 = au plus près de la porte.
+          // Toutes les caisses visent LE FOND, à l'opposé de la face d'accès.
+          // C'est la règle du coffre de voiture donnée par un joueur : on
+          // commence par le fond avec les plus encombrants, les petits
+          // finissent près de l'ouverture.
+          //
+          // Le rang servait auparavant à ÉTALER les caisses d'un contrat sur
+          // toute la profondeur. C'était doublement faux : une caisse seule
+          // recevait le rang 0, donc la porte, et douze caisses identiques se
+          // répartissaient du fond jusqu'à l'ouverture au lieu de se tasser
+          // au fond. La stratification n'a pas besoin d'être calculée ici :
+          // elle découle de l'ORDRE DE POSE (voir le tri de `boxes` plus
+          // haut — livraisons tardives d'abord, puis les plus grosses), qui
+          // sert les premières caisses au fond et repousse les suivantes vers
+          // la porte. Ce qui repart tôt se retrouve donc naturellement à
+          // portée, sans qu'on ait à le viser.
+          // La profondeur reflète QUAND la caisse repart, rapportée au trajet
+          // entier : ce qui part en dernier va au fond, ce qui part tôt reste
+          // à portée de la porte. Un contrat livré en un seul arrêt vise donc
+          // le fond, et toutes ses caisses s'y tassent au lieu de s'étaler.
+          //
+          // C'est le même calcul que le chemin sans zone (idealDepthForModule
+          // plus bas), qui lui plaçait déjà correctement — c'est en comparant
+          // les deux qu'on a trouvé le défaut.
           const idealDepthForZone = (z) => {
             const maxDepthIdx = z.module.cellDims[z.module.depthAxis] - 1;
             if (maxDepthIdx <= 0) return 0;
-            const depuisAcces = rankFrac * maxDepthIdx;
-            return z.module.depthAccessAtFar ? maxDepthIdx - depuisAcces : depuisAcces;
+            const depuisPorte = dropoffFrac * maxDepthIdx;
+            return z.module.depthAccessAtFar ? maxDepthIdx - depuisPorte : depuisPorte;
           };
           // IMPORTANT : un contrat peut avoir PLUSIEURS zones DANS LE MÊME
           // module (une voie tier 1 partielle, puis un empilement tier 2
