@@ -936,6 +936,18 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
     // vers les axes réels de CE module (voir accessibleFaceAxes) — réutilisé
     // pour toutes les caisses de ce module.
     module.faceAxes = accessibleFaceAxes(accessFaces, module);
+    // Sens de lecture de la profondeur. La profondeur idéale d'une caisse était
+    // toujours comptée depuis le cran 0, comme si la porte se trouvait
+    // forcément à l'arrière. En déclarant un accès par l'avant, l'ordre de
+    // chargement se retrouvait donc inversé : les petites caisses au fond et
+    // les grosses côté porte, alors qu'on charge les grosses en premier — elles
+    // entrent au fond — et les petites en dernier, à portée de la porte.
+    //
+    // On ne bascule que si TOUTES les faces d'accès de l'axe de profondeur sont
+    // à l'extrémité opposée : si le joueur déclare les deux bouts, l'un vaut
+    // l'autre et l'ordre historique convient.
+    const facesProfondeur = module.faceAxes.filter((f) => f.axis === module.depthAxis);
+    module.depthAccessAtFar = facesProfondeur.length > 0 && facesProfondeur.every((f) => f.direction === "far");
     // Zones réservées à des véhicules garés (brique A′) : 0..N obstacles
     // permanents pleine hauteur par module. Chacun pré-marque ses cellules
     // (rien ne s'y range) ET s'injecte dans activeBoxes comme obstacle qui ne
@@ -1079,9 +1091,13 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
           // entier dans sa zone — pas la fraction du trajet entier, voir
           // missionBoxRank plus haut).
           const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
+          // Mesurée DEPUIS LA FACE D'ACCÈS, pas depuis le cran 0 (voir
+          // depthAccessAtFar) : rang 0 = au plus près de la porte.
           const idealDepthForZone = (z) => {
             const maxDepthIdx = z.module.cellDims[z.module.depthAxis] - 1;
-            return maxDepthIdx > 0 ? rankFrac * maxDepthIdx : 0;
+            if (maxDepthIdx <= 0) return 0;
+            const depuisAcces = rankFrac * maxDepthIdx;
+            return z.module.depthAccessAtFar ? maxDepthIdx - depuisAcces : depuisAcces;
           };
           // IMPORTANT : un contrat peut avoir PLUSIEURS zones DANS LE MÊME
           // module (une voie tier 1 partielle, puis un empilement tier 2
@@ -1209,7 +1225,9 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
             });
           const idealDepthForModule = (m) => {
             const maxDepthIdx = m.cellDims[m.depthAxis] - 1;
-            return maxDepthIdx > 0 ? dropoffFrac * maxDepthIdx : 0;
+            if (maxDepthIdx <= 0) return 0;
+            const depuisAcces = dropoffFrac * maxDepthIdx;
+            return m.depthAccessAtFar ? maxDepthIdx - depuisAcces : depuisAcces;
           };
           placed = placeInBestModule(byFreeSpace, b.box, b.dropoffStop, idealDepthForModule, null, missionId);
         }

@@ -1106,6 +1106,51 @@ test("voie: un contrat seul ne s'éparpille pas sur plus de soutes que nécessai
   assert.ok(modules.size <= 3, `${modules.size} soutes utilisées pour 1235 SCU, 3 suffisent`);
 });
 
+// --- Ordre de chargement : grosses au fond, petites près de la porte ------
+// Règle donnée par un joueur : « on charge les grosses caisses en premier, et
+// les moyennes puis les petites ». Les grosses entrent donc au fond et les
+// petites restent près de la face d'accès, à portée pour être sorties.
+// La profondeur idéale était toujours mesurée depuis le cran 0, comme si la
+// porte était forcément à l'arrière : en déclarant un accès par l'avant, tout
+// se retrouvait inversé — les petites au fond.
+function profondeurMoyenneParTaille(ctx, faces) {
+  const holds = [
+    { name: "bay", dimensions: { x: 7.5, y: 25, z: 7.5 }, capacity: 720, maxContainerSize: 32 },
+  ];
+  const lignes = [168, 168, 48, 48, 20];
+  const entries = lignes.map((q, i) => ({
+    quantity: q, commodity: "C" + i, mission: { id: 1, name: "M1" },
+    pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32,
+  }));
+  const r = ctx.simulateRoutePacking(entries, holds, 2, faces);
+  assert.strictEqual(r.unplaced.length, 0);
+  const parTaille = new Map();
+  r.placements.forEach((p) => {
+    if (!parTaille.has(p.box.scu)) parTaille.set(p.box.scu, []);
+    parTaille.get(p.box.scu).push(p.position[1]); // axe 1 = profondeur d'une soute 6x20x6
+  });
+  const moy = (s) => {
+    const v = parTaille.get(s);
+    assert.ok(v && v.length, `aucune caisse de ${s} SCU placée`);
+    return v.reduce((a, b) => a + b, 0) / v.length;
+  };
+  return moy;
+}
+
+test("chargement: accès ARRIÈRE -> grosses au fond, petites près de la porte", () => {
+  const ctx = loadCargoPacking();
+  const moy = profondeurMoyenneParTaille(ctx, { back: true });
+  // Porte au cran 0 : les grosses doivent être PLUS LOIN (profondeur élevée).
+  assert.ok(moy(32) > moy(8), `32 SCU à ${moy(32)}, 8 SCU à ${moy(8)} — les grosses doivent aller au fond`);
+});
+
+test("chargement: accès AVANT -> l'ordre s'inverse avec la porte", () => {
+  const ctx = loadCargoPacking();
+  const moy = profondeurMoyenneParTaille(ctx, { front: true });
+  // Porte au cran le plus élevé : les grosses doivent être PLUS PRÈS de 0.
+  assert.ok(moy(32) < moy(8), `32 SCU à ${moy(32)}, 8 SCU à ${moy(8)} — les petites doivent rester côté porte`);
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
