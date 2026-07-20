@@ -260,6 +260,8 @@ const TRANSLATIONS = {
     allowRevisitsHint: "Si activé, un lieu peut être visité plusieurs fois pour débloquer un trajet autrement impossible — le résultat n'est alors plus garanti optimal.",
     revisitedResultWarning:
       "⚠ Trajet de secours : au moins un lieu est visité plusieurs fois pour satisfaire des missions imposant un ordre contradictoire. Ce trajet n'est PAS optimisé (simple parcours au plus proche, pas de recherche du meilleur ordre) — désactive \"{allowRevisitsBtn}\" et désélectionne une mission pour un calcul optimal.",
+    revisitedOptimalNote:
+      "Un même lieu est visité plusieurs fois : des missions imposent des ordres contradictoires (tu dois livrer là où tu dois aussi récupérer). L'ordre des arrêts ci-dessous est le plus court possible.",
     approximateResultNote: "{count} lieux distincts : résultat approché (heuristique), pas garanti optimal à 100%.",
     routeTotal: "Distance totale estimée : {total} Gm — {stops} arrêt(s)",
     maxLoadOverload:
@@ -548,6 +550,8 @@ const TRANSLATIONS = {
     allowRevisitsHint: "When enabled, a location can be visited more than once to unblock an otherwise impossible route — the result is then no longer guaranteed optimal.",
     revisitedResultWarning:
       "⚠ Fallback route: at least one location is visited more than once to satisfy missions requiring a contradictory order. This route is NOT optimized (simple nearest-neighbor pass, no search for the best order) — disable \"{allowRevisitsBtn}\" and deselect a mission for an optimal calculation.",
+    revisitedOptimalNote:
+      "One location is visited more than once: missions require contradictory orders (you must deliver where you also have to pick up). The stop order below is the shortest possible.",
     approximateResultNote: "{count} distinct locations: approximate result (heuristic), not guaranteed 100% optimal.",
     routeTotal: "Estimated total distance: {total} Gm — {stops} stop(s)",
     maxLoadOverload: "Maximum load along the route: {load} / {scu} SCU — exceeds capacity by {over} SCU at some point!",

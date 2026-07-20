@@ -705,16 +705,279 @@ function findDirectConstraintCycle(constraints, locIds) {
   return null;
 }
 
-// Repli utilisé uniquement quand le calcul strict (chaque lieu visité une
-// seule fois) échoue ET que le joueur a explicitement coché "autoriser à
-// revisiter un lieu" : parcours glouton "plus proche voisin" parmi les
-// actions encore à faire (ramassages/dépôts), qui peut donc repasser par un
-// même lieu si c'est nécessaire pour satisfaire des missions imposant un
-// ordre contradictoire. Volontairement simple (pas de recherche
-// d'optimalité) : c'est un filet de secours pour débloquer un trajet
-// autrement impossible, pas un second algorithme d'optimisation — d'où le
-// marquage systématique en résultat non garanti optimal.
+// Regroupe les lignes de cargaison par couple (ramassage, dépôt). Deux lignes
+// qui partent du même endroit vers le même endroit sont indiscernables pour le
+// calcul du trajet : elles seront toujours embarquées puis déposées ensemble.
+// Les traiter comme UNE tâche fait chuter l'espace d'états de 3^(lignes) à
+// 3^(couples distincts) — en pratique une poignée, même avec dix missions.
+function buildRevisitTasks(missions, broken) {
+  const isUsable = (item) => !broken.has(item.pickupId) && !broken.has(item.dropoffId);
+  const byPair = new Map();
+  missions.forEach((m) => {
+    (m.cargoItems || []).forEach((item, index) => {
+      if (!isUsable(item)) return;
+      if (!item.pickupId || !item.dropoffId || item.pickupId === item.dropoffId) return;
+      const key = `${item.pickupId}>${item.dropoffId}`;
+      let task = byPair.get(key);
+      if (!task) {
+        task = { pickupId: item.pickupId, dropoffId: item.dropoffId, entries: [] };
+        byPair.set(key, task);
+      }
+      task.entries.push({ mission: m, item, index });
+    });
+  });
+  return Array.from(byPair.values());
+}
+
+// Plafond de l'espace d'états du calcul exact avec revisites (3^tâches × lieux).
+// Au-delà on repasse sur le glouton. 10 couples ramassage/dépôt distincts font
+// 59 049 codes : très au-delà de ce qu'on voit sur un vrai run.
+const EXACT_REVISIT_MAX_STATES = 1e6;
+
+// Trajet avec revisites, résolu de façon EXACTE.
+//
+// Pourquoi un second solveur : solveExactDP raisonne sur "quels lieux ai-je
+// déjà visités", ce qui suppose un lieu = une visite. Dès que deux missions
+// imposent l'ordre inverse entre les deux mêmes stations (livrer A->B et
+// récupérer B->A dans le même run — cas très courant du hauling), il ne peut
+// RIEN produire. Il faut alors changer d'état : plus "où suis-je passé" mais
+// "où en est chaque chargement".
+//
+// Chaque tâche a trois états (à prendre / à bord / livrée), d'où un code en
+// base 3. Une transition fait avancer UNE tâche d'un cran, donc le code croît
+// STRICTEMENT : les parcourir dans l'ordre croissant est un tri topologique
+// valide, sans file de priorité ni détection de cycle.
+//
+// Critère, dans cet ordre : distance, puis nombre d'arrêts, puis pic de charge.
+// Ce dernier n'est pas cosmétique — à distance et arrêts égaux, deux ordres
+// peuvent différer de plusieurs centaines de SCU au plus chargé, et donc tenir
+// ou non dans la soute. Départager au hasard reviendrait à proposer parfois la
+// version qui déborde alors qu'une équivalente passe.
+//
+// Le pic reste un critère valide malgré le max (et non une somme) : la charge
+// à un instant donné ne dépend que de l'état, donc à état égal un préfixe de
+// pic plus bas domine — le pic final vaut max(préfixe, suffixe) et le suffixe
+// est identique.
+//
+// Renvoie null si l'instance est trop grosse ou si aucun trajet n'existe.
+function solveRevisitExact(tasks, startId) {
+  const k = tasks.length;
+  if (!k) return null;
+
+  const locIds = [];
+  const idxOf = new Map();
+  const addLoc = (id) => {
+    if (!idxOf.has(id)) {
+      idxOf.set(id, locIds.length);
+      locIds.push(id);
+    }
+    return idxOf.get(id);
+  };
+  if (startId) addLoc(startId);
+  const from = new Int32Array(k);
+  const to = new Int32Array(k);
+  tasks.forEach((t, i) => {
+    from[i] = addLoc(t.pickupId);
+    to[i] = addLoc(t.dropoffId);
+  });
+  const n = locIds.length;
+
+  const pow3 = new Array(k + 1);
+  pow3[0] = 1;
+  for (let i = 1; i <= k; i++) pow3[i] = pow3[i - 1] * 3;
+  const P = pow3[k];
+  if (n * P > EXACT_REVISIT_MAX_STATES) return null;
+
+  const d = [];
+  for (let i = 0; i < n; i++) {
+    const row = new Float64Array(n);
+    for (let j = 0; j < n; j++) row[j] = i === j ? 0 : getDistance(locIds[i], locIds[j]);
+    d.push(row);
+  }
+
+  // Charge à bord pour chaque code d'état : somme des quantités des tâches au
+  // statut "à bord" (chiffre 1). Ne dépend que du code, jamais du chemin.
+  const qty = new Float64Array(k);
+  tasks.forEach((t, i) => {
+    qty[i] = t.entries.reduce((s, e) => s + (Number(e.item.quantity) || 0), 0);
+  });
+  const loadOfCode = new Float64Array(P);
+  for (let code = 0; code < P; code++) {
+    let load = 0;
+    for (let t = 0; t < k; t++) if (Math.floor(code / pow3[t]) % 3 === 1) load += qty[t];
+    loadOfCode[code] = load;
+  }
+
+  const size = n * P;
+  const best = new Float64Array(size).fill(Infinity);
+  const stops = new Int32Array(size).fill(0x7fffffff);
+  const peak = new Float64Array(size).fill(Infinity);
+  const prevState = new Int32Array(size).fill(-1);
+  const prevTask = new Int8Array(size).fill(-1);
+
+  // Le lieu de départ compte déjà pour un arrêt (il est affiché comme tel).
+  if (startId) {
+    const s = idxOf.get(startId) * P;
+    best[s] = 0;
+    stops[s] = 1;
+    peak[s] = 0;
+  } else {
+    // Sans départ imposé, le trajet peut commencer à n'importe quel lieu de
+    // ramassage — le premier arrêt est alors la première action.
+    for (let i = 0; i < k; i++) {
+      const s = from[i] * P;
+      if (best[s] === Infinity) {
+        best[s] = 0;
+        stops[s] = 1;
+        peak[s] = 0;
+      }
+    }
+  }
+
+  const EPS = 1e-9;
+  for (let code = 0; code < P; code++) {
+    for (let loc = 0; loc < n; loc++) {
+      const s = loc * P + code;
+      const cur = best[s];
+      if (cur === Infinity) continue;
+      for (let t = 0; t < k; t++) {
+        const st = Math.floor(code / pow3[t]) % 3;
+        if (st === 2) continue; // déjà livrée
+        const target = st === 0 ? from[t] : to[t];
+        const ncode = code + pow3[t];
+        const ns = target * P + ncode;
+        const nd = cur + d[loc][target];
+        const nstops = stops[s] + (target === loc ? 0 : 1);
+        const npeak = Math.max(peak[s], loadOfCode[ncode]);
+        const tie = nd <= best[ns] + EPS && nd >= best[ns] - EPS;
+        if (
+          nd < best[ns] - EPS ||
+          (tie && nstops < stops[ns]) ||
+          (tie && nstops === stops[ns] && npeak < peak[ns])
+        ) {
+          best[ns] = nd;
+          stops[ns] = nstops;
+          peak[ns] = npeak;
+          prevState[ns] = s;
+          prevTask[ns] = t;
+        }
+      }
+    }
+  }
+
+  // État final : toutes les tâches livrées, soit le code dont tous les
+  // chiffres valent 2 (= 3^k - 1).
+  const goal = P - 1;
+  let bestEnd = -1;
+  for (let loc = 0; loc < n; loc++) {
+    const s = loc * P + goal;
+    if (best[s] === Infinity) continue;
+    if (bestEnd === -1) {
+      bestEnd = s;
+      continue;
+    }
+    const tie = best[s] <= best[bestEnd] + EPS && best[s] >= best[bestEnd] - EPS;
+    if (
+      best[s] < best[bestEnd] - EPS ||
+      (tie && stops[s] < stops[bestEnd]) ||
+      (tie && stops[s] === stops[bestEnd] && peak[s] < peak[bestEnd])
+    ) {
+      bestEnd = s;
+    }
+  }
+  if (bestEnd === -1) return null;
+
+  const seq = [];
+  let s = bestEnd;
+  while (prevState[s] !== -1) {
+    const t = prevTask[s];
+    const ps = prevState[s];
+    const st = Math.floor((ps % P) / pow3[t]) % 3;
+    seq.push({ locId: locIds[Math.floor(s / P)], task: tasks[t], type: st === 0 ? "pickup" : "dropoff" });
+    s = ps;
+  }
+  seq.reverse();
+  return { seq, startLocId: locIds[Math.floor(s / P)] };
+}
+
+// Assemble la suite d'actions (ramasser/déposer) en arrêts : deux actions
+// consécutives au même lieu forment UN arrêt, et les lignes sont regroupées
+// par mission — une même tâche peut porter des lignes de plusieurs missions.
+function buildRevisitSteps(seq, startLocId, startId) {
+  const steps = [];
+  let current = startId || startLocId;
+  // Le lieu de départ choisi apparaît comme premier arrêt même sans action,
+  // comme dans le calcul strict.
+  if (startId) steps.push({ locId: startId, actions: [], legDistance: 0 });
+
+  seq.forEach((a) => {
+    let step = steps[steps.length - 1];
+    if (!step || step.locId !== a.locId) {
+      step = {
+        locId: a.locId,
+        actions: [],
+        legDistance: steps.length ? getDistance(current, a.locId) : 0,
+      };
+      steps.push(step);
+      current = a.locId;
+    }
+    a.task.entries.forEach((e) => {
+      let action = step.actions.find((x) => x.type === a.type && x.mission === e.mission);
+      if (!action) {
+        action = { type: a.type, mission: e.mission, items: [] };
+        step.actions.push(action);
+      }
+      action.items.push({ ...e.item, index: e.index });
+    });
+  });
+  return steps;
+}
+
+// Charge de cargo réellement à bord à chaque arrêt (ajoutée au retrait,
+// retirée au dépôt), et pic sur l'ensemble du trajet.
+function annotateCargoLoad(steps) {
+  let load = 0;
+  let maxLoad = 0;
+  steps.forEach((step) => {
+    step.actions.forEach((a) => {
+      const sum = a.items.reduce((s, item) => s + (Number(item.quantity) || 0), 0);
+      load += a.type === "pickup" ? sum : -sum;
+    });
+    step.cargoLoad = roundScu(load);
+    if (step.cargoLoad > maxLoad) maxLoad = step.cargoLoad;
+  });
+  return maxLoad;
+}
+
+// Point d'entrée du trajet avec revisites : exact si l'instance tient dans le
+// plafond d'états, glouton sinon (voir solveRevisitGreedy).
 function solveRouteWithRevisits(missions, startId, broken) {
+  const tasks = buildRevisitTasks(missions, broken);
+  if (!tasks.length) return { error: t("selectMissionError") };
+
+  const solved = solveRevisitExact(tasks, startId);
+  if (!solved) return solveRevisitGreedy(missions, startId, broken);
+
+  const steps = buildRevisitSteps(solved.seq, solved.startLocId, startId);
+  const maxLoad = annotateCargoLoad(steps);
+  const total = steps.reduce((s, step) => s + step.legDistance, 0);
+  const distinct = new Set(steps.map((s) => s.locId)).size;
+
+  return {
+    steps,
+    total: roundScu(total),
+    approximate: false,
+    revisited: steps.length > distinct,
+    stopCount: steps.length,
+    maxCargoLoad: maxLoad,
+  };
+}
+
+// Repli de dernier recours, quand l'instance dépasse le plafond d'états du
+// calcul exact : parcours glouton "plus proche voisin" parmi les actions
+// encore à faire. Volontairement simple et NON optimal — d'où le marquage du
+// résultat en approximate, qui déclenche l'avertissement dédié dans l'UI.
+function solveRevisitGreedy(missions, startId, broken) {
   const isUsable = (item) => !broken.has(item.pickupId) && !broken.has(item.dropoffId);
 
   const entries = [];
@@ -783,16 +1046,7 @@ function solveRouteWithRevisits(missions, startId, broken) {
     }
   }
 
-  let load = 0;
-  let maxLoad = 0;
-  steps.forEach((step) => {
-    step.actions.forEach((a) => {
-      const sum = a.items.reduce((s, item) => s + (Number(item.quantity) || 0), 0);
-      load += a.type === "pickup" ? sum : -sum;
-    });
-    step.cargoLoad = roundScu(load);
-    if (step.cargoLoad > maxLoad) maxLoad = step.cargoLoad;
-  });
+  const maxLoad = annotateCargoLoad(steps);
 
   return {
     steps,
@@ -2396,9 +2650,14 @@ function renderRouteResult(result) {
   }
 
   if (result.revisited) {
+    // Deux cas très différents : le trajet exact (l'ordre EST le meilleur, on
+    // explique juste pourquoi on repasse au même endroit) et le repli glouton
+    // sur très grosse instance (là seulement, l'ordre n'est pas garanti).
     const p = document.createElement("p");
-    p.className = "hint warning-text";
-    p.textContent = t("revisitedResultWarning", { allowRevisitsBtn: t("allowRevisitsBtn") });
+    p.className = result.approximate ? "hint warning-text" : "hint";
+    p.textContent = result.approximate
+      ? t("revisitedResultWarning", { allowRevisitsBtn: t("allowRevisitsBtn") })
+      : t("revisitedOptimalNote");
     container.appendChild(p);
   } else if (result.approximate) {
     const p = document.createElement("p");
