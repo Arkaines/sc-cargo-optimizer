@@ -1745,3 +1745,13 @@ footer button {
     animation: none;
   }
 }
+
+/* La phrase qui explique à quoi servent les faces d'accès. Sans elle personne
+   ne coche, et tout le calcul de blocage entre grilles voisines reste inerte
+   — il ne s'active que si le joueur a décrit son vaisseau. */
+.access-faces-hint {
+  flex-basis: 100%;
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
