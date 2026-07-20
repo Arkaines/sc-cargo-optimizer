@@ -734,17 +734,24 @@ function assignMissionZones(boxes, modules) {
       const freeCapOf = (ms) => (ms.hiEdge - ms.loEdge) * ms.laneCapacity;
       const isFresh = (ms) => ms.loEdge === 0 && ms.hiEdge === ms.maxWidth;
 
+      // PREMIÈRE soute qui convient, dans l'ordre où le vaisseau les déclare —
+      // et non celle dont la capacité colle au plus juste. Le « au plus juste »
+      // est optimal sur le papier mais illisible en soute : sur 900 SCU
+      // d'Ironclad il remplissait front_left, sautait à rear_left parce que
+      // sa capacité tombait mieux, puis revenait déposer 36 SCU dans
+      // front_right. Trois soutes là où deux suffisent, dans un ordre que
+      // personne ne suivrait en chargeant. On remplit donc dans l'ordre.
       let bestFit = null;
       openModules.forEach((ms) => {
-        if (!isFresh(ms)) return;
+        if (bestFit || !isFresh(ms)) return;
         const freeCap = freeCapOf(ms);
-        if (freeCap >= remaining && (!bestFit || freeCap < bestFit.freeCap)) bestFit = { ms, freeCap };
+        if (freeCap >= remaining) bestFit = { ms, freeCap };
       });
       if (!bestFit) {
         openModules.forEach((ms) => {
-          if (isFresh(ms)) return;
+          if (bestFit || isFresh(ms)) return;
           const freeCap = freeCapOf(ms);
-          if (freeCap >= remaining && (!bestFit || freeCap < bestFit.freeCap)) bestFit = { ms, freeCap };
+          if (freeCap >= remaining) bestFit = { ms, freeCap };
         });
       }
       const ms =

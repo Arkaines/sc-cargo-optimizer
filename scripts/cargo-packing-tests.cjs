@@ -1151,6 +1151,38 @@ test("chargement: accès AVANT -> l'ordre s'inverse avec la porte", () => {
   assert.ok(moy(32) < moy(8), `32 SCU à ${moy(32)}, 8 SCU à ${moy(8)} — les petites doivent rester côté porte`);
 });
 
+// --- Les soutes se remplissent DANS L'ORDRE ------------------------------
+// Demandé par un joueur : « il faut remplir les soutes dans l'ordre ».
+// L'allocation choisissait la soute au plus juste (celle dont la capacité
+// libre collait le mieux au reste à placer) : sur 900 SCU d'Ironclad, elle
+// remplissait front_left, sautait à rear_left, puis revenait déposer 36 SCU
+// dans front_right. Trois soutes là où deux suffisent, et un ordre que
+// personne ne suivrait en soute.
+test("soutes: remplies dans l'ordre déclaré, sans sauter à la suivante", () => {
+  const ctx = loadCargoPacking();
+  const entries = [
+    { quantity: 900, commodity: "H", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, IRONCLAD, 2);
+  assert.strictEqual(r.unplaced.length, 0);
+
+  const ordreUtilisation = [];
+  r.placements.forEach((p) => {
+    if (!ordreUtilisation.includes(p.module.name)) ordreUtilisation.push(p.module.name);
+  });
+  const declare = IRONCLAD.map((h) => h.name);
+  // Les soutes utilisées doivent apparaître dans le même ordre relatif que
+  // l'ordre déclaré — jamais l'inverse.
+  const rangs = ordreUtilisation.map((n) => declare.indexOf(n));
+  const croissant = rangs.every((v, i) => i === 0 || rangs[i - 1] < v);
+  assert.ok(croissant, `soutes utilisées dans le désordre : ${ordreUtilisation.join(" -> ")}`);
+
+  // 900 SCU tiennent dans les deux soutes avant (576 SCU chacune avec des
+  // caisses de 32) : les soutes arrière ne doivent pas être entamées.
+  const arriere = ordreUtilisation.filter((n) => n.includes("rear"));
+  assert.strictEqual(arriere.length, 0, `soutes arrière entamées inutilement : ${arriere.join(", ")}`);
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
