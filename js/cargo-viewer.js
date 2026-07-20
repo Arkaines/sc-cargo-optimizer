@@ -21,7 +21,13 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const UNIT = 1.25; // 1 cran de grille = 1,25 m (voir js/cargo-packing.js)
-const MODULE_GAP = 1.5; // espace entre modules affichés côte à côte, en mètres
+// Espace entre deux grilles affichées côte à côte. Vaut exactement 1 SCU
+// (1,25 m) et non une valeur arbitraire : sur les vaisseaux dont la soute est
+// d'un seul tenant (Ironclad par exemple), les grilles ne sont pas des pièces
+// séparées par une cloison — c'est un seul volume, avec une bande d'un SCU
+// entre elles où l'on ne peut rien poser. C'est précisément ce qui explique
+// qu'une soute unique soit déclarée en quatre grilles.
+const MODULE_GAP = UNIT;
 
 let renderer = null;
 let scene = null;
