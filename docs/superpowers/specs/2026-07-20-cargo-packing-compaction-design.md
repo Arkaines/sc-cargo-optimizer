@@ -74,43 +74,49 @@ Le départage `|| a.box.scu - b.box.scu` attribue donc un rang **distinct** à d
 
 L'intention d'origine était d'éviter qu'une caisse bloque une autre caisse **du même contrat** partant plus tôt. Cette intention est valable — mais elle ne s'applique qu'entre arrêts de livraison différents. À l'intérieur d'un même arrêt, l'ordre des caisses entre elles n'a aucune importance : elles sortent toutes en même temps.
 
-## Conception
+## Tentative écartée : le rang par groupe de livraison
 
-Le rang devient celui du **groupe de livraison**, pas de la caisse individuelle.
+**Première conception, réfutée par la mesure. Consignée pour qu'on ne la retente pas.**
 
-```js
-boxesByMission.forEach((list) => {
-  const stops = [...new Set(list.map((b) => b.dropoffStop))].sort((a, b) => a - b);
-  if (stops.length < 2) return;
-  list.forEach((b) => missionBoxRank.set(b, stops.indexOf(b.dropoffStop) / (stops.length - 1)));
-});
-```
+L'idée était de donner le même rang à toutes les caisses d'un même arrêt (rang du *groupe* et non de la caisse), pour qu'elles cessent d'être départagées en profondeur.
 
-Deux conséquences :
+Résultat mesuré : la compaction passait bien à 96/96, mais les conflits sur les données réelles du Raft **passaient de 4 à 12**. L'ordonnancement fin des caisses d'un contrat, loin d'être gratuit, est nécessaire dès que la soute est disputée — le Raft porte 10 contrats pour 8 crans de large, les zones se partagent, et sans ordre interne les caisses d'un même contrat se bloquent entre elles.
 
-1. **Deux arrêts différents donnent toujours deux profondeurs idéales différentes.** La protection d'origine est intégralement conservée.
-2. **Deux caisses du même arrêt partagent la même profondeur idéale.** `depthDistance` cesse alors de les départager, et les critères de compacité reprennent la main.
+Une variante (borner l'étalement à la profondeur réellement occupée par le contrat) a été écartée sans être implémentée : dans le cas C le contrat remplit toute la soute, donc sa profondeur nécessaire *est* la profondeur du module et le bornage ne changerait rien.
 
-### Contrat à un seul arrêt de livraison
+## Conception retenue
 
-Aucune entrée n'est écrite dans `missionBoxRank`. Le repli déjà présent ligne 1005 s'applique :
+Le rang par caisse est **conservé tel quel**. Ce qui change est l'**unité de mesure** de l'écart à la profondeur idéale.
+
+`js/cargo-packing.js`, dans `findBestPosition` :
 
 ```js
-const rankFrac = missionBoxRank.get(b) ?? dropoffFrac;
+depthDistance:
+  idealDepth != null
+    ? Math.abs(Math.floor(d / size[depthAxis]) - Math.floor(idealDepth / size[depthAxis]))
+    : 0,
 ```
 
-avec `dropoffFrac = b.dropoffStop / (stepCount - 1)` (ligne 985), identique pour toutes les caisses concernées. Les contrats livrés tôt restent donc près de l'accès et les tardifs au fond — l'ordonnancement **entre** contrats est préservé — tandis que l'éventail **à l'intérieur** d'un contrat disparaît.
+Au lieu de `Math.abs(d - idealDepth)`.
 
-Aucun code appelant n'est modifié : le repli existe déjà.
+### Pourquoi
+
+La profondeur idéale avance continûment : rang `i / (n-1)` multiplié par la profondeur du module. Pour 24 caisses dans un module de 8 crans, elle progresse de **0,30 cran par caisse** — alors qu'une caisse de 4 SCU en occupe **2**.
+
+Deux caisses successives visent donc 0,30 et 0,61, et se placent aux profondeurs 0 et 1 : **décalées d'un cran au lieu d'être alignées**. D'où le quinconce.
+
+Mesuré sur le cas C : 3 caisses à chacune des profondeurs 0 à 6, au lieu de 6 caisses aux profondeurs 0, 2, 4 et 6.
+
+En comparant des **rangs de caisse** plutôt que des cellules, toutes les positions d'un même cran deviennent équivalentes pour ce critère, et ce sont les critères de compacité (parois, voisins) qui départagent. L'ordonnancement par date de sortie reste exact d'un cran à l'autre.
 
 ### Cas limites
 
 | Situation | Comportement |
 |---|---|
-| Contrat sans `mission.id` | Déjà exclu de `boxesByMission` (ligne 933). Inchangé. |
-| Contrat à une seule caisse | `stops.length === 1` → repli `dropoffFrac`. Avant : rang 0. Changement volontaire et cohérent avec le point précédent. |
-| Contrat à 2+ arrêts | Rang par groupe. Les caisses d'un même groupe se compactent, les groupes restent séparés. |
-| `stepCount <= 1` | `dropoffFrac = 0` (ligne 985, inchangé). Profondeur idéale 0 pour tous. |
+| `idealDepth == null` | `depthDistance = 0`, inchangé (branche préexistante). |
+| Caisse d'un cran de profondeur | `size[depthAxis] === 1` : la division est neutre, comportement strictement identique à avant. |
+| Rotation de la caisse | `size` est l'orientation testée, donc l'unité suit l'encombrement réel de cette orientation précise. |
+| `missionBoxRank` | Non modifié. Le rang par caisse et le repli `?? dropoffFrac` restent tels quels. |
 
 ## Hors périmètre
 
@@ -137,12 +143,19 @@ P2 fait l'objet de sa propre conception. Il n'est pas couvert par ce document.
 
 ## Critères de réussite
 
-| Vérification | Attendu |
-|---|---|
-| Cas C (96 SCU en 4 SCU, 1 contrat) | 84/96 → **96/96 cellules, 0 non placée** |
-| Cas A (formats mixtes, même arrêt) | reste à 96/96 |
-| Cas B (arrêts différents) | inchangé — la règle de support continue de s'appliquer |
-| `scripts/cargo-packing-tests.cjs` | 47/47, sans hausse du nombre de conflits |
-| Non-régression de l'intention d'origine | deux caisses d'un même contrat partant à des arrêts **différents** restent séparées en profondeur |
+| Vérification | Attendu | Mesuré |
+|---|---|---|
+| Cas C (96 SCU en 4 SCU, 1 contrat) | 96/96 cellules, 0 non placée | **96/96, 0 non placée** |
+| Cas B (arrêts différents) | inchangé — la règle de support s'applique toujours | inchangé |
+| Raft, 10 contrats réels | pas de hausse des conflits | **4 → 1 conflit**, 0 non placée |
+| `scripts/cargo-packing-tests.cjs` | tout vert | **49/49** |
+| Suites navigateur | tout vert | **6/6** |
+| Non-régression de l'intention d'origine | deux caisses d'un même contrat partant à des arrêts **différents** restent séparées en profondeur | vérifié par test dédié |
 
 Le dernier point est essentiel : c'est la garantie que la correction n'a pas simplement supprimé la protection au lieu de la cibler.
+
+### Un test existant corrigé
+
+`single footprint slot, crossing intervals -> 1 conflict` attendait 1 conflit et le qualifiait d'« inévitable ». Il ne l'est pas : deux caisses dans un couloir de deux crans peuvent toujours être ordonnées par date de sortie, puisque le manifeste complet du trajet est connu d'avance. Cette valeur encodait une limite du placement, pas une contrainte du problème — elle est tombée d'elle-même.
+
+Le test attend désormais 0 conflit **et** vérifie que la caisse partant en premier est bien la plus proche de l'accès. La détection de conflit reste active par ailleurs, comme le prouve le jeu de données réel du Raft qui en signale toujours un.

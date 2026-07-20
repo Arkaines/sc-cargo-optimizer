@@ -499,7 +499,25 @@ function findBestPosition(grid, cellDims, box, depthAxis, dropoffStop, activeBox
             position: pos.slice(),
             size,
             severity: worstConflictDropoff(effectiveFaceAxes, activeBoxes, pos, size, dropoffStop),
-            depthDistance: idealDepth != null ? Math.abs(d - idealDepth) : 0,
+            // Distance mesurée en CRANS DE CAISSE, pas en cellules. La
+            // profondeur idéale avance continûment (rang i/n × profondeur du
+            // module), donc bien plus finement que l'encombrement réel d'une
+            // caisse : deux caisses successives visaient 0,30 et 0,61 dans un
+            // module où elles occupent 2 crans chacune, et se plaçaient donc
+            // à des profondeurs DÉCALÉES D'UN CRAN au lieu de s'aligner.
+            // D'où un rangement en quinconce qui fragmente l'espace — mesuré :
+            // 3 caisses à chacune des profondeurs 0 à 6 au lieu de 6 caisses
+            // aux profondeurs 0, 2, 4 et 6, soit 84 cellules occupées sur 96.
+            //
+            // En comparant les rangs de caisse, toutes les positions d'un même
+            // cran deviennent équivalentes pour ce critère, et ce sont les
+            // critères de compacité (parois, voisins) qui départagent — sans
+            // rien perdre de l'ordonnancement par date de sortie, qui reste
+            // exact d'un cran à l'autre.
+            depthDistance:
+              idealDepth != null
+                ? Math.abs(Math.floor(d / size[depthAxis]) - Math.floor(idealDepth / size[depthAxis]))
+                : 0,
             isFloor: pos[2] === 0,
             missionTouches: missionId != null ? countNeighborTouches(grid, cellDims, pos, size, missionId) : 0,
             wallTouches: countWallTouches(cellDims, pos, size),
