@@ -240,6 +240,20 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
 // exactement l'ancien modèle à un seul axe (accès par l'arrière uniquement).
 const DEFAULT_ACCESS_FACES = { back: true };
 
+// Côté du vaisseau où se trouve une soute, déduit de son NOM. FleetYards
+// n'expose aucune position, mais nomme explicitement le côté sur la moitié des
+// soutes (142 sur 288, réparties sur 31 vaisseaux) : hardpoint_cargogrid_left,
+// hardpoint_cargo_front_right, hardpoint_cargogrid_main_small_left...
+// Renvoie "left", "right", ou null quand le nom ne dit rien (soute centrale ou
+// unique) — dans ce cas les faces « intérieur » ne s'appliquent tout
+// simplement pas à cette soute.
+function moduleShipSide(hold) {
+  const name = (hold && hold.name) || "";
+  if (/(^|[_-])left($|[_-])/i.test(name)) return "left";
+  if (/(^|[_-])right($|[_-])/i.test(name)) return "right";
+  return null;
+}
+
 // Traduit les 6 étiquettes de faces (point de vue du joueur : arrière/avant/
 // gauche/droite/dessus/dessous) vers les axes réels de CE module précis
 // (depthAxis/widthAxis/heightAxis — calculés une fois par module, voir
@@ -262,7 +276,7 @@ function moduleFaceAxes(module) {
     obj.direction = direction;
     return obj;
   };
-  return {
+  const mapping = {
     back: mkFace(module.depthAxis, "near"),
     front: mkFace(module.depthAxis, "far"),
     bottom: mkFace(module.heightAxis, "near"),
@@ -270,6 +284,20 @@ function moduleFaceAxes(module) {
     left: mkFace(module.widthAxis, "near"),
     right: mkFace(module.widthAxis, "far"),
   };
+
+  // Faces « intérieures » : le joueur se tient dans la coursive centrale et
+  // décrit ce qu'il atteint à sa gauche et à sa droite. Une soute de bâbord
+  // s'ouvre donc vers TRIBORD (sa face droite) et une soute de tribord vers
+  // BÂBORD (sa face gauche) — c'est exactement ce qu'une case « gauche » ou
+  // « droite » seule ne peut pas exprimer, puisque le côté à ouvrir change
+  // d'une soute à l'autre sur le même vaisseau.
+  //
+  // Ne s'applique qu'aux soutes dont le nom identifie un côté (voir
+  // moduleShipSide) : ailleurs, ces cases n'ont aucun effet.
+  const side = moduleShipSide(module.hold);
+  if (side === "left") mapping.interiorLeft = mapping.right;
+  if (side === "right") mapping.interiorRight = mapping.left;
+  return mapping;
 }
 
 // Liste des {axis, direction} correspondant aux faces cochées par le joueur

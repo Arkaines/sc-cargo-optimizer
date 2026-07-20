@@ -1299,7 +1299,11 @@ function renderShipCapacity() {
   if (document.activeElement !== customInput) customInput.value = state.customShipCapacity || "";
 }
 
-const ACCESS_FACE_KEYS = ["back", "front", "left", "right", "top", "bottom"];
+// Les deux dernières décrivent un accès depuis une coursive centrale : le
+// joueur y est debout et dit ce qu'il atteint à sa gauche et à sa droite.
+// Elles ne s'appliquent qu'aux soutes dont le nom identifie un côté (voir
+// moduleShipSide dans js/cargo-packing.js).
+const ACCESS_FACE_KEYS = ["back", "front", "left", "right", "top", "bottom", "interiorLeft", "interiorRight"];
 
 function getShipAccessFaces(shipName) {
   return (shipName && state.shipAccessFaces[shipName]) || null;

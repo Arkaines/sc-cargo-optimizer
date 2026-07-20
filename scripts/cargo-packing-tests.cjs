@@ -995,6 +995,69 @@ test("compaction: l'ordre de sortie sépare toujours des arrêts DIFFÉRENTS", (
   );
 });
 
+// --- Faces « intérieur » (coursive centrale) -----------------------------
+test("intérieur: une soute _left s'ouvre par sa face DROITE, une _right par sa GAUCHE", () => {
+  const ctx = loadCargoPacking();
+  const mkModule = (nom) => {
+    const cellDims = [4, 8, 3];
+    const depthAxis = ctx.depthAxisIndex(cellDims);
+    const { widthAxis, heightAxis } = ctx.moduleAxes(cellDims, depthAxis);
+    return { hold: { name: nom }, cellDims, depthAxis, widthAxis, heightAxis };
+  };
+  const gauche = ctx.moduleFaceAxes(mkModule("hardpoint_cargogrid_main_left"));
+  const droite = ctx.moduleFaceAxes(mkModule("hardpoint_cargogrid_main_right"));
+  const centre = ctx.moduleFaceAxes(mkModule("hardpoint_cargogrid_module_centre"));
+
+  assert.deepStrictEqual(gauche.interiorLeft, gauche.right, "soute bâbord : l'intérieur est sa face droite");
+  assert.strictEqual(gauche.interiorRight, undefined, "une soute bâbord n'a pas de face « intérieur droit »");
+  assert.deepStrictEqual(droite.interiorRight, droite.left, "soute tribord : l'intérieur est sa face gauche");
+  assert.strictEqual(droite.interiorLeft, undefined, "une soute tribord n'a pas de face « intérieur gauche »");
+  assert.strictEqual(centre.interiorLeft, undefined, "une soute sans côté nommé n'a aucune face intérieure");
+  assert.strictEqual(centre.interiorRight, undefined);
+});
+
+test("intérieur: cocher les deux ouvre la face centrale de chaque banc", () => {
+  const ctx = loadCargoPacking();
+  const mk = (nom) => {
+    const cellDims = [4, 8, 3];
+    const depthAxis = ctx.depthAxisIndex(cellDims);
+    const { widthAxis, heightAxis } = ctx.moduleAxes(cellDims, depthAxis);
+    return { hold: { name: nom }, cellDims, depthAxis, widthAxis, heightAxis };
+  };
+  const faces = { front: true, interiorLeft: true, interiorRight: true };
+  const g = ctx.accessibleFaceAxes(faces, mk("hardpoint_cargogrid_left"));
+  const d = ctx.accessibleFaceAxes(faces, mk("hardpoint_cargogrid_right"));
+  // Chaque banc reçoit l'avant + SA face tournée vers le centre, pas les deux.
+  assert.strictEqual(g.length, 2, `soute bâbord : 2 faces attendues, ${g.length}`);
+  assert.strictEqual(d.length, 2, `soute tribord : 2 faces attendues, ${d.length}`);
+  const aFace = (list, dir) => list.some((f) => f.direction === dir);
+  assert.ok(aFace(g, "far"), "bâbord doit ouvrir vers le centre (face droite = far)");
+  assert.ok(aFace(d, "near"), "tribord doit ouvrir vers le centre (face gauche = near)");
+});
+
+test("intérieur: plus de faces ouvertes ne peut pas dégrader le rangement", () => {
+  const ctx = loadCargoPacking();
+  // Deux soutes latérales nommées, un contrat qui les remplit.
+  const holds = [
+    { name: "hardpoint_cargogrid_left", dimensions: { x: 5, y: 10, z: 3.75 }, capacity: 96, maxContainerSize: 32 },
+    { name: "hardpoint_cargogrid_right", dimensions: { x: 5, y: 10, z: 3.75 }, capacity: 96, maxContainerSize: 32 },
+  ];
+  const entries = [
+    { quantity: 96, commodity: "A", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 8 },
+    { quantity: 64, commodity: "B", mission: { id: 2, name: "M2" }, pickupStop: 0, dropoffStop: 2, maxCargoBoxSize: 8 },
+  ];
+  const arriere = ctx.simulateRoutePacking(entries, holds, 3, { back: true });
+  const coursive = ctx.simulateRoutePacking(entries, holds, 3, { front: true, interiorLeft: true, interiorRight: true });
+  assert.ok(
+    coursive.unplaced.length <= arriere.unplaced.length,
+    `déclarer plus d'accès ne doit pas placer moins de caisses (${arriere.unplaced.length} -> ${coursive.unplaced.length})`
+  );
+  assert.ok(
+    coursive.conflicts.length <= arriere.conflicts.length,
+    `déclarer plus d'accès ne doit pas créer de conflits (${arriere.conflicts.length} -> ${coursive.conflicts.length})`
+  );
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
