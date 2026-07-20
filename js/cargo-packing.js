@@ -250,11 +250,24 @@ const DEFAULT_ACCESS_FACES = { back: true };
 //
 // Renvoie null quand aucune grille n'a été publiée pour ce vaisseau : on ne
 // sait alors rien de l'emplacement des soutes, et on ne suppose rien.
+// DEUX sources, dans deux repères différents — d'où les deux branches :
+//
+// - `offset` vient de FleetYards et est en repère JEU, comme `dimensions`
+//   (z = vertical). Disponible pour 9 vaisseaux sur 97, dont le Caterpillar
+//   (14 soutes sur 14) et le Carrack (9/9). C'est gratuit, aucune saisie.
+// - `position` vient d'une grille publiée par la communauté, saisie dans
+//   l'éditeur admin, donc en repère VISUALISEUR (y = vertical). Elle prime
+//   quand elle existe : quelqu'un l'a vérifiée à l'œil.
+//
+// js/cargo-viewer.js fait la conversion inverse (`[o.x, o.z, o.y]`) pour
+// afficher un offset FleetYards dans sa scène Three.js.
 function moduleCellOffset(hold) {
-  const p = hold && hold.position;
-  if (!p) return null;
   const cran = (m) => Math.round((m || 0) / SCU_UNIT_METERS);
-  return [cran(p.x), cran(p.z), cran(p.y)];
+  const publiee = hold && hold.position;
+  if (publiee) return [cran(publiee.x), cran(publiee.z), cran(publiee.y)];
+  const fleetyards = hold && hold.offset;
+  if (fleetyards) return [cran(fleetyards.x), cran(fleetyards.y), cran(fleetyards.z)];
+  return null;
 }
 
 // Deux grilles se touchent-elles ? Sur les vaisseaux dont la soute est d'un
@@ -963,6 +976,15 @@ function resolveReservations(reservations, hold, holds, cellDims) {
 }
 
 function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reservations) {
+  // Le blocage d'une grille à l'autre n'a de sens que si les faces d'accès
+  // déclarées sont justes — c'est la déclaration du joueur qui dit par où on
+  // atteint la soute. Tant qu'il n'a rien coché, on reste sur le repli
+  // DEFAULT_ACCESS_FACES (arrière seul), qui est faux pour beaucoup de
+  // vaisseaux : appliquer le calcul dessus ferait passer un Caterpillar non
+  // configuré de 0 à 95 conflits sans que personne n'ait rien demandé.
+  // Mesuré le 2026-07-20 ; décision du mainteneur : ne rien signaler tant que
+  // le joueur n'a pas décrit SON vaisseau.
+  const facesConfigurees = !!(accessFaces && Object.keys(accessFaces).some((f) => accessFaces[f]));
   const modules = holds.map((h) => {
     const cellDims = cellsFromDimensions(h.dimensions);
     const depthAxis = depthAxisIndex(cellDims);
@@ -1124,6 +1146,7 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
             // et deux grilles d'une même soute peuvent en obtenir de
             // différents. Comparer des repères incohérents inventerait des
             // conflits, ce qui est pire que de n'en signaler aucun.
+            if (!facesConfigurees) return false;
             if (autreModule.depthAxis !== m.depthAxis) return false;
             if (!m.cellOffset || !autreModule.cellOffset) return false;
             if (!areModulesContiguous(autreModule.hold, m.hold)) return false;

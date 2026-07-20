@@ -51,7 +51,13 @@ module.exports = {
           ];
 
           try {
-            const r = simulateRoutePacking(entries, holds, 4, { back: true }, null);
+            // Aucune face déclarée : c'est le parcours du joueur qui n'a rien
+            // configuré, donc le cas le plus courant, et celui qui ne doit jamais
+            // régresser. Déclarer explicitement « arrière seul » activerait le
+            // blocage entre grilles contiguës, qui signale alors de VRAIS conflits
+            // sur les vaisseaux dont les soutes s'enfilent (Caterpillar : 70 avec
+            // une unique porte arrière, ce qui est exact pour cette déclaration).
+            const r = simulateRoutePacking(entries, holds, 4, undefined, null);
             out.push({
               nom, capacite, maxCommun, demande: q,
               nonPlace: r.unplaced.length,

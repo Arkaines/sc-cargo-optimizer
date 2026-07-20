@@ -1317,6 +1317,58 @@ test("contigu: sans position publiée, rien ne change", () => {
   );
 });
 
+test("contigu: l'offset FleetYards est lu, en repère JEU (z vertical)", () => {
+  const ctx = loadCargoPacking();
+  // Offset FleetYards : z est la VERTICALE, comme dimensions. Deux grilles
+  // décalées de 5 crans sur y (profondeur) et séparées d'un cran.
+  const a = { name: "A", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, offset: { x: 0, y: 0, z: 0 } };
+  const b = { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, offset: { x: 0, y: 6.25, z: 0 } };
+  assert.strictEqual(ctx.areModulesContiguous(a, b), true, "1 cran d'écart en profondeur = contiguës");
+
+  // Empilées à la verticale de 5 crans : plus contiguës du tout.
+  const haut = { name: "C", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, offset: { x: 0, y: 0, z: 6.25 } };
+  assert.strictEqual(ctx.areModulesContiguous(a, haut), false, "5 crans au-dessus = pas contiguës");
+});
+
+test("contigu: une grille publiée prime sur l'offset FleetYards", () => {
+  const ctx = loadCargoPacking();
+  // position (repère visualiseur, z = profondeur) doit l'emporter sur offset.
+  const a = { name: "A", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, offset: { x: 0, y: 0, z: 0 } };
+  const b = {
+    name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32,
+    offset: { x: 0, y: 999, z: 0 },      // très loin selon FleetYards
+    position: { x: 0, y: 0, z: 6.25 },   // mais la grille publiée dit : juste derrière
+  };
+  assert.strictEqual(ctx.areModulesContiguous(a, b), true, "la position publiée doit primer");
+});
+
+test("contigu: rien ne change tant que le joueur n'a pas coché ses faces", () => {
+  const ctx = loadCargoPacking();
+  // Deux grilles contiguës, l'une derrière l'autre, avec de quoi se bloquer.
+  const holds = [
+    { name: "A", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, offset: { x: 0, y: 0, z: 0 } },
+    { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, offset: { x: 0, y: 6.25, z: 0 } },
+  ];
+  const entries = [
+    { quantity: 8, commodity: "TARD", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 3, maxCargoBoxSize: 4 },
+    { quantity: 8, commodity: "TOT", mission: { id: 2, name: "M2" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 4 },
+  ];
+  assert.ok(ctx.areModulesContiguous(holds[0], holds[1]), "préalable : les grilles doivent bien se toucher");
+
+  // Aucune face déclarée : on retombe sur le repli, et le calcul inter-grilles
+  // ne s'applique pas — sinon un vaisseau non configuré verrait apparaître des
+  // conflits sans que le joueur ait rien touché.
+  const sansConfig = ctx.simulateRoutePacking(entries, holds, 4, undefined);
+  const objetVide = ctx.simulateRoutePacking(entries, holds, 4, {});
+  const toutFaux = ctx.simulateRoutePacking(entries, holds, 4, { back: false, front: false });
+  [sansConfig, objetVide, toutFaux].forEach((r, i) => {
+    assert.strictEqual(r.unplaced.length, 0, `cas ${i} : tout doit se placer`);
+  });
+  // Le comportement doit être identique aux trois : aucun n'est « configuré ».
+  assert.strictEqual(objetVide.conflicts.length, sansConfig.conflicts.length, "{} doit se comporter comme undefined");
+  assert.strictEqual(toutFaux.conflicts.length, sansConfig.conflicts.length, "tout décoché doit se comporter comme undefined");
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
