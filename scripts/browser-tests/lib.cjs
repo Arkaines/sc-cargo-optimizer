@@ -186,7 +186,15 @@ async function openApp(ctx, { probes = true, skipSync = false } = {}) {
     alerts.push(d.message());
     d.accept();
   });
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Erreurs remontées par le NAVIGATEUR lui-même, jamais par le site : une
+  // extension Edge qui parle à un service worker absent. Observé une fois sur
+  // sept passages, sur une suite différente à chaque fois. Les laisser passer
+  // faisait échouer une suite au hasard pour une cause étrangère au produit.
+  const BRUIT_NAVIGATEUR = [/Could not establish connection\. Receiving end does not exist/i];
+  page.on("pageerror", (e) => {
+    if (BRUIT_NAVIGATEUR.some((re) => re.test(e.message))) return;
+    errors.push(e.message);
+  });
 
   // Journal des toasts. Ils s'effacent tout seuls au bout de quelques
   // secondes : lire le DOM au moment de l'assertion raterait un message paru
