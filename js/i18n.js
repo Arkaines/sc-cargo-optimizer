@@ -260,6 +260,8 @@ const TRANSLATIONS = {
     allowRevisitsHint: "Si activé, un lieu peut être visité plusieurs fois pour débloquer un trajet autrement impossible — le résultat n'est alors plus garanti optimal.",
     revisitedResultWarning:
       "⚠ Trajet de secours : au moins un lieu est visité plusieurs fois pour satisfaire des missions imposant un ordre contradictoire. Ce trajet n'est PAS optimisé (simple parcours au plus proche, pas de recherche du meilleur ordre) — désactive \"{allowRevisitsBtn}\" et désélectionne une mission pour un calcul optimal.",
+    revisitedOptimalNote:
+      "Un même lieu est visité plusieurs fois : des missions imposent des ordres contradictoires (tu dois livrer là où tu dois aussi récupérer). L'ordre des arrêts ci-dessous est le plus court possible.",
     approximateResultNote: "{count} lieux distincts : résultat approché (heuristique), pas garanti optimal à 100%.",
     routeTotal: "Distance totale estimée : {total} Gm — {stops} arrêt(s)",
     maxLoadOverload:
@@ -284,6 +286,19 @@ const TRANSLATIONS = {
     dialogConfirm: "Confirmer",
     dialogCancel: "Annuler",
     toastDismiss: "Fermer la notification",
+
+    // Retours des actions courantes. Elles étaient muettes jusqu'ici, alors
+    // que ce sont les plus répétées de la session.
+    missionAdded: "Mission « {name} » enregistrée.",
+    missionDeleted: "Mission « {name} » supprimée.",
+    missionRestored: "Mission « {name} » rétablie.",
+    undoBtn: "Annuler",
+    locationAdded: "Lieu « {name} » ajouté.",
+    locationNameRequired: "Donne un nom au lieu avant de l'ajouter.",
+    ocrDropzoneAria: "Choisir des captures d'écran de mission à importer",
+    viewSwitcherAria: "Angle de vue de la soute",
+    ocrHelpImageZoom: "Agrandir l'exemple de capture",
+    lightboxClose: "Fermer l'agrandissement",
   },
 
   en: {
@@ -537,6 +552,8 @@ const TRANSLATIONS = {
     allowRevisitsHint: "When enabled, a location can be visited more than once to unblock an otherwise impossible route — the result is then no longer guaranteed optimal.",
     revisitedResultWarning:
       "⚠ Fallback route: at least one location is visited more than once to satisfy missions requiring a contradictory order. This route is NOT optimized (simple nearest-neighbor pass, no search for the best order) — disable \"{allowRevisitsBtn}\" and deselect a mission for an optimal calculation.",
+    revisitedOptimalNote:
+      "One location is visited more than once: missions require contradictory orders (you must deliver where you also have to pick up). The stop order below is the shortest possible.",
     approximateResultNote: "{count} distinct locations: approximate result (heuristic), not guaranteed 100% optimal.",
     routeTotal: "Estimated total distance: {total} Gm — {stops} stop(s)",
     maxLoadOverload: "Maximum load along the route: {load} / {scu} SCU — exceeds capacity by {over} SCU at some point!",
@@ -557,6 +574,17 @@ const TRANSLATIONS = {
     dialogConfirm: "Confirm",
     dialogCancel: "Cancel",
     toastDismiss: "Dismiss notification",
+
+    missionAdded: "Mission \"{name}\" saved.",
+    missionDeleted: "Mission \"{name}\" deleted.",
+    missionRestored: "Mission \"{name}\" restored.",
+    undoBtn: "Undo",
+    locationAdded: "Location \"{name}\" added.",
+    locationNameRequired: "Name the location before adding it.",
+    ocrDropzoneAria: "Choose mission screenshots to import",
+    viewSwitcherAria: "Cargo hold viewing angle",
+    ocrHelpImageZoom: "Enlarge the example screenshot",
+    lightboxClose: "Close the enlarged view",
   },
 };
 

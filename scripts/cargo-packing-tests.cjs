@@ -54,7 +54,16 @@ test("nested: one lateral slot, non-overlapping intervals -> 0 conflict", () => 
 });
 
 // --- Sanity : un seul couloir, intervalles croisés -> conflit inévitable --
-test("single footprint slot, crossing intervals -> 1 conflict", () => {
+// Corrigé le 2026-07-20 : ce test attendait 1 conflit et le qualifiait
+// d'« inévitable ». Il ne l'est pas. Deux caisses dans un couloir de deux
+// crans peuvent TOUJOURS être ordonnées par date de sortie — celle qui part
+// en premier devant — puisque le manifeste complet du trajet est connu
+// d'avance (le rangement n'est pas un problème en ligne). L'ancienne valeur
+// encodait une limite du placement, pas une contrainte du problème : elle est
+// tombée d'elle-même quand depthDistance a cessé de se mesurer en cellules.
+// Vérifié : la détection de conflit reste active par ailleurs (le jeu de
+// données réel du Raft en signale toujours un).
+test("single footprint slot, crossing intervals -> 0 conflict (ordonnançable)", () => {
   const ctx = loadCargoPacking();
   const holds = [{ name: "test", dimensions: { x: 1.25, y: 2.5, z: 1.25 }, capacity: 999, maxContainerSize: 32 }];
   const entries = [
@@ -62,7 +71,11 @@ test("single footprint slot, crossing intervals -> 1 conflict", () => {
     { quantity: 1, commodity: "B", pickupStop: 1, dropoffStop: 3 },
   ];
   const r = ctx.simulateRoutePacking(entries, holds, 4);
-  assert.strictEqual(r.conflicts.length, 1);
+  assert.strictEqual(r.conflicts.length, 0);
+  // Ce qui part en premier doit être devant (profondeur moindre sur l'axe 1).
+  const a = r.placements.find((p) => p.dropoffStop === 2);
+  const b = r.placements.find((p) => p.dropoffStop === 3);
+  assert.ok(a.position[1] < b.position[1], "la caisse partant en premier doit être la plus proche de l'accès");
 });
 
 // --- Sanity : deux couloirs, intervalles croisés -> évitable -------------
@@ -664,12 +677,15 @@ test("real data: Hull B (16 modules, 10 real contracts) -> 0 conflicts", () => {
 // conflits. Comme prévu, ce fix de scoring ne peut qu'améliorer ou laisser
 // inchangé le nombre de conflits (jamais l'empirer) puisqu'il rend la
 // recherche de dernier recours plus précise, pas différente en nature.
-test("real data: Raft (1 module, 10 real contracts) -> at most 4 conflicts (measured at task 6bis, worstConflictDropoff polarity fix)", () => {
+// Puis 4 -> 1 (2026-07-20), en mesurant depthDistance en crans de caisse
+// plutôt qu'en cellules : les caisses cessent de se placer en quinconce, donc
+// elles laissent moins de poches inutilisables et se gênent moins.
+test("real data: Raft (1 module, 10 real contracts) -> at most 1 conflict (measured 2026-07-20, quantised depthDistance)", () => {
   const ctx = loadCargoPacking();
   const { entries, holds, stepCount } = loadFixture("raft-real.json");
   const r = ctx.simulateRoutePacking(entries, holds, stepCount);
   assert.strictEqual(r.unplaced.length, 0);
-  assert.ok(r.conflicts.length <= 4, `expected <= 4 conflicts (measured at task 6bis), got ${r.conflicts.length}`);
+  assert.ok(r.conflicts.length <= 1, `expected <= 1 conflict (measured 2026-07-20), got ${r.conflicts.length}`);
 });
 
 // --- Régression : conflit évitable via la recherche de dernier recours ---
@@ -931,6 +947,52 @@ test("reserved A': an invalid footprint in a list is skipped, valid ones apply",
   // La bonne (0,0,1,1) est exclue ; la mauvaise est ignorée (pas de plantage).
   r.placements.forEach((p) => assert.ok(!overlapsReserved(p, 0, 0, 1, 1)));
   assert.strictEqual(r.placements.length, 1, "la caisse doit se placer ailleurs, pas disparaître");
+});
+
+// --- Compaction : pas d'éventail de profondeur quand rien ne l'exige ------
+// Voir docs/superpowers/specs/2026-07-20-cargo-packing-compaction-design.md.
+// Le rang d'une caisse dans son contrat servait à la placer en profondeur
+// selon son ordre de sortie. Comme il était départagé par TAILLE, des caisses
+// partant au MÊME arrêt recevaient des profondeurs idéales différentes et
+// s'éparpillaient — mesuré : 84 cellules sur 96 dans le cas le plus simple.
+const SOUTE_4x8x3 = { name: "bay", dimensions: { x: 5, y: 10, z: 3.75 }, capacity: 96, maxContainerSize: 32 };
+
+test("compaction: un contrat, un arrêt, caisses uniformes -> soute remplie à 100%", () => {
+  const ctx = loadCargoPacking();
+  const entries = [
+    { quantity: 96, commodity: "A", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 4 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, [SOUTE_4x8x3], 2);
+  // 96 SCU en caisses de 4 SCU (empreinte 2x2, 1 cran) = 24 caisses = 96
+  // cellules, exactement le volume de la soute.
+  assert.strictEqual(r.placements.length, 24, "les 24 caisses doivent tenir");
+  assert.strictEqual(r.unplaced.length, 0, "aucune caisse ne doit rester dehors");
+  const cellulesOccupees = r.placements.reduce((s, p) => s + p.size[0] * p.size[1] * p.size[2], 0);
+  assert.strictEqual(cellulesOccupees, 96, "la soute doit être pleine, sans trou");
+});
+
+test("compaction: l'ordre de sortie sépare toujours des arrêts DIFFÉRENTS", () => {
+  const ctx = loadCargoPacking();
+  // Même contrat, deux arrêts de livraison : ce qui part en premier doit
+  // rester plus près de l'accès. C'est la protection que la correction ne
+  // doit PAS avoir supprimée en supprimant l'éventail inutile.
+  const mission = { id: 1, name: "M1" };
+  const entries = [
+    { quantity: 16, commodity: "TOT", mission, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 4 },
+    { quantity: 16, commodity: "TARD", mission, pickupStop: 0, dropoffStop: 2, maxCargoBoxSize: 4 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, [SOUTE_4x8x3], 3);
+  assert.strictEqual(r.unplaced.length, 0);
+  // L'axe de profondeur d'une soute 4x8x3 est l'axe 1 (le plus long).
+  const profondeurMoyenne = (stop) => {
+    const sel = r.placements.filter((p) => p.dropoffStop === stop);
+    assert.ok(sel.length > 0, `aucune caisse pour l'arrêt ${stop}`);
+    return sel.reduce((s, p) => s + p.position[1], 0) / sel.length;
+  };
+  assert.ok(
+    profondeurMoyenne(1) < profondeurMoyenne(2),
+    `ce qui part en premier doit rester plus près de l'accès (tôt=${profondeurMoyenne(1)}, tard=${profondeurMoyenne(2)})`
+  );
 });
 
 let failed = 0;
