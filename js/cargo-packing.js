@@ -679,7 +679,7 @@ function assignMissionZones(boxes, modules) {
   const zonesByMission = new Map();
   const allZones = []; // toutes les zones déjà attribuées (tier 1 et tier 2), dans l'ordre, pour servir d'hôtes potentiels au tier 2.
 
-  missionsSorted.forEach(({ mission, totalScu, minFootprintNeeded, minPickupStop, maxDropoffStop }) => {
+  missionsSorted.forEach(({ mission, totalScu, minFootprintNeeded, minPickupStop, maxDropoffStop }, missionIndex) => {
     let remaining = totalScu;
     const zones = [];
     while (remaining > 0.0001) {
@@ -757,7 +757,30 @@ function assignMissionZones(boxes, modules) {
         });
 
       const freeWidth = ms.hiEdge - ms.loEdge;
-      const neededWidth = Math.min(freeWidth, Math.max(minFootprintNeeded, Math.ceil(remaining / ms.laneCapacity)));
+      // La voie se compte en LARGEURS DE CAISSE, pas en cellules brutes. Une
+      // caisse ne pivotant qu'à plat, il lui faut minFootprintNeeded crans
+      // d'un coup sur l'axe de largeur : une voie de 5 crans pour des caisses
+      // de 2 n'en accueille que 2 côte à côte, et le 5e cran est perdu sur
+      // TOUTE la longueur et TOUTE la hauteur du module.
+      //
+      // Signalé par un joueur sur son Ironclad (soutes de 6 crans de large,
+      // caisses de 32 SCU larges de 2) : ceil(515 / 120) donnait une voie de
+      // 5, d'où une colonne vide contre la paroi. C'est le « il laisse
+      // toujours un espace vide » — pas un défaut de placement, un défaut de
+      // découpage de la zone.
+      const grain = Math.max(1, minFootprintNeeded);
+      const parVolume = Math.max(minFootprintNeeded, Math.ceil(remaining / ms.laneCapacity));
+      const arrondi = Math.min(freeWidth, Math.ceil(parVolume / grain) * grain);
+      // Arrondir prive forcément le reste du module de la largeur ajoutée :
+      // on ne le fait que si ça ne vole pas à un AUTRE contrat sa dernière
+      // bande utilisable. Sans ce garde-fou, le premier contrat servi rafle
+      // toute la largeur et les suivants doivent s'empiler dessus — mesuré
+      // sur la fixture Host/Big : 0 conflit -> 2.
+      const contratsRestants = missionsSorted.length - 1 - missionIndex;
+      const neededWidth =
+        freeWidth - arrondi >= grain || contratsRestants === 0
+          ? arrondi
+          : Math.min(freeWidth, parVolume);
       const side = ms.nextSide;
       ms.nextSide = side === "lo" ? "hi" : "lo";
 

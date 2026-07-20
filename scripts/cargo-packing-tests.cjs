@@ -1058,6 +1058,54 @@ test("intérieur: plus de faces ouvertes ne peut pas dégrader le rangement", ()
   );
 });
 
+// --- Voie de largeur utilisable de bout en bout --------------------------
+// Signalé par un joueur sur son Ironclad : « il laisse toujours un espace
+// vide ». La voie réservée à un contrat était dimensionnée en cellules brutes
+// (ceil(SCU restants / capacité d'un cran)), sans tenir compte de la largeur
+// des caisses. Une voie de 5 crans ne peut accueillir que 2 caisses de 2 crans
+// de large : le 5e cran est perdu sur TOUTE la longueur et TOUTE la hauteur.
+const IRONCLAD = [
+  { name: "hardpoint_cargogrid_front_left", dimensions: { x: 7.5, y: 25, z: 7.5 }, capacity: 720, maxContainerSize: 32 },
+  { name: "hardpoint_cargogrid_front_right", dimensions: { x: 7.5, y: 25, z: 7.5 }, capacity: 720, maxContainerSize: 32 },
+  { name: "hardpoint_cargogrid_rear_left", dimensions: { x: 7.5, y: 12.5, z: 7.5 }, capacity: 360, maxContainerSize: 32 },
+  { name: "hardpoint_cargogrid_rear_right", dimensions: { x: 7.5, y: 12.5, z: 7.5 }, capacity: 360, maxContainerSize: 32 },
+];
+
+test("voie: aucune bande trop étroite pour les caisses du contrat (Ironclad, 1235 SCU en 32)", () => {
+  const ctx = loadCargoPacking();
+  const entries = [
+    { quantity: 1235, commodity: "Hydrogen", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, IRONCLAD, 2);
+  assert.strictEqual(r.unplaced.length, 0, "tout doit se placer");
+
+  // Pour chaque soute utilisée, la largeur réellement occupée doit être un
+  // multiple de la largeur des caisses (2 crans) : sinon il reste une bande
+  // d'un cran, inutilisable sur toute la soute — le vide que voit le joueur.
+  const largeurUtilisee = new Map();
+  r.placements.forEach((p) => {
+    const k = p.module.name;
+    largeurUtilisee.set(k, Math.max(largeurUtilisee.get(k) || 0, p.position[0] + p.size[0]));
+  });
+  largeurUtilisee.forEach((largeur, nom) => {
+    assert.strictEqual(largeur % 2, 0, `${nom} : largeur occupée de ${largeur} crans, il reste une bande d'un cran perdue`);
+  });
+});
+
+test("voie: un contrat seul ne s'éparpille pas sur plus de soutes que nécessaire", () => {
+  const ctx = loadCargoPacking();
+  const entries = [
+    { quantity: 1235, commodity: "Hydrogen", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 32 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, IRONCLAD, 2);
+  const modules = new Set(r.placements.map((p) => p.module.name));
+  // Les deux grandes soutes tiennent 18 caisses de 32 SCU chacune (3 de front
+  // x 2 en longueur x 3 en hauteur = 576 SCU), une petite en tient 9 (288).
+  // 1235 SCU entrent donc dans trois soutes ; en utiliser quatre signifie
+  // qu'on a laissé des colonnes vides ailleurs.
+  assert.ok(modules.size <= 3, `${modules.size} soutes utilisées pour 1235 SCU, 3 suffisent`);
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {
