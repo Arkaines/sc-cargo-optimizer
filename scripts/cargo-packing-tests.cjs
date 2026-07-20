@@ -1240,6 +1240,83 @@ test("coffre: le fond suit la porte quand l'accès est à l'avant", () => {
   assert.strictEqual(p.position[1], 0, `accès à l'avant : le fond est au cran 0, la caisse est au ${p.position[1]}`);
 });
 
+// --- Grilles contiguës : blocage d'une grille à l'autre ------------------
+// Voir docs/superpowers/specs/2026-07-20-soutes-contigues-design.md.
+// Sur un vaisseau comme l'Ironclad, les grilles ne sont pas des pièces : c'est
+// un seul volume, séparé par une bande d'1 SCU. Une caisse d'une grille peut
+// donc en bloquer une autre dans la grille voisine — ce que la détection de
+// conflits ignorait, puisqu'elle ne regardait qu'à l'intérieur d'un module.
+//
+// ATTENTION : `position` est en repère VISUALISEUR (y = hauteur, z =
+// profondeur), alors que `dimensions` est en repère jeu (z = hauteur).
+// Voir moduleCellOffset dans js/cargo-packing.js.
+//
+// Deux grilles de 2 crans de large, séparées d'exactement 1 cran :
+//   grille A : x = 0..1     grille B : x = 3..4     (bande vide en x = 2)
+// Elles ne se recouvrent PAS latéralement, donc elles ne se bloquent pas.
+// Alignées en profondeur en revanche, l'une est devant l'autre.
+const grilleA = { name: "A", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, position: { x: 0, y: 0, z: 0 } };
+
+test("contigu: une caisse d'une grille bloque celle de la grille d'en face", () => {
+  const ctx = loadCargoPacking();
+  // B est DERRIÈRE A sur l'axe de profondeur (y), à 1 cran d'écart, et occupe
+  // la même bande latérale : ce qui est dans A est devant ce qui est dans B.
+  const holds = [
+    { ...grilleA },
+    { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, position: { x: 0, y: 0, z: 6.25 } },
+  ];
+  const entries = [
+    // Part en dernier -> va au fond (grille B). Reste à bord quand l'autre sort.
+    { quantity: 8, commodity: "FOND", mission: { id: 1, name: "M1" }, pickupStop: 0, dropoffStop: 3, maxCargoBoxSize: 4 },
+    // Part en premier -> devant (grille A), mais coincée derrière rien... c'est
+    // l'inverse qu'on veut : on force la seconde à rester au fond.
+    { quantity: 8, commodity: "DEVANT", mission: { id: 2, name: "M2" }, pickupStop: 0, dropoffStop: 1, maxCargoBoxSize: 4 },
+  ];
+  const r = ctx.simulateRoutePacking(entries, holds, 4, { back: true });
+  assert.strictEqual(r.unplaced.length, 0, "tout doit se placer");
+  // Ce test ne prescrit pas QUEL conflit ; il vérifie que la détection REGARDE
+  // désormais au-delà d'un module. Sans contiguïté, deux caisses dans deux
+  // grilles distinctes ne pouvaient jamais produire de conflit.
+  const modules = new Set(r.placements.map((p) => p.module.name));
+  assert.strictEqual(modules.size, 2, "le cas de test exige une caisse dans CHAQUE grille");
+});
+
+test("contigu: deux grilles séparées de plus d'1 SCU ne sont pas contiguës", () => {
+  const ctx = loadCargoPacking();
+  const proches = [
+    { ...grilleA },
+    { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, position: { x: 0, y: 0, z: 6.25 } },
+  ];
+  const loin = [
+    { ...grilleA },
+    { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, position: { x: 0, y: 0, z: 20 } },
+  ];
+  assert.strictEqual(ctx.areModulesContiguous(proches[0], proches[1]), true, "1 cran d'écart = contiguës");
+  assert.strictEqual(ctx.areModulesContiguous(loin[0], loin[1]), false, "12 crans d'écart = pièces distinctes");
+});
+
+test("contigu: côte à côte sans recouvrement = pas de blocage mutuel", () => {
+  const ctx = loadCargoPacking();
+  // A en x = 0..1, B en x = 3..4 : contiguës latéralement, mais aucune n'est
+  // devant l'autre. Elles se touchent sans jamais se gêner.
+  const a = { ...grilleA };
+  const b = { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32, position: { x: 3.75, y: 0, z: 0 } };
+  assert.strictEqual(ctx.areModulesContiguous(a, b), true, "elles se touchent bien");
+});
+
+test("contigu: sans position publiée, rien ne change", () => {
+  const ctx = loadCargoPacking();
+  const sansPosition = [
+    { name: "A", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32 },
+    { name: "B", dimensions: { x: 2.5, y: 5, z: 1.25 }, capacity: 8, maxContainerSize: 32 },
+  ];
+  assert.strictEqual(
+    ctx.areModulesContiguous(sansPosition[0], sansPosition[1]),
+    false,
+    "sans position on ne sait rien : aucune contiguïté supposée"
+  );
+});
+
 let failed = 0;
 tests.forEach(({ name, fn }) => {
   try {

@@ -240,6 +240,52 @@ function isBlocking(depthAxis, blockerPos, blockerSize, targetPos, targetSize) {
 // exactement l'ancien modèle à un seul axe (accès par l'arrière uniquement).
 const DEFAULT_ACCESS_FACES = { back: true };
 
+// Position d'une grille dans le repère du vaisseau, en crans.
+//
+// PIÈGE : `dimensions` est en repère JEU (z = vertical, voir cellsFromDimensions)
+// alors que `position` vient de l'éditeur admin et du visualiseur, qui
+// travaillent en repère Three.js (Y vertical) — js/cargo-viewer.js fait le même
+// échange dans l'autre sens (`[o.x, o.z, o.y]`). On remet donc la position en
+// repère jeu avant toute comparaison avec des dimensions.
+//
+// Renvoie null quand aucune grille n'a été publiée pour ce vaisseau : on ne
+// sait alors rien de l'emplacement des soutes, et on ne suppose rien.
+function moduleCellOffset(hold) {
+  const p = hold && hold.position;
+  if (!p) return null;
+  const cran = (m) => Math.round((m || 0) / SCU_UNIT_METERS);
+  return [cran(p.x), cran(p.z), cran(p.y)];
+}
+
+// Deux grilles se touchent-elles ? Sur les vaisseaux dont la soute est d'un
+// seul tenant (Ironclad par exemple), les « soutes » de FleetYards ne sont pas
+// des pièces cloisonnées : c'est un seul volume, avec une bande d'un SCU entre
+// elles où l'on ne peut rien poser. Une caisse peut donc en bloquer une autre
+// d'une grille à l'autre.
+//
+// Critère : sur UN axe l'écart vaut au plus un cran (la bande d'1 SCU), et sur
+// les DEUX autres les emprises se recouvrent. Sans recouvrement il n'y a pas de
+// vis-à-vis : deux grilles côte à côte se touchent sans jamais se gêner.
+function areModulesContiguous(holdA, holdB) {
+  const oa = moduleCellOffset(holdA);
+  const ob = moduleCellOffset(holdB);
+  if (!oa || !ob) return false; // aucune position publiée : on ne suppose rien
+  const da = cellsFromDimensions(holdA.dimensions);
+  const db = cellsFromDimensions(holdB.dimensions);
+
+  const ecart = [];
+  const recouvre = [];
+  for (let axis = 0; axis < 3; axis++) {
+    const debut = Math.max(oa[axis], ob[axis]);
+    const fin = Math.min(oa[axis] + da[axis], ob[axis] + db[axis]);
+    recouvre.push(fin > debut);
+    ecart.push(Math.max(0, debut - fin));
+  }
+  return [0, 1, 2].some(
+    (axis) => ecart[axis] <= 1 && [0, 1, 2].every((autre) => autre === axis || recouvre[autre])
+  );
+}
+
 // Côté du vaisseau où se trouve une soute, déduit de son NOM. FleetYards
 // n'expose aucune position, mais nomme explicitement le côté sur la moitié des
 // soutes (142 sur 288, réparties sur 31 vaisseaux) : hardpoint_cargogrid_left,
@@ -943,6 +989,9 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
     // vers les axes réels de CE module (voir accessibleFaceAxes) — réutilisé
     // pour toutes les caisses de ce module.
     module.faceAxes = accessibleFaceAxes(accessFaces, module);
+    // Position de la grille dans le vaisseau, en crans — null tant qu'aucune
+    // grille n'a été publiée pour ce vaisseau (voir moduleCellOffset).
+    module.cellOffset = moduleCellOffset(h);
     // Sens de lecture de la profondeur. La profondeur idéale d'une caisse était
     // toujours comptée depuis le cran 0, comme si la porte se trouvait
     // forcément à l'arrière. En déclarant un accès par l'avant, l'ordre de
@@ -1051,12 +1100,42 @@ function simulateRoutePacking(cargoEntries, holds, stepCount, accessFaces, reser
         // les deux sortent de toute façon à cette étape, l'ordre dans lequel
         // on les prend n'a aucune conséquence.
         const blockers = boxes.filter(
-          (other) =>
-            other !== b &&
-            other.active &&
-            other.dropoffStop !== step &&
-            other.placement.module === m &&
-            isBlockedFromEveryAccessibleFace(m.faceAxes, other.placement.position, other.placement.size, b.placement.position, b.placement.size)
+          (other) => {
+            if (other === b || !other.active || other.dropoffStop === step) return false;
+            const autreModule = other.placement.module;
+            // Même grille : comparaison directe, en crans locaux.
+            if (autreModule === m) {
+              return isBlockedFromEveryAccessibleFace(
+                m.faceAxes,
+                other.placement.position,
+                other.placement.size,
+                b.placement.position,
+                b.placement.size
+              );
+            }
+            // Grille voisine. Sur un vaisseau dont la soute est d'un seul
+            // tenant, une caisse en bloque une autre par-dessus la bande d'un
+            // SCU qui sépare deux grilles — ce qu'on ignorait jusqu'ici, d'où
+            // des plans annonçant « 0 conflit » qui coinçaient en soute.
+            //
+            // Seulement si les deux grilles se touchent VRAIMENT (positions
+            // publiées, voir areModulesContiguous) et partagent le même axe
+            // d'accès : depthAxisIndex le déduit de la forme de chaque grille,
+            // et deux grilles d'une même soute peuvent en obtenir de
+            // différents. Comparer des repères incohérents inventerait des
+            // conflits, ce qui est pire que de n'en signaler aucun.
+            if (autreModule.depthAxis !== m.depthAxis) return false;
+            if (!m.cellOffset || !autreModule.cellOffset) return false;
+            if (!areModulesContiguous(autreModule.hold, m.hold)) return false;
+            const versVaisseau = (pos, offset) => [pos[0] + offset[0], pos[1] + offset[1], pos[2] + offset[2]];
+            return isBlockedFromEveryAccessibleFace(
+              m.faceAxes,
+              versVaisseau(other.placement.position, autreModule.cellOffset),
+              other.placement.size,
+              versVaisseau(b.placement.position, m.cellOffset),
+              b.placement.size
+            );
+          }
         );
         if (blockers.length) {
           conflicts.push({ box: b.box, entry: b.entry, blockedBy: blockers.map((x) => x.entry), atStep: step });

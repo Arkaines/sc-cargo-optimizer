@@ -3072,6 +3072,14 @@ function getShipHolds(shipName) {
       dimensions: m.dimensions,
       capacity: m.capacity,
       maxContainerSize: m.maxContainerSize,
+      // La position était retirée ici, si bien que le rangement ignorait où se
+      // trouvent les soutes. Or sur les vaisseaux dont la soute est d'un seul
+      // tenant (Ironclad), les grilles ne sont pas des pièces : une caisse en
+      // bloque une autre par-dessus la bande d'un SCU qui les sépare. Sans
+      // position, ces blocages étaient invisibles et le plan annonçait « 0
+      // conflit » alors qu'il coinçait en soute. Voir areModulesContiguous
+      // dans js/cargo-packing.js et le spec 2026-07-20-soutes-contigues.
+      position: m.position,
     }));
   }
   return typeof getShipCargoHolds === "function" ? getShipCargoHolds(shipName) : null;
