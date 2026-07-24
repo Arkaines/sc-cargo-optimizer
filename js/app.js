@@ -112,6 +112,7 @@ function backfillCustomLocationPlanetHints() {
   const scwikiEntries = allScwikiLocations();
   state.customLocations = state.customLocations.map((loc) => migrateCustomLocation(loc, scwikiEntries));
   planetAnchorCache = null;
+  scwikiSelectableCache = null; // le catalogue SC Wiki a pu changer (voir allLocations)
 }
 
 // Repasse les migrations de forme sur l'état EN PLACE. Nécessaire après avoir
@@ -125,6 +126,7 @@ function migratePlayerDataInPlace() {
   const scwikiEntries = allScwikiLocations();
   state.customLocations = (state.customLocations || []).map((loc) => migrateCustomLocation(loc, scwikiEntries));
   planetAnchorCache = null;
+  scwikiSelectableCache = null; // le catalogue SC Wiki a pu changer (voir allLocations)
 }
 
 function loadState() {
@@ -194,9 +196,38 @@ function saveState() {
 // =========================================================================
 // Lieux
 // =========================================================================
+// Lieux Star Citizen Wiki ABSENTS du catalogue UEX, rendus sélectionnables
+// comme lieux de récupération/dépôt. UEX ne connaît pas tous les points de
+// mission (ex. « microTech Logistics Depot S4LD13 », inexistant côté UEX) ;
+// SC Wiki, si — et son champ `parent` rattache chaque lieu à une planète, ce
+// qui permet d'estimer sa distance via l'ancre de cette planète (voir
+// getDistance / planetAnchorLocationId) même sans aucune donnée UEX.
+//
+// Mémoïsé car reconstruire ~1000 lieux à chaque appel d'allLocations() (elle
+// est appelée en boucle serrée pendant l'optimisation de route) serait coûteux.
+// Invalidé aux mêmes points que planetAnchorCache : après une synchro ou une
+// migration, les catalogues changent (voir scwikiSelectableCache = null).
+let scwikiSelectableCache = null;
+function scwikiSelectableLocations() {
+  if (scwikiSelectableCache) return scwikiSelectableCache;
+  const uexBase = state.uexLocations.length ? state.uexLocations : DEFAULT_LOCATIONS;
+  const seen = new Set(uexBase.map((l) => l.name.toLowerCase().trim()));
+  const out = [];
+  allScwikiLocations().forEach((e) => {
+    const key = (e.name || "").toLowerCase().trim();
+    if (!key || seen.has(key)) return; // déjà couvert par UEX, ou doublon SC Wiki
+    seen.add(key);
+    const loc = { id: "scwiki-" + (slugify(e.name) || "lieu"), name: e.name, category: scwikiCategory(e) };
+    if (e.parent) loc.planetHint = e.parent; // rattachement planète -> distance
+    out.push(loc);
+  });
+  scwikiSelectableCache = out;
+  return out;
+}
+
 function allLocations() {
   const base = state.uexLocations.length ? state.uexLocations : DEFAULT_LOCATIONS;
-  return [...base, ...state.customLocations];
+  return [...base, ...scwikiSelectableLocations(), ...state.customLocations];
 }
 
 function getLocationById(id) {
