@@ -1765,7 +1765,8 @@ footer button {
   line-height: 1.35;
 }
 
-/* Bouton « mode daltonien » de l'en-tête — même gabarit que thème/langue. */
+/* Bouton « mode daltonien » de l'en-tête — icône + texte, comme le bouton de
+   langue (« US EN »). */
 #colorblind-toggle {
   height: 2.75rem;
   min-width: 2.75rem;
@@ -1773,10 +1774,13 @@ footer button {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   color: var(--text);
-  font-size: 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.35rem;
   cursor: pointer;
   padding: 0 0.75rem;
   flex: none;
