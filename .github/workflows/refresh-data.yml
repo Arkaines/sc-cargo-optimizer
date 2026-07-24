@@ -2,13 +2,14 @@ name: Refresh catalog data
 
 # Régénère data/locations.js, commodities.js, companies.js, ships.js et
 # scwiki-locations.js depuis les APIs publiques UEX Corp et Star Citizen
-# Wiki (voir scripts/refresh-data.js) et ouvre une pull request s'il y a un
-# changement. But : que le dépôt lui-même reste à jour, sans dépendre
+# Wiki (voir scripts/refresh-data.js) et commite directement sur master si le
+# catalogue a changé. But : que le dépôt lui-même reste à jour, sans dépendre
 # uniquement de la synchro côté navigateur d'un joueur (voir maybeAutoSync
-# dans js/app.js). Ne touche jamais master directement -- toujours via une
-# PR à relire (le script peut avertir sur des changements à vérifier, ex.
-# une entreprise suivie dans faction-reputation-ladders.js qui disparaît de
-# l'API UEX companies -- voir les logs du job ou la sortie du script).
+# dans js/app.js). Le script n'écrit QUE si les données changent réellement
+# (date ignorée), donc pas de commit hebdomadaire vide. Il peut avertir sur
+# des changements à vérifier À LA MAIN (ex. une entreprise suivie dans
+# faction-reputation-ladders.js qui disparaît de l'API UEX companies) --
+# voir les logs du job, puisqu'il n'y a plus de PR à relire.
 #
 # Ne régénère PAS data/distances.js, data/*-aliases.js,
 # data/mission-reputation*.js, data/faction-reputation-ladders.js ni
@@ -25,7 +26,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   refresh:
@@ -40,23 +40,26 @@ jobs:
       - name: Régénérer les fichiers data/*.js
         run: node scripts/refresh-data.js
 
-      - name: Ouvrir une pull request si quelque chose a changé
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "Rafraîchir le catalogue depuis UEX Corp / Star Citizen Wiki"
-          title: "Rafraîchir le catalogue (vaisseaux/lieux/marchandises/entreprises)"
-          body: |
-            Régénéré automatiquement par `scripts/refresh-data.js` depuis les APIs publiques UEX Corp et Star Citizen Wiki.
-
-            Vérifie les logs du job pour d'éventuels avertissements (ex. une entreprise suivie dans `data/faction-reputation-ladders.js` qui aurait disparu du catalogue UEX) avant de merger.
-          branch: auto/refresh-data
-          delete-branch: true
-          add-paths: |
-            data/locations.js
-            data/commodities.js
-            data/companies.js
-            data/ships.js
-            data/scwiki-locations.js
-          labels: |
-            automated
-            data-refresh
+      # Push DIRECT plutôt qu'une pull request : la création de PR par une
+      # GitHub Action était bloquée par un réglage du dépôt (« GitHub Actions is
+      # not permitted to create or approve pull requests »), ce qui faisait
+      # échouer le job depuis le 2026-07-20. Le token intégré a le droit
+      # d'écrire (contents: write), donc on commite directement. refresh-data.js
+      # ne réécrit QUE si le catalogue a réellement changé (date ignorée), donc
+      # ce step ne pousse rien tant que rien ne bouge — pas de commit hebdo vide.
+      #
+      # Les avertissements du script (ex. une entreprise suivie dans
+      # data/faction-reputation-ladders.js disparue de l'API UEX) restent
+      # visibles dans les logs du job, à vérifier à la main puisqu'il n'y a plus
+      # de PR à relire.
+      - name: Commiter et pousser si le catalogue a changé
+        run: |
+          if [ -z "$(git status --porcelain data/)" ]; then
+            echo "Catalogue inchangé — rien à pousser."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "Rafraîchir le catalogue depuis UEX Corp / Star Citizen Wiki"
+          git push

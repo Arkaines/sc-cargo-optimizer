@@ -217,12 +217,35 @@ function formatEntries(entries, fields) {
 // tout le fichier sur la seule première ligne à chaque régénération.
 const FILES_WITH_BOM = new Set(["locations.js", "commodities.js", "companies.js"]);
 
+// N'écrit QUE si les données ont réellement changé — en ignorant la ligne de
+// date, qui sinon différerait à chaque exécution même quand le catalogue est
+// identique (le jeu ne change qu'aux patchs). Sans ça, la GitHub Action
+// produirait un commit chaque semaine pour un simple changement de date, du
+// bruit pur. Renvoie true si un fichier a été écrit.
+function writeIfChanged(filename, content) {
+  const full = path.join(DATA_DIR, filename);
+  // Normalise aussi les fins de ligne : un dépôt cloné sous Windows (autocrlf)
+  // a des CRLF sur disque alors qu'on écrit en LF — sans ça la comparaison
+  // échouerait toujours et on réécrirait pour rien.
+  const sansDate = (s) =>
+    s.replace(/\r\n/g, "\n").replace(/Gener[ée] le \d{4}-\d{2}-\d{2}/g, "Genere le AAAA-MM-JJ");
+  if (fs.existsSync(full)) {
+    const ancien = fs.readFileSync(full, "utf-8");
+    if (sansDate(ancien) === sansDate(content)) {
+      console.log(`${filename}: inchangé (données identiques, date ignorée)`);
+      return false;
+    }
+  }
+  fs.writeFileSync(full, content, "utf-8");
+  console.log(`${filename}: écrit`);
+  return true;
+}
+
 function writeDataFile(filename, header, varName, entries, fields) {
   const body = formatEntries(entries, fields);
   const bom = FILES_WITH_BOM.has(filename) ? "﻿" : "";
   const content = `${bom}${header}\nconst ${varName} = [\n${body}\n];\n`;
-  fs.writeFileSync(path.join(DATA_DIR, filename), content, "utf-8");
-  console.log(`${filename}: ${entries.length} entrées`);
+  writeIfChanged(filename, content);
 }
 
 function writeScwikiFile(entries) {
@@ -237,8 +260,7 @@ function writeScwikiFile(entries) {
 // exclus. Genere le ${TODAY} (scripts/refresh-data.js). Rafraichissable via "Tout synchroniser".
 const DEFAULT_SCWIKI_LOCATIONS = `;
   const content = `${header}${JSON.stringify(entries)};\n`;
-  fs.writeFileSync(path.join(DATA_DIR, "scwiki-locations.js"), content, "utf-8");
-  console.log(`scwiki-locations.js: ${entries.length} entrées`);
+  writeIfChanged("scwiki-locations.js", content);
 }
 
 async function main() {
