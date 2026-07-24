@@ -3195,6 +3195,87 @@ function bindEvent(id, event, handler) {
   if (el) el.addEventListener(event, handler);
 }
 
+// Bouton d'en-tête « mode daltonien ». Un clic ouvre un petit menu de choix du
+// TYPE (aucun / protanopie / deutéranopie / tritanopie) — chaque type recolore
+// les caisses avec une palette adaptée à l'axe qu'il perçoit (voir
+// missionColorCss dans js/cargo-viewer.js). Le choix est persisté par
+// cargo-viewer.js dans sa propre clé localStorage.
+function setupColorblindMenu() {
+  const btn = document.getElementById("colorblind-toggle");
+  if (!btn || typeof window.getColorblindType !== "function") return;
+
+  const OPTIONS = ["off", "protan", "deutan", "tritan"];
+  const labelKey = { off: "colorblindOff", protan: "colorblindProtan", deutan: "colorblindDeutan", tritan: "colorblindTritan" };
+
+  const reflectActive = () => {
+    // Le bouton se teinte quand un type est actif, pour signaler l'état sans
+    // rien afficher en plus dans l'en-tête déjà chargé.
+    btn.classList.toggle("active", window.getColorblindType() !== "off");
+  };
+  reflectActive();
+
+  let menu = null;
+  const closeMenu = () => {
+    if (!menu) return;
+    menu.remove();
+    menu = null;
+    btn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("keydown", onKeydown, true);
+    document.removeEventListener("click", onOutside, true);
+  };
+  const onKeydown = (e) => {
+    if (e.key === "Escape") {
+      closeMenu();
+      btn.focus();
+    }
+  };
+  const onOutside = (e) => {
+    if (menu && !menu.contains(e.target) && e.target !== btn) closeMenu();
+  };
+
+  const openMenu = () => {
+    menu = document.createElement("div");
+    menu.className = "colorblind-menu";
+    menu.setAttribute("role", "menu");
+    const current = window.getColorblindType();
+    OPTIONS.forEach((type) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "colorblind-menu-item" + (type === current ? " active" : "");
+      item.setAttribute("role", "menuitemradio");
+      item.setAttribute("aria-checked", type === current ? "true" : "false");
+      item.textContent = (type === current ? "✓ " : "") + t(labelKey[type]);
+      item.addEventListener("click", () => {
+        window.setColorblindType(type);
+        reflectActive();
+        closeMenu();
+        btn.focus();
+        // Re-rend caisses 3D ET pastilles de la légende d'un coup (voir
+        // renderCargoStepView, qui fait les deux).
+        renderCargoStepView();
+      });
+      menu.appendChild(item);
+    });
+    // Ancré sous le bouton, calé sur son bord droit (le bouton est dans le coin
+    // droit de l'en-tête). position: fixed pour échapper à tout overflow.
+    const r = btn.getBoundingClientRect();
+    menu.style.top = `${Math.round(r.bottom + 4)}px`;
+    menu.style.right = `${Math.round(window.innerWidth - r.right)}px`;
+    document.body.appendChild(menu);
+    btn.setAttribute("aria-expanded", "true");
+    // Différé : le clic qui ouvre ne doit pas être capté aussitôt comme un
+    // clic extérieur.
+    setTimeout(() => {
+      document.addEventListener("keydown", onKeydown, true);
+      document.addEventListener("click", onOutside, true);
+    }, 0);
+    const first = menu.querySelector(".colorblind-menu-item");
+    if (first) first.focus();
+  };
+
+  btn.addEventListener("click", () => (menu ? closeMenu() : openMenu()));
+}
+
 // Pivoter un module de 90° autour de la VERTICALE. Sur une grille alignée sur
 // des cellules cubiques, cette rotation est exactement l'échange de X et Y —
 // il n'y a donc rien à faire tourner : on échange les deux champs et on repasse
@@ -4188,6 +4269,8 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("sc-cargo-optimizer-theme", next);
     themeToggle.textContent = next === "light" ? "🌙" : "☀️";
   });
+
+  setupColorblindMenu();
 
   const langToggle = document.getElementById("lang-toggle");
   langToggle.innerHTML = getLang() === "en" ? "🇫🇷 FR" : "🇺🇸 EN";

@@ -142,10 +142,76 @@ let lastLabelMetrics = null;
 let lastResolvedLayout = [];
 let labelMeshes = { front: null, rear: null, left: null, right: null };
 
+// Palette Okabe-Ito : sept teintes conçues pour rester distinctes sous les
+// trois principales formes de daltonisme. Le noir d'origine est retiré :
+// invisible sur le fond quasi-noir de la scène. https://jfly.uni-koeln.de/color/
+const OKABE_ITO = {
+  blue: "#0072B2",
+  orange: "#E69F00",
+  yellow: "#F0E442",
+  sky: "#56B4E9",
+  green: "#009E73",
+  vermillion: "#D55E00",
+  purple: "#CC79A7",
+};
+
+// Une palette par type de daltonisme. La MÊME palette validée sert dans tous
+// les cas — donc jamais pire que le standard universel — mais l'ORDRE change :
+// les teintes les mieux séparées SUR L'AXE QUE CE TYPE PERÇOIT sont placées en
+// premier, et servent donc aux premières missions.
+//   - protanopie / deutéranopie : rouge-vert confondus -> on sépare sur l'axe
+//     bleu-jaune (+ clarté), d'où bleu / orange / jaune en tête.
+//   - tritanopie : bleu-jaune confondus -> on sépare sur l'axe rouge-vert
+//     (+ clarté), d'où vermillon / vert / violet en tête.
+const CB_PALETTES = {
+  protan: [OKABE_ITO.blue, OKABE_ITO.orange, OKABE_ITO.yellow, OKABE_ITO.sky, OKABE_ITO.purple, OKABE_ITO.green, OKABE_ITO.vermillion],
+  deutan: [OKABE_ITO.blue, OKABE_ITO.orange, OKABE_ITO.yellow, OKABE_ITO.sky, OKABE_ITO.purple, OKABE_ITO.green, OKABE_ITO.vermillion],
+  tritan: [OKABE_ITO.vermillion, OKABE_ITO.green, OKABE_ITO.purple, OKABE_ITO.sky, OKABE_ITO.orange, OKABE_ITO.blue, OKABE_ITO.yellow],
+};
+const CB_TYPES = ["off", "protan", "deutan", "tritan"];
+const CB_STORAGE_KEY = "sc-cargo-optimizer-colorblind";
+
+// Préférence d'affichage persistée comme le thème, dans sa propre clé
+// localStorage : ce fichier est un module ES et n'a pas accès à `state`.
+let colorblindType = "off";
+try {
+  const raw = localStorage.getItem(CB_STORAGE_KEY);
+  // Migration de l'ancien format booléen ("1"/"0") vers les types nommés :
+  // "1" bascule sur la deutéranopie, la forme la plus répandue.
+  if (raw === "1") colorblindType = "deutan";
+  else if (CB_TYPES.includes(raw)) colorblindType = raw;
+} catch (e) {
+  /* localStorage indisponible : on reste sur "off" */
+}
+
+// Appelée par js/app.js quand le joueur choisit un type dans le menu. Ne
+// redessine pas : l'appelant relance renderCargoStepView() (qui re-rend caisses
+// 3D ET pastilles de la légende).
+function setColorblindType(type) {
+  colorblindType = CB_TYPES.includes(type) ? type : "off";
+  try {
+    localStorage.setItem(CB_STORAGE_KEY, colorblindType);
+  } catch (e) {
+    /* silencieux */
+  }
+}
+window.setColorblindType = setColorblindType;
+window.getColorblindType = () => colorblindType;
+
 // Une couleur stable par mission (dérivée de son id) plutôt qu'aléatoire, pour
-// que la même mission garde toujours la même couleur d'un rendu à l'autre.
+// que la même mission garde toujours la même couleur d'un rendu à l'autre. Avec
+// un type de daltonisme choisi, on pioche dans sa palette au lieu de la rotation
+// de teinte, qui pouvait faire tomber deux missions sur un rouge et un vert
+// indistinguables.
 function missionColorCss(missionId) {
-  const hue = ((Number(missionId) || 0) * 47) % 360;
+  const id = Number(missionId) || 0;
+  const palette = CB_PALETTES[colorblindType];
+  if (palette) {
+    // × 3 (premier avec 7) permute les index : deux missions d'id voisins ne
+    // reçoivent pas des teintes voisines de la palette.
+    return palette[(id * 3) % palette.length];
+  }
+  const hue = (id * 47) % 360;
   return `hsl(${hue}, 65%, 55%)`;
 }
 function colorForMission(missionId) {

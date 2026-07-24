@@ -260,6 +260,16 @@ async function stableProbe(page, { tries = 40, delay = 100 } = {}) {
 // Glisser souris réel sur la cible courante du visualiseur, en partant d'une
 // position stabilisée.
 async function dragFrom(page, dx, dy) {
+  // Amène le visualiseur dans le viewport AVANT de projeter la cible : la vue
+  // 3D fait 560px de haut et, selon la hauteur de l'en-tête (qui varie avec ce
+  // qu'il contient), son bas peut passer sous la ligne de flottaison. La cible
+  // du glisser tomberait alors hors écran et le geste dans le vide. Ne dépend
+  // plus d'un budget de hauteur d'en-tête — un vrai joueur fait défiler de
+  // toute façon pour atteindre la vue.
+  await page.evaluate(() => {
+    const el = document.getElementById("cargo-viewer-3d");
+    if (el) el.scrollIntoView({ block: "center" });
+  });
   const p = await stableProbe(page);
   await page.mouse.move(p.x, p.y);
   await page.mouse.down();
