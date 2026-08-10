@@ -1,7 +1,7 @@
 ﻿// Liste de lieux generee depuis l'API UEX Corp (https://uexcorp.space/api/documentation/).
 // Un lieu par station/ville/avant-poste/lune (dedoublonne), avec l'ID de terminal UEX
 // (uexTerminalId) et l'ID d'orbite (orbitId) associes, utilises pour les distances.
-// Genere le 2026-07-17 (scripts/refresh-data.js).
+// Genere le 2026-08-10 (scripts/refresh-data.js).
 const DEFAULT_LOCATIONS = [
   { id: "uex-outpost-1", name: "ArcCorp Mining Area 045", category: "Avant-poste", uexTerminalId: 6, orbitId: 4 },
   { id: "uex-outpost-2", name: "ArcCorp Mining Area 048", category: "Avant-poste", uexTerminalId: 7, orbitId: 4 },
@@ -38,6 +38,7 @@ const DEFAULT_LOCATIONS = [
   { id: "uex-outpost-42", name: "Rayari Kaltag Research Outpost", category: "Avant-poste", uexTerminalId: 72, orbitId: 190 },
   { id: "uex-outpost-43", name: "Rayari McGrath Research Outpost", category: "Avant-poste", uexTerminalId: 73, orbitId: 190 },
   { id: "uex-outpost-44", name: "Reclamation & Disposal Orinth", category: "Avant-poste", uexTerminalId: 74, orbitId: 116 },
+  { id: "uex-outpost-120", name: "Sakura Sun Goldenrod Workcenter", category: "Avant-poste", uexTerminalId: 868, orbitId: 190 },
   { id: "uex-outpost-45", name: "Samson & Son's Salvage Center", category: "Avant-poste", uexTerminalId: 75, orbitId: 4 },
   { id: "uex-outpost-46", name: "Shubin Mining Facility SAL-2", category: "Avant-poste", uexTerminalId: 77, orbitId: 4 },
   { id: "uex-outpost-47", name: "Shubin Mining Facility SAL-5", category: "Avant-poste", uexTerminalId: 78, orbitId: 4 },
