@@ -1,5 +1,5 @@
 // Liste des vaisseaux (capacite cargo en SCU) generee depuis l'API UEX Corp
-// (https://uexcorp.space/api/documentation/). Genere le 2026-07-17 (scripts/refresh-data.js).
+// (https://uexcorp.space/api/documentation/). Genere le 2026-08-31 (scripts/refresh-data.js).
 // Seuls les vaisseaux avec une capacite cargo non nulle sont retenus ; les
 // variantes purement cosmetiques/edition (meme SCU que leur vaisseau de base)
 // restent exclues -- voir js/uex.js:syncUexShips et ce script:fetchShips.
@@ -59,7 +59,7 @@ const DEFAULT_SHIPS = [
   { name: "Hull B", scu: 512, company: "Musashi Industrial and Starflight Concern" },
   { name: "Hull C", scu: 4608, company: "Musashi Industrial and Starflight Concern" },
   { name: "Hull D", scu: 6912, company: "Musashi Industrial and Starflight Concern" },
-  { name: "Hull E", scu: 12000, company: "Musashi Industrial and Starflight Concern" },
+  { name: "Hull E", scu: 12288, company: "Musashi Industrial and Starflight Concern" },
   { name: "Idris-M", scu: 1326, company: "Aegis Dynamics" },
   { name: "Idris-P", scu: 1374, company: "Aegis Dynamics" },
   { name: "Intrepid", scu: 8, company: "Crusader Industries" },
