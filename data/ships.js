@@ -1,5 +1,5 @@
 // Liste des vaisseaux (capacite cargo en SCU) generee depuis l'API UEX Corp
-// (https://uexcorp.space/api/documentation/). Genere le 2026-08-31 (scripts/refresh-data.js).
+// (https://uexcorp.space/api/documentation/). Genere le 2026-10-19 (scripts/refresh-data.js).
 // Seuls les vaisseaux avec une capacite cargo non nulle sont retenus ; les
 // variantes purement cosmetiques/edition (meme SCU que leur vaisseau de base)
 // restent exclues -- voir js/uex.js:syncUexShips et ce script:fetchShips.
@@ -29,10 +29,11 @@ const DEFAULT_SHIPS = [
   { name: "Carrack", scu: 456, company: "Anvil Aerospace" },
   { name: "Caterpillar", scu: 576, company: "Drake Interplanetary" },
   { name: "Clipper", scu: 12, company: "Drake Interplanetary" },
-  { name: "Constellation Andromeda", scu: 96, company: "Roberts Space Industries" },
-  { name: "Constellation Phoenix", scu: 80, company: "Roberts Space Industries" },
-  { name: "Constellation Phoenix Emerald", scu: 80, company: "Roberts Space Industries" },
-  { name: "Constellation Taurus", scu: 174, company: "Roberts Space Industries" },
+  { name: "Constellation Mk IV Andromeda", scu: 96, company: "Roberts Space Industries" },
+  { name: "Constellation Mk IV Phoenix", scu: 80, company: "Roberts Space Industries" },
+  { name: "Constellation Mk IV Phoenix Emerald", scu: 80, company: "Roberts Space Industries" },
+  { name: "Constellation Mk IV Taurus", scu: 174, company: "Roberts Space Industries" },
+  { name: "Constellation Mk V Centaurus", scu: 240, company: "Roberts Space Industries" },
   { name: "Corsair", scu: 72, company: "Drake Interplanetary" },
   { name: "Crucible", scu: 240, company: "Anvil Aerospace" },
   { name: "Cutlass Black", scu: 46, company: "Drake Interplanetary" },
